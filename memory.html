@@ -35,7 +35,7 @@
   .tm b { font-size: 1.3rem; min-width: 1.2em; text-align: right; }
   .tb { border: 0; background: #fff; border-radius: 14px; padding: 8px 14px; font-weight: 600; color: var(--ink-2); box-shadow: 0 3px 0 #e2d8c4; }
 
-  .board { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(4, 1fr); gap: clamp(6px, 1.2vw, 14px); min-height: 0; perspective: 1200px; }
+  .board { display: grid; grid-template-columns: repeat(var(--cols, 5), 1fr); grid-template-rows: repeat(var(--rows, 4), 1fr); gap: clamp(6px, 1.2vw, 14px); min-height: 0; perspective: 1200px; }
   .card { position: relative; border: 0; padding: 0; background: none; min-height: 0; }
   .card .in { position: absolute; inset: 0; transition: transform .45s; transform-style: preserve-3d; }
   .card.up .in, .card.done .in { transform: rotateY(180deg); }
@@ -45,6 +45,8 @@
   .card .fr { transform: rotateY(180deg); background: var(--face); border: 5px solid #fff; overflow: hidden; }
   .card .fr.w { background: var(--word-face); }
   .card .fr svg { width: 90%; height: 88%; }
+  .card .fr img { max-width: 90%; max-height: 88%; object-fit: contain; border-radius: 8px; }
+  .card.done.pic .fr img { max-height: 70%; margin-bottom: 18%; }
   .card .fr .wd { font-family: var(--word); font-weight: 700; font-size: var(--ws, 2rem); line-height: 1; }
   .card .fr .cap { position: absolute; bottom: 4%; left: 0; right: 0; text-align: center; font-family: var(--word); font-weight: 700; font-size: calc(var(--ws, 2rem) * .42); color: var(--good-deep); line-height: 1; }
   .card.done .fr { border-color: var(--good); box-shadow: 0 0 0 4px var(--good), 0 6px 0 rgba(36,49,74,.18); }
@@ -71,6 +73,25 @@
   .seg button[aria-pressed="true"] { background: var(--back); border-color: var(--back); color: #fff; }
   .go { margin-top: 20px; width: 100%; border: 0; border-radius: 18px; background: var(--good); color: #fff; font-size: 1.5rem; font-weight: 700; padding: 12px; box-shadow: 0 6px 0 var(--good-deep); }
   .trophy { font-size: clamp(3.5rem, 12vw, 6rem); line-height: 1; }
+  .edit { margin-top: 12px; width: 100%; border: 2px solid #e2d8c4; background: #fffaf0; border-radius: 16px; padding: 10px; font-weight: 700; color: var(--ink-2); }
+  .cardx.ed { width: min(760px, 100%); text-align: left; }
+  .cardx.ed p { font-size: .98rem; }
+  kbd { font-family: var(--display); font-size: .85em; border: 1px solid #c9bfa8; border-radius: 6px; padding: 0 5px; background: #fffaf0; }
+  .rows { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 30px 88px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border-radius: 16px; background: #fffaf0; border: 2px solid #f1e8d6; }
+  .row.drag { border-color: var(--back); background: #eef4ff; }
+  .row .n { font-weight: 700; color: var(--ink-2); text-align: center; }
+  .row .pic { width: 88px; height: 88px; border-radius: 14px; background: #fff; border: 2px dashed #c9bfa8; display: grid; place-items: center; overflow: hidden; padding: 0; color: var(--ink-2); font-size: .75rem; font-weight: 600; text-align: center; line-height: 1.15; }
+  .row .pic:focus { border-style: solid; border-color: var(--back); outline: 3px solid #bcd3ff; }
+  .row .pic svg, .row .pic img { width: 92%; height: 92%; object-fit: contain; }
+  .row .pic.need { border-color: var(--try); color: var(--try); }
+  .row input[type=text] { width: 100%; font-family: var(--word); font-weight: 700; font-size: 1.4rem; padding: 8px 12px; border-radius: 12px; border: 2px solid #e2d8c4; }
+  .row .acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 260px; }
+  .row .acts button, .row .acts label { border: 0; background: #fff; border-radius: 10px; padding: 6px 10px; font-weight: 600; font-size: .85rem; box-shadow: 0 2px 0 #e2d8c4; cursor: pointer; color: var(--ink); }
+  .row .acts .x { color: #b91c1c; }
+  .edrow2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .ednote { color: #b45309 !important; font-weight: 600; min-height: 1.2em; margin: 10px 0 0 !important; }
+  @media (max-width: 620px) { .row { grid-template-columns: 70px minmax(0, 1fr); } .row .n { display: none; } .row .pic { width: 70px; height: 70px; } .row .acts { grid-column: 1 / -1; max-width: none; justify-content: flex-start; } }
   @media (prefers-reduced-motion: reduce) { .card .in { transition: none; } .card.pop .in, .card.no .in, .msg { animation: none; } }
 </style>
 
@@ -88,11 +109,23 @@
   <div class="cardx" role="dialog" aria-modal="true" aria-labelledby="stH">
     <h2 id="stH">Word and Picture Match</h2>
     <p>Flip two cards. Find the word that goes with each picture!</p>
+    <p id="setInfo" style="font-size:.95rem;margin-top:-6px"></p>
     <span class="lbl" id="lp">Who is playing?</span>
     <div class="seg" id="segP" role="group" aria-labelledby="lp"></div>
     <span class="lbl" id="ls">Sound</span>
     <div class="seg" id="segS" role="group" aria-labelledby="ls"></div>
     <button class="go" id="goBtn" type="button">Play!</button>
+    <button class="edit" id="editBtn" type="button">Change the words and pictures</button>
+  </div>
+</div>
+<div class="sheet" id="editor" hidden>
+  <div class="cardx ed" role="dialog" aria-modal="true" aria-labelledby="edH">
+    <h2 id="edH">Your cards</h2>
+    <p>Type a word and give it a picture. To use a picture from the web: right-click it, choose <b>Copy image</b>, click the row's picture box here, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>⌘</kbd>+<kbd>V</kbd> on a Mac). You can also drag a picture onto a row, upload one, or paste a picture's web address.</p>
+    <div class="rows" id="rows"></div>
+    <div class="edrow2"><button class="tb" id="addRow" type="button">+ Add a word</button><button class="tb" id="resetRows" type="button">Use the original 10 words</button></div>
+    <p class="ednote" id="edNote"></p>
+    <button class="go" id="edDone" type="button">Save cards</button>
   </div>
 </div>
 <div class="sheet" id="end" hidden>
@@ -119,32 +152,41 @@ dad: `<circle cx="40" cy="22" r="14" fill="#c68b5e"/><path d="M26 20 Q27 6 40 6 
 };
 
 (() => {
-  const WORDS = ['chair', 'girl', 'teacher', 'boy', 'desk', 'dog', 'cat', 'school', 'lunch', 'dad'];
+  const ORIGINAL = ['chair', 'girl', 'teacher', 'boy', 'desk', 'dog', 'cat', 'school', 'lunch', 'dad'];
   const TEAMS = [{ n: 'Team 1', c: '#ef4444' }, { n: 'Team 2', c: '#3b82f6' }, { n: 'Team 3', c: '#22b35e' }, { n: 'Team 4', c: '#a855f7' }];
   const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const STORE = 'word-picture-match-v1';
-  let set = { players: 1, sound: true };
+  let set = { players: 1, sound: true, cards: null };
   try { Object.assign(set, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(set)); } catch (e) {} };
+  const cards = () => (set.cards && set.cards.length >= 2 ? set.cards : ORIGINAL.map((w) => ({ w, src: '' })));
+  const picHTML = (c) => c.src ? `<img src="${c.src}" alt="">` : (PICS[c.w.toLowerCase()] ? `<svg viewBox="0 0 100 100" aria-hidden="true">${PICS[c.w.toLowerCase()]}</svg>` : '');
+  let pairs = 10;
   let deck = [], open = [], lock = false, scores = [], turn = 0, found = 0, tries = 0;
 
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
   function newGame() {
-    deck = shuffle(WORDS.flatMap((w) => [{ w, kind: 'pic' }, { w, kind: 'word' }]));
+    const cs = cards(); pairs = cs.length;
+    deck = shuffle(cs.flatMap((c, k) => [{ w: c.w, k, kind: 'pic', html: picHTML(c) }, { w: c.w, k, kind: 'word' }]));
     open = []; lock = false; found = 0; tries = 0; turn = 0;
     scores = Array(Math.max(1, set.players)).fill(0);
     buildBoard(); drawTeams();
   }
   function buildBoard() {
     const b = $('board'); b.innerHTML = '';
+    const n = deck.length, landscape = innerWidth >= innerHeight;
+    let best = null;
+    for (let c = 2; c <= n; c++) { const r = Math.ceil(n / c); if (r * c - n >= c) continue; const cw = innerWidth / c, ch = (innerHeight - 70) / r, score = Math.min(cw / 1.5, ch) - (r * c - n) * 3; if (!best || score > best.s) best = { c, r, s: score }; }
+    b.style.setProperty('--cols', best.c); b.style.setProperty('--rows', best.r);
     deck.forEach((c, i) => {
       const el = document.createElement('button');
       el.type = 'button'; el.className = 'card ' + c.kind; el.dataset.i = i;
       el.setAttribute('aria-label', `Card ${i + 1}, face down`);
       const face = c.kind === 'pic'
-        ? `<div class="f fr"><svg viewBox="0 0 100 100" aria-hidden="true">${PICS[c.w]}</svg><div class="cap" hidden>${c.w}</div></div>`
-        : `<div class="f fr w"><span class="wd">${c.w}</span></div>`;
+        ? `<div class="f fr">${c.html}<div class="cap" hidden>${esc(c.w)}</div></div>`
+        : `<div class="f fr w"><span class="wd">${esc(c.w)}</span></div>`;
       el.innerHTML = `<div class="in"><div class="f bk"><span>?</span></div>${face}</div>`;
       el.onclick = () => flip(i, el);
       b.appendChild(el);
@@ -158,7 +200,7 @@ dad: `<circle cx="40" cy="22" r="14" fill="#c68b5e"/><path d="M26 20 Q27 6 40 6 
   }
   function drawTeams() {
     const t = $('teams'); t.innerHTML = '';
-    if (set.players <= 1) { t.innerHTML = `<div class="tm on" style="--tc:#22b35e"><i></i>Matches <b>${found}</b> / 10</div>`; return; }
+    if (set.players <= 1) { t.innerHTML = `<div class="tm on" style="--tc:#22b35e"><i></i>Matches <b>${found}</b> / ${pairs}</div>`; return; }
     scores.forEach((s, k) => { t.insertAdjacentHTML('beforeend', `<div class="tm${k === turn ? ' on' : ''}" style="--tc:${TEAMS[k].c}"><i></i>${TEAMS[k].n} <b>${s}</b></div>`); });
   }
 
@@ -170,14 +212,14 @@ dad: `<circle cx="40" cy="22" r="14" fill="#c68b5e"/><path d="M26 20 Q27 6 40 6 
     if (open.length < 2) return;
     lock = true; tries++;
     const [a, b] = open, A = deck[a], B = deck[b], ea = $('board').children[a], eb = $('board').children[b];
-    if (A.w === B.w && A.kind !== B.kind) {
+    if (A.k === B.k && A.kind !== B.kind) {
       setTimeout(() => {
         [ea, eb].forEach((e) => { e.classList.remove('up'); e.classList.add('done', 'pop'); });
         const pic = A.kind === 'pic' ? ea : eb; pic.querySelector('.cap').hidden = false;
         found++; scores[set.players > 1 ? turn : 0]++;
         drawTeams(); banner(`Match! ${A.w}`, 'good'); cheer(); confetti(70);
         open = []; lock = false;
-        if (found === WORDS.length) setTimeout(finish, 1300);
+        if (found === pairs) setTimeout(finish, 1300);
       }, 500);
     } else {
       setTimeout(() => { [ea, eb].forEach((e) => e.classList.add('no')); banner('Try again!', 'try'); oops(); }, 450);
@@ -190,7 +232,7 @@ dad: `<circle cx="40" cy="22" r="14" fill="#c68b5e"/><path d="M26 20 Q27 6 40 6 
   }
   function finish() {
     let txt;
-    if (set.players <= 1) txt = `All 10 matches in ${tries} tries. Great reading!`;
+    if (set.players <= 1) txt = `All ${pairs} matches in ${tries} tries. Great reading!`;
     else {
       const top = Math.max(...scores), w = scores.map((s, k) => s === top ? TEAMS[k].n : null).filter(Boolean);
       txt = w.length > 1 ? `It's a tie: ${w.join(' and ')}!` : `${w[0]} wins with ${top} matches!`;
@@ -231,9 +273,92 @@ dad: `<circle cx="40" cy="22" r="14" fill="#c68b5e"/><path d="M26 20 Q27 6 40 6 
     opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(v === cur)); b.onclick = () => { pick(v); save(); renderStart(); }; el.appendChild(b); });
   }
   function renderStart() {
+    const cs = cards(); $('setInfo').textContent = `${cs.length} words: ${cs.map((c) => c.w).join(', ')}`;
     seg($('segP'), [[1, 'Whole class'], [2, '2 teams'], [3, '3 teams'], [4, '4 teams']], set.players, (v) => { set.players = v; });
     seg($('segS'), [[true, 'On'], [false, 'Off']], set.sound, (v) => { set.sound = v; });
   }
+
+  /* ---------- card editor ---------- */
+  let draft = [];
+  function shrink(blob, cb) {
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 320 / Math.max(im.width, im.height)), cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+      const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(im, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url); cb(cv.toDataURL('image/jpeg', .86));
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); note('That file is not a picture the browser can open. Try a JPG or PNG.'); };
+    im.src = url;
+  }
+  function fromLink(link, k) {
+    link = (link || '').trim(); if (!link) return;
+    if (!/^https?:\/\//i.test(link) && !/^data:image\//i.test(link)) { note('Paste a web address that starts with http:// or https://'); return; }
+    const im = new Image();
+    im.onload = () => { draft[k].src = link; renderRows(); note('Picture added from the web. If it ever disappears, the website may have moved it: copy and paste the picture instead.'); };
+    im.onerror = () => note('That picture could not be loaded here. Instead, right-click the picture on the web page, choose Copy image, click the picture box, and press Ctrl+V.');
+    im.src = link;
+  }
+  function note(t) { $('edNote').textContent = t; }
+  function openEditor() {
+    draft = cards().map((c) => ({ w: c.w, src: c.src || '' }));
+    note(''); renderRows(); $('start').hidden = true; $('editor').hidden = false;
+  }
+  function renderRows() {
+    const box = $('rows'); box.innerHTML = '';
+    draft.forEach((c, k) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const ph = picHTML(c);
+      row.innerHTML = `<span class="n">${k + 1}</span>
+        <button class="pic${ph ? '' : ' need'}" type="button" aria-label="Picture for word ${k + 1}. Press Ctrl+V to paste a copied picture.">${ph || 'Paste,<br>drop or<br>upload'}</button>
+        <input type="text" maxlength="18" aria-label="Word ${k + 1}" value="${esc(c.w)}">
+        <div class="acts"><label>Upload<input type="file" accept="image/*" hidden></label><button type="button" class="lnk">Web link</button>${c.src ? '<button type="button" class="clr">Remove picture</button>' : ''}<button type="button" class="x">Delete</button></div>`;
+      const pic = row.querySelector('.pic');
+      row.querySelector('input[type=text]').addEventListener('input', (e) => { c.w = e.target.value; if (!c.src) { const p = picHTML(c); pic.innerHTML = p || 'Paste,<br>drop or<br>upload'; pic.classList.toggle('need', !p); } });
+      row.querySelector('input[type=file]').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) shrink(f, (u) => { c.src = u; renderRows(); }); });
+      row.querySelector('.lnk').onclick = () => { const u = prompt('Paste the picture\'s web address (it should end in .jpg, .png, .gif or similar):'); if (u) fromLink(u, k); };
+      const clr = row.querySelector('.clr'); if (clr) clr.onclick = () => { c.src = ''; renderRows(); };
+      row.querySelector('.x').onclick = () => { if (draft.length <= 2) { note('Keep at least 2 words.'); return; } draft.splice(k, 1); renderRows(); };
+      pic.onclick = () => { pic.focus(); note('Now press Ctrl+V (or ⌘+V) to paste a picture you copied, or drag one onto this row.'); };
+      row.addEventListener('paste', (e) => {
+        const items = [...(e.clipboardData && e.clipboardData.items || [])];
+        const img = items.find((it) => it.type.startsWith('image/'));
+        if (img) { e.preventDefault(); shrink(img.getAsFile(), (u) => { c.src = u; renderRows(); note('Picture pasted!'); }); return; }
+        if (e.target.tagName === 'INPUT') return;
+        const txt = e.clipboardData && e.clipboardData.getData('text');
+        if (txt && /^https?:\/\//i.test(txt.trim())) { e.preventDefault(); fromLink(txt, k); }
+      });
+      row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag'); });
+      row.addEventListener('dragleave', () => row.classList.remove('drag'));
+      row.addEventListener('drop', (e) => {
+        e.preventDefault(); row.classList.remove('drag');
+        const f = [...(e.dataTransfer.files || [])].find((x) => x.type.startsWith('image/'));
+        if (f) { shrink(f, (u) => { c.src = u; renderRows(); }); return; }
+        const html = e.dataTransfer.getData('text/html'), m = html && html.match(/<img[^>]+src="([^"]+)"/i);
+        const link = (m && m[1]) || e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+        if (link) fromLink(link.split('\n')[0], k);
+      });
+      box.appendChild(row);
+    });
+    $('addRow').disabled = draft.length >= 12;
+    $('addRow').textContent = draft.length >= 12 ? 'Up to 12 words' : '+ Add a word';
+  }
+  $('editBtn').onclick = openEditor;
+  $('addRow').onclick = () => { if (draft.length < 12) { draft.push({ w: '', src: '' }); renderRows(); const ins = $('rows').querySelectorAll('input[type=text]'); ins[ins.length - 1].focus(); } };
+  $('resetRows').onclick = () => { draft = ORIGINAL.map((w) => ({ w, src: '' })); renderRows(); note('Back to the original 10 words and pictures. Click Save cards to keep this.'); };
+  $('edDone').onclick = () => {
+    const clean = draft.map((c) => ({ w: c.w.trim(), src: c.src })).filter((c) => c.w || c.src);
+    if (clean.length < 2) { note('Add at least 2 words.'); return; }
+    const noWord = clean.findIndex((c) => !c.w); if (noWord >= 0) { note(`Card ${noWord + 1} has a picture but no word.`); return; }
+    const noPic = clean.findIndex((c) => !picHTML(c)); if (noPic >= 0) { note(`“${clean[noPic].w}” needs a picture.`); return; }
+    const lower = clean.map((c) => c.w.toLowerCase()); const dup = lower.findIndex((w, i) => lower.indexOf(w) !== i); if (dup >= 0) { note(`“${clean[dup].w}” is in the list twice.`); return; }
+    const isOriginal = clean.length === ORIGINAL.length && clean.every((c, i) => !c.src && c.w.toLowerCase() === ORIGINAL[i]);
+    set.cards = isOriginal ? null : clean;
+    let warn = '';
+    try { localStorage.setItem(STORE, JSON.stringify(set)); } catch (e) { warn = /quota/i.test(e && (e.name + e.message)) ? 'Saved for now, but these pictures are too big to keep on this computer after you close the page. Try fewer or smaller pictures.' : ''; }
+    if (warn) { alert(warn); }
+    $('editor').hidden = true; renderStart(); $('start').hidden = false; $('goBtn').focus();
+  };
   $('goBtn').onclick = () => { $('start').hidden = true; newGame(); };
   $('againBtn').onclick = () => { $('end').hidden = true; newGame(); };
   $('newBtn').onclick = () => { renderStart(); $('start').hidden = false; $('goBtn').focus(); };
