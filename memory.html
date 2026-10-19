@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Word and Picture Match</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: one board. Top bar with title, whose turn and team scores; a 5 by 4 grid of cards fills the rest. */
+  :root {
+    --bg: #fff8ec; --sky: #e3f2ff; --ink: #24314a; --ink-2: #5b6780;
+    --back: #4f8df5; --back-2: #3b6fd1; --face: #ffffff; --word-face: #fff7d6;
+    --good: #22b35e; --good-deep: #148043; --try: #ff8a3d;
+    --display: "Fredoka", "Andika", system-ui, sans-serif; --word: "Andika", "Fredoka", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: linear-gradient(var(--sky), var(--bg) 70%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 4px solid #f59e0b; outline-offset: 3px; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; gap: 10px; padding: 10px 14px 14px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top h1 { margin: 0 auto 0 0; font-size: clamp(1.2rem, 3vh, 1.8rem); }
+  .teams { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tm { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 16px; background: #fff; border: 3px solid transparent; font-weight: 700; box-shadow: 0 3px 0 #e2d8c4; opacity: .6; transition: opacity .3s, transform .3s; }
+  .tm.on { opacity: 1; border-color: var(--tc); transform: scale(1.06); }
+  .tm i { width: 16px; height: 16px; border-radius: 50%; background: var(--tc); }
+  .tm b { font-size: 1.3rem; min-width: 1.2em; text-align: right; }
+  .tb { border: 0; background: #fff; border-radius: 14px; padding: 8px 14px; font-weight: 600; color: var(--ink-2); box-shadow: 0 3px 0 #e2d8c4; }
+
+  .board { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(4, 1fr); gap: clamp(6px, 1.2vw, 14px); min-height: 0; perspective: 1200px; }
+  .card { position: relative; border: 0; padding: 0; background: none; min-height: 0; }
+  .card .in { position: absolute; inset: 0; transition: transform .45s; transform-style: preserve-3d; }
+  .card.up .in, .card.done .in { transform: rotateY(180deg); }
+  .card .f { position: absolute; inset: 0; border-radius: 18px; backface-visibility: hidden; display: grid; place-items: center; box-shadow: 0 6px 0 rgba(36,49,74,.18); }
+  .card .bk { background: repeating-linear-gradient(45deg, var(--back) 0 14px, var(--back-2) 14px 28px); border: 5px solid #fff; }
+  .card .bk span { width: 46%; aspect-ratio: 1; border-radius: 50%; background: #fff; display: grid; place-items: center; font-weight: 700; color: var(--back-2); font-size: clamp(1.2rem, 4vh, 2.4rem); }
+  .card .fr { transform: rotateY(180deg); background: var(--face); border: 5px solid #fff; overflow: hidden; }
+  .card .fr.w { background: var(--word-face); }
+  .card .fr svg { width: 90%; height: 88%; }
+  .card .fr .wd { font-family: var(--word); font-weight: 700; font-size: var(--ws, 2rem); line-height: 1; }
+  .card .fr .cap { position: absolute; bottom: 4%; left: 0; right: 0; text-align: center; font-family: var(--word); font-weight: 700; font-size: calc(var(--ws, 2rem) * .42); color: var(--good-deep); line-height: 1; }
+  .card.done .fr { border-color: var(--good); box-shadow: 0 0 0 4px var(--good), 0 6px 0 rgba(36,49,74,.18); }
+  .card.done.pic .fr svg { height: 74%; margin-bottom: 18%; }
+  .card.pop .in { animation: pop .6s cubic-bezier(.3,1.7,.5,1); }
+  @keyframes pop { 0% { transform: rotateY(180deg) scale(1); } 40% { transform: rotateY(180deg) scale(1.12); } 100% { transform: rotateY(180deg) scale(1); } }
+  .card.no .fr { border-color: var(--try); }
+  .card.no .in { animation: shake .45s; }
+  @keyframes shake { 0%, 100% { transform: rotateY(180deg) translateX(0); } 25%, 75% { transform: rotateY(180deg) translateX(-10px); } 50% { transform: rotateY(180deg) translateX(10px); } }
+
+  .msg { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none; font-size: clamp(2rem, 8vw, 4.6rem); font-weight: 700; padding: 10px 34px; border-radius: 24px; color: #fff; text-align: center; line-height: 1.05; box-shadow: 0 14px 40px rgba(36,49,74,.3); animation: msg 1.4s ease-out forwards; }
+  .msg.good { background: var(--good); }
+  .msg.try { background: var(--try); }
+  @keyframes msg { 0% { transform: translate(-50%, -50%) scale(.4); opacity: 0; } 18% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; } 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { opacity: 0; } }
+  canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+  .sheet { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(36,49,74,.45); padding: 16px; }
+  .sheet .cardx { background: #fff; border-radius: 26px; padding: clamp(20px, 4vw, 34px); width: min(560px, 100%); max-height: 100%; overflow: auto; text-align: center; }
+  .sheet h2 { margin: 0 0 8px; font-size: clamp(1.8rem, 6vw, 2.8rem); }
+  .sheet p { color: var(--ink-2); margin: 0 0 14px; font-size: 1.1rem; }
+  .lbl { display: block; font-weight: 700; color: var(--ink-2); margin: 14px 0 8px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .seg button { border: 2px solid #e2d8c4; background: #fffaf0; border-radius: 14px; padding: 9px 16px; font-weight: 600; }
+  .seg button[aria-pressed="true"] { background: var(--back); border-color: var(--back); color: #fff; }
+  .go { margin-top: 20px; width: 100%; border: 0; border-radius: 18px; background: var(--good); color: #fff; font-size: 1.5rem; font-weight: 700; padding: 12px; box-shadow: 0 6px 0 var(--good-deep); }
+  .trophy { font-size: clamp(3.5rem, 12vw, 6rem); line-height: 1; }
+  @media (prefers-reduced-motion: reduce) { .card .in { transition: none; } .card.pop .in, .card.no .in, .msg { animation: none; } }
+</style>
+
+<div class="app">
+  <div class="top">
+    <h1>Word and Picture Match</h1>
+    <div class="teams" id="teams"></div>
+    <button class="tb" id="newBtn" type="button">New game</button>
+  </div>
+  <div class="board" id="board" aria-label="Memory cards"></div>
+</div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div class="sheet" id="start">
+  <div class="cardx" role="dialog" aria-modal="true" aria-labelledby="stH">
+    <h2 id="stH">Word and Picture Match</h2>
+    <p>Flip two cards. Find the word that goes with each picture!</p>
+    <span class="lbl" id="lp">Who is playing?</span>
+    <div class="seg" id="segP" role="group" aria-labelledby="lp"></div>
+    <span class="lbl" id="ls">Sound</span>
+    <div class="seg" id="segS" role="group" aria-labelledby="ls"></div>
+    <button class="go" id="goBtn" type="button">Play!</button>
+  </div>
+</div>
+<div class="sheet" id="end" hidden>
+  <div class="cardx" role="dialog" aria-modal="true" aria-labelledby="enH">
+    <div class="trophy" aria-hidden="true">🏆</div>
+    <h2 id="enH">You found them all!</h2>
+    <p id="enP"></p>
+    <button class="go" id="againBtn" type="button">Play again</button>
+  </div>
+</div>
+
+<script>
+const PICS = {
+chair: `<rect x="30" y="12" width="40" height="8" rx="3" fill="#b9733b"/><rect x="30" y="12" width="7" height="44" rx="3" fill="#a5612d"/><rect x="63" y="12" width="7" height="44" rx="3" fill="#a5612d"/><rect x="34" y="27" width="32" height="5" rx="2" fill="#c98a52"/><rect x="34" y="38" width="32" height="5" rx="2" fill="#c98a52"/><rect x="24" y="54" width="52" height="10" rx="4" fill="#c98a52"/><rect x="27" y="62" width="7" height="30" rx="3" fill="#a5612d"/><rect x="66" y="62" width="7" height="30" rx="3" fill="#a5612d"/><rect x="34" y="62" width="5" height="22" rx="2" fill="#8c4f22"/><rect x="61" y="62" width="5" height="22" rx="2" fill="#8c4f22"/>`,
+desk: `<rect x="10" y="40" width="80" height="10" rx="3" fill="#c98a52"/><rect x="14" y="50" width="6" height="40" rx="2" fill="#7b8794"/><rect x="80" y="50" width="6" height="40" rx="2" fill="#7b8794"/><rect x="24" y="50" width="52" height="12" rx="2" fill="#a5612d"/><rect x="22" y="28" width="30" height="12" rx="2" fill="#3b82f6"/><rect x="22" y="28" width="30" height="3" fill="#2563eb"/><rect x="24" y="31" width="26" height="7" fill="#fff"/><g transform="rotate(-18 70 34)"><rect x="56" y="31" width="26" height="6" rx="1" fill="#facc15"/><path d="M82 31 L89 34 L82 37 Z" fill="#f2d2a9"/><path d="M87 33.2 L89 34 L87 34.8 Z" fill="#333"/><rect x="54" y="31" width="4" height="6" rx="1" fill="#f472b6"/></g>`,
+dog: `<ellipse cx="50" cy="80" rx="26" ry="14" fill="#c98a52"/><circle cx="50" cy="46" r="26" fill="#d9a066"/><path d="M26 30 Q12 46 20 70 Q32 66 32 44 Z M74 30 Q88 46 80 70 Q68 66 68 44 Z" fill="#8b5a2b"/><circle cx="40" cy="42" r="4.5" fill="#222"/><circle cx="60" cy="42" r="4.5" fill="#222"/><circle cx="41.5" cy="40.5" r="1.4" fill="#fff"/><circle cx="61.5" cy="40.5" r="1.4" fill="#fff"/><ellipse cx="50" cy="56" rx="12" ry="9" fill="#f3d3ae"/><ellipse cx="50" cy="52" rx="6" ry="4.5" fill="#222"/><path d="M50 56 V61 M43 61 Q50 66 57 61" stroke="#222" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M47 63 Q50 72 53 63 Z" fill="#f472b6"/>`,
+cat: `<path d="M74 84 Q94 78 88 60" stroke="#f59e0b" stroke-width="8" fill="none" stroke-linecap="round"/><ellipse cx="52" cy="78" rx="24" ry="15" fill="#f59e0b"/><path d="M26 38 L30 12 L46 28 Z M74 38 L70 12 L54 28 Z" fill="#f59e0b"/><path d="M30 34 L32 19 L41 28 Z M70 34 L68 19 L59 28 Z" fill="#fbcfe8"/><circle cx="50" cy="44" r="25" fill="#f59e0b"/><path d="M38 24 L42 33 M50 22 V31 M62 24 L58 33" stroke="#d97706" stroke-width="3" stroke-linecap="round"/><ellipse cx="40" cy="44" rx="4" ry="6" fill="#222"/><ellipse cx="60" cy="44" rx="4" ry="6" fill="#222"/><circle cx="41" cy="42" r="1.4" fill="#fff"/><circle cx="61" cy="42" r="1.4" fill="#fff"/><path d="M46 53 L54 53 L50 57 Z" fill="#ec4899"/><path d="M50 57 Q45 62 41 59 M50 57 Q55 62 59 59" stroke="#222" stroke-width="2" fill="none"/><path d="M18 52 H34 M18 58 L34 56 M82 52 H66 M82 58 L66 56" stroke="#222" stroke-width="1.6"/>`,
+school: `<rect x="14" y="40" width="72" height="50" fill="#dc6b4a"/><path d="M8 42 L50 14 L92 42 Z" fill="#7c2d12"/><rect x="48" y="2" width="2.5" height="16" fill="#555"/><path d="M50.5 3 H64 L60 7 L64 11 H50.5 Z" fill="#3b82f6"/><circle cx="50" cy="31" r="6" fill="#fde68a" stroke="#92400e" stroke-width="2"/><path d="M50 27 V31 L53 33" stroke="#92400e" stroke-width="1.6" fill="none"/><rect x="42" y="66" width="16" height="24" rx="2" fill="#7c3aed"/><circle cx="55" cy="79" r="1.4" fill="#fde68a"/>${[20,32,62,74].map(x=>`<rect x="${x}" y="48" width="8" height="10" fill="#bfdbfe" stroke="#fff" stroke-width="1.5"/><rect x="${x}" y="68" width="8" height="10" fill="#bfdbfe" stroke="#fff" stroke-width="1.5"/>`).join('')}<rect x="4" y="90" width="92" height="5" rx="2" fill="#65a30d"/>`,
+lunch: `<rect x="6" y="40" width="88" height="50" rx="8" fill="#94a3b8"/><rect x="10" y="44" width="80" height="42" rx="6" fill="#cbd5e1"/><path d="M16 80 L40 52 L52 80 Z" fill="#f5d08a"/><path d="M20 76 L40 56 L48 76 Z" fill="#84cc16"/><path d="M22 74 L40 58 L46 74 Z" fill="#f87171"/><path d="M16 80 L40 52 L52 80" stroke="#c08a3e" stroke-width="3" fill="none" stroke-linejoin="round"/><circle cx="66" cy="70" r="11" fill="#ef4444"/><path d="M66 59 Q68 54 72 53" stroke="#7c4a1e" stroke-width="2.5" fill="none"/><path d="M68 57 Q76 52 78 58 Q72 60 68 57 Z" fill="#22c55e"/><circle cx="62" cy="66" r="2.5" fill="#fca5a5"/><path d="M70 14 L86 14 L86 44 L70 44 Z" fill="#fff" stroke="#60a5fa" stroke-width="2"/><path d="M70 14 L78 6 L86 14 Z" fill="#e0f2fe" stroke="#60a5fa" stroke-width="2"/><rect x="72" y="24" width="12" height="10" rx="2" fill="#3b82f6"/>`,
+girl: `<path d="M24 34 Q18 52 26 58 L32 40 Z M76 34 Q82 52 74 58 L68 40 Z" fill="#7c2d12"/><circle cx="23" cy="56" r="6" fill="#7c2d12"/><circle cx="77" cy="56" r="6" fill="#7c2d12"/><circle cx="23" cy="49" r="3" fill="#f472b6"/><circle cx="77" cy="49" r="3" fill="#f472b6"/><circle cx="50" cy="34" r="20" fill="#c68b5e"/><path d="M30 32 Q32 12 50 12 Q68 12 70 32 Q60 22 50 24 Q40 22 30 32 Z" fill="#7c2d12"/><circle cx="43" cy="35" r="2.6" fill="#222"/><circle cx="57" cy="35" r="2.6" fill="#222"/><path d="M43 43 Q50 49 57 43" stroke="#222" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="38" cy="41" r="3" fill="#f9a8a8" opacity=".7"/><circle cx="62" cy="41" r="3" fill="#f9a8a8" opacity=".7"/><path d="M38 56 L62 56 L72 84 L28 84 Z" fill="#ec4899"/><path d="M38 58 L28 72 M62 58 L72 72" stroke="#c68b5e" stroke-width="6" stroke-linecap="round"/><path d="M42 84 V95 M58 84 V95" stroke="#c68b5e" stroke-width="6" stroke-linecap="round"/><path d="M38 96 H46 M54 96 H62" stroke="#7c3aed" stroke-width="5" stroke-linecap="round"/>`,
+boy: `<circle cx="50" cy="32" r="20" fill="#f1c9a5"/><path d="M30 30 Q30 10 50 11 Q70 10 70 30 Q66 20 56 21 Q48 16 40 22 Q33 22 30 30 Z" fill="#3f2a1d"/><circle cx="43" cy="33" r="2.6" fill="#222"/><circle cx="57" cy="33" r="2.6" fill="#222"/><path d="M43 41 Q50 47 57 41" stroke="#222" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="29" cy="34" r="4" fill="#f1c9a5"/><circle cx="71" cy="34" r="4" fill="#f1c9a5"/><rect x="34" y="53" width="32" height="26" rx="6" fill="#3b82f6"/><path d="M36 56 L24 70 M64 56 L76 70" stroke="#3b82f6" stroke-width="9" stroke-linecap="round"/><circle cx="23" cy="72" r="4" fill="#f1c9a5"/><circle cx="77" cy="72" r="4" fill="#f1c9a5"/><rect x="36" y="76" width="28" height="9" rx="2" fill="#1e3a8a"/><path d="M42 85 V95 M58 85 V95" stroke="#f1c9a5" stroke-width="6" stroke-linecap="round"/><path d="M37 96 H46 M54 96 H63" stroke="#ef4444" stroke-width="5" stroke-linecap="round"/><path d="M44 60 L50 66 L56 60" stroke="#fde047" stroke-width="3" fill="none"/>`,
+teacher: `<rect x="4" y="10" width="54" height="38" rx="3" fill="#166534" stroke="#a16207" stroke-width="4"/><text x="31" y="36" text-anchor="middle" font-family="Comic Sans MS, Arial" font-size="15" font-weight="700" fill="#fff">ABC</text><rect x="12" y="46" width="12" height="3" fill="#fff"/><path d="M58 58 L44 34" stroke="#a16207" stroke-width="2.5" stroke-linecap="round"/><path d="M60 22 Q60 8 72 8 Q84 8 84 22 L86 34 Q72 30 58 34 Z" fill="#111827"/><circle cx="72" cy="24" r="12" fill="#8d5a3b"/><path d="M60 22 Q64 12 72 13 Q80 12 84 22 Q78 16 72 18 Q66 16 60 22 Z" fill="#111827"/><circle cx="67" cy="25" r="3.6" fill="none" stroke="#222" stroke-width="1.5"/><circle cx="77" cy="25" r="3.6" fill="none" stroke="#222" stroke-width="1.5"/><path d="M70.6 25 H73.4" stroke="#222" stroke-width="1.5"/><circle cx="67" cy="25" r="1.3" fill="#222"/><circle cx="77" cy="25" r="1.3" fill="#222"/><path d="M68 31 Q72 34 76 31" stroke="#222" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M60 40 L84 40 L90 82 L54 82 Z" fill="#8b5cf6"/><path d="M62 44 L58 58" stroke="#8d5a3b" stroke-width="6" stroke-linecap="round"/><path d="M82 44 L88 62" stroke="#8d5a3b" stroke-width="6" stroke-linecap="round"/><path d="M66 82 V94 M78 82 V94" stroke="#8d5a3b" stroke-width="6" stroke-linecap="round"/><path d="M62 96 H70 M75 96 H83" stroke="#111827" stroke-width="5" stroke-linecap="round"/>`,
+dad: `<circle cx="40" cy="22" r="14" fill="#c68b5e"/><path d="M26 20 Q27 6 40 6 Q53 6 54 20 Q48 12 40 13 Q32 12 26 20 Z" fill="#1f2937"/><path d="M28 24 Q30 38 40 38 Q50 38 52 24 Q50 32 40 32 Q30 32 28 24 Z" fill="#1f2937"/><circle cx="35" cy="21" r="2" fill="#222"/><circle cx="45" cy="21" r="2" fill="#222"/><path d="M36 30 Q40 33 44 30" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/><rect x="26" y="38" width="28" height="32" rx="6" fill="#16a34a"/><path d="M28 42 L18 62 M52 42 L64 62" stroke="#16a34a" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="64" r="4" fill="#c68b5e"/><circle cx="65" cy="64" r="4" fill="#c68b5e"/><rect x="28" y="68" width="24" height="10" fill="#1e3a8a"/><path d="M33 76 V95 M47 76 V95" stroke="#1e3a8a" stroke-width="8" stroke-linecap="round"/><path d="M28 96 H37 M43 96 H52" stroke="#111" stroke-width="5" stroke-linecap="round"/><circle cx="76" cy="54" r="9" fill="#c68b5e"/><path d="M67 52 Q68 44 76 44 Q84 44 85 52 Q80 48 76 49 Q72 48 67 52 Z" fill="#1f2937"/><circle cx="73" cy="54" r="1.4" fill="#222"/><circle cx="79" cy="54" r="1.4" fill="#222"/><path d="M73 58 Q76 60 79 58" stroke="#222" stroke-width="1.4" fill="none"/><rect x="69" y="63" width="14" height="16" rx="4" fill="#f97316"/><path d="M70 66 L65 63" stroke="#f97316" stroke-width="5" stroke-linecap="round"/><path d="M73 79 V93 M79 79 V93" stroke="#c68b5e" stroke-width="4.5" stroke-linecap="round"/><path d="M70 94 H75 M78 94 H83" stroke="#ef4444" stroke-width="4" stroke-linecap="round"/>`
+};
+
+(() => {
+  const WORDS = ['chair', 'girl', 'teacher', 'boy', 'desk', 'dog', 'cat', 'school', 'lunch', 'dad'];
+  const TEAMS = [{ n: 'Team 1', c: '#ef4444' }, { n: 'Team 2', c: '#3b82f6' }, { n: 'Team 3', c: '#22b35e' }, { n: 'Team 4', c: '#a855f7' }];
+  const $ = (id) => document.getElementById(id);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const STORE = 'word-picture-match-v1';
+  let set = { players: 1, sound: true };
+  try { Object.assign(set, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(set)); } catch (e) {} };
+  let deck = [], open = [], lock = false, scores = [], turn = 0, found = 0, tries = 0;
+
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function newGame() {
+    deck = shuffle(WORDS.flatMap((w) => [{ w, kind: 'pic' }, { w, kind: 'word' }]));
+    open = []; lock = false; found = 0; tries = 0; turn = 0;
+    scores = Array(Math.max(1, set.players)).fill(0);
+    buildBoard(); drawTeams();
+  }
+  function buildBoard() {
+    const b = $('board'); b.innerHTML = '';
+    deck.forEach((c, i) => {
+      const el = document.createElement('button');
+      el.type = 'button'; el.className = 'card ' + c.kind; el.dataset.i = i;
+      el.setAttribute('aria-label', `Card ${i + 1}, face down`);
+      const face = c.kind === 'pic'
+        ? `<div class="f fr"><svg viewBox="0 0 100 100" aria-hidden="true">${PICS[c.w]}</svg><div class="cap" hidden>${c.w}</div></div>`
+        : `<div class="f fr w"><span class="wd">${c.w}</span></div>`;
+      el.innerHTML = `<div class="in"><div class="f bk"><span>?</span></div>${face}</div>`;
+      el.onclick = () => flip(i, el);
+      b.appendChild(el);
+    });
+    fit();
+  }
+  function fit() {
+    const cell = $('board').children[0]; if (!cell) return;
+    const r = cell.getBoundingClientRect();
+    $('board').style.setProperty('--ws', Math.min(r.width / 4.6, r.height / 2.2) + 'px');
+  }
+  function drawTeams() {
+    const t = $('teams'); t.innerHTML = '';
+    if (set.players <= 1) { t.innerHTML = `<div class="tm on" style="--tc:#22b35e"><i></i>Matches <b>${found}</b> / 10</div>`; return; }
+    scores.forEach((s, k) => { t.insertAdjacentHTML('beforeend', `<div class="tm${k === turn ? ' on' : ''}" style="--tc:${TEAMS[k].c}"><i></i>${TEAMS[k].n} <b>${s}</b></div>`); });
+  }
+
+  function flip(i, el) {
+    if (lock || el.classList.contains('up') || el.classList.contains('done')) return;
+    el.classList.add('up'); el.setAttribute('aria-label', deck[i].kind === 'pic' ? `Picture of ${deck[i].w}` : `Word: ${deck[i].w}`);
+    tick();
+    open.push(i);
+    if (open.length < 2) return;
+    lock = true; tries++;
+    const [a, b] = open, A = deck[a], B = deck[b], ea = $('board').children[a], eb = $('board').children[b];
+    if (A.w === B.w && A.kind !== B.kind) {
+      setTimeout(() => {
+        [ea, eb].forEach((e) => { e.classList.remove('up'); e.classList.add('done', 'pop'); });
+        const pic = A.kind === 'pic' ? ea : eb; pic.querySelector('.cap').hidden = false;
+        found++; scores[set.players > 1 ? turn : 0]++;
+        drawTeams(); banner(`Match! ${A.w}`, 'good'); cheer(); confetti(70);
+        open = []; lock = false;
+        if (found === WORDS.length) setTimeout(finish, 1300);
+      }, 500);
+    } else {
+      setTimeout(() => { [ea, eb].forEach((e) => e.classList.add('no')); banner('Try again!', 'try'); oops(); }, 450);
+      setTimeout(() => {
+        [ea, eb].forEach((e) => { e.classList.remove('up', 'no'); e.setAttribute('aria-label', 'Card face down'); });
+        open = []; lock = false;
+        if (set.players > 1) { turn = (turn + 1) % set.players; drawTeams(); }
+      }, 1700);
+    }
+  }
+  function finish() {
+    let txt;
+    if (set.players <= 1) txt = `All 10 matches in ${tries} tries. Great reading!`;
+    else {
+      const top = Math.max(...scores), w = scores.map((s, k) => s === top ? TEAMS[k].n : null).filter(Boolean);
+      txt = w.length > 1 ? `It's a tie: ${w.join(' and ')}!` : `${w[0]} wins with ${top} matches!`;
+    }
+    $('enP').textContent = txt; $('end').hidden = false; fanfare(); confetti(260); $('againBtn').focus();
+  }
+  function banner(t, cls) { const m = document.createElement('div'); m.className = 'msg ' + cls; m.textContent = t; document.body.appendChild(m); setTimeout(() => m.remove(), 1450); }
+
+  /* confetti */
+  let parts = [], raf = 0;
+  function confetti(n) {
+    if (reduce) return;
+    const cv = $('fx'), d = devicePixelRatio; cv.width = innerWidth * d; cv.height = innerHeight * d;
+    const pal = ['#ffc93d', '#22b35e', '#ef5a5a', '#4f8df5', '#b06ef5', '#ff8a3d'];
+    for (let i = 0; i < n; i++) parts.push({ x: cv.width / 2, y: cv.height * .45, vx: (Math.random() - .5) * 24 * d, vy: (-6 - Math.random() * 14) * d, r: (6 + Math.random() * 8) * d, a: Math.random() * 6, va: (Math.random() - .5) * .4, c: pal[i % pal.length] });
+    if (!raf) step();
+  }
+  function step() {
+    const cv = $('fx'), ctx = cv.getContext('2d'), d = devicePixelRatio;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    parts.forEach((q) => { q.vy += .45 * d; q.x += q.vx; q.y += q.vy; q.vx *= .99; q.a += q.va; ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.a); ctx.fillStyle = q.c; ctx.fillRect(-q.r / 2, -q.r / 4, q.r, q.r / 2); ctx.restore(); });
+    parts = parts.filter((q) => q.y < cv.height + 40);
+    raf = parts.length ? requestAnimationFrame(step) : 0;
+  }
+
+  /* optional sound */
+  let ac = null;
+  function audio() { if (!set.sound) return null; try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { return null; } return ac; }
+  function tone(f, s, d, type, vol) { const a = audio(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d); o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02); }
+  function tick() { const a = audio(); if (a) tone(880, a.currentTime, .06, 'sine', .06); }
+  function cheer() { const a = audio(); if (!a) return; const t = a.currentTime; [659, 784, 1046].forEach((f, k) => tone(f, t + k * .1, .22)); }
+  function oops() { const a = audio(); if (!a) return; const t = a.currentTime; tone(392, t, .15, 'sine', .1); tone(330, t + .14, .22, 'sine', .1); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1046, 784, 1046].forEach((f, k) => tone(f, t + k * .13, k === 5 ? .6 : .18, 'square', .07)); }
+
+  /* setup */
+  function seg(el, opts, cur, pick) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(v === cur)); b.onclick = () => { pick(v); save(); renderStart(); }; el.appendChild(b); });
+  }
+  function renderStart() {
+    seg($('segP'), [[1, 'Whole class'], [2, '2 teams'], [3, '3 teams'], [4, '4 teams']], set.players, (v) => { set.players = v; });
+    seg($('segS'), [[true, 'On'], [false, 'Off']], set.sound, (v) => { set.sound = v; });
+  }
+  $('goBtn').onclick = () => { $('start').hidden = true; newGame(); };
+  $('againBtn').onclick = () => { $('end').hidden = true; newGame(); };
+  $('newBtn').onclick = () => { renderStart(); $('start').hidden = false; $('goBtn').focus(); };
+  addEventListener('resize', fit);
+  renderStart(); newGame();
+})();
+</script>
+
+</body>
+</html>
