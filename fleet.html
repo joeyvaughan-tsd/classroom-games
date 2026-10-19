@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Sink the Fleet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Lexend:wght@400;600;700;800&display=swap">
+<style>
+  /* Layout: naval radar. Header strip, the target grids on the left panel, team score cards on the right. */
+  :root {
+    --bg: #06121c; --glow: #10354f; --surface: #0b1d2c; --panel: #11283b; --panel-hi: #18344c;
+    --line: rgba(200, 235, 255, .16); --text: #eaf6ff; --text-dim: rgba(234, 246, 255, .64);
+    --accent: #3ee0c8; --accent-deep: #14917f; --pop: #ff5a3c; --pop-deep: #b3301b;
+    --skip: #23202a; --skip-line: #48404f; --hint-bg: rgba(6, 18, 28, .9); --scrim: rgba(3, 8, 13, .86);
+    --display: "Black Ops One", "Arial Black", Impact, system-ui, sans-serif;
+    --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 50% -20%, var(--glow) 0, transparent 60%);
+    color: var(--text);
+    font-family: var(--body);
+    overflow: hidden;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: var(--body); font-size: .75em; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .85; }
+
+  .wrap {
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+  }
+
+  /* ---------- Setup ---------- */
+  .setup { display: grid; place-items: center; overflow-y: auto; }
+  .setup-card {
+    width: 100%; max-width: 720px; margin-block: auto;
+    background: var(--surface); border: 2px solid var(--line); border-radius: 22px;
+    padding: clamp(20px, 4vw, 36px);
+    display: flex; flex-direction: column; gap: 20px; box-sizing: border-box;
+  }
+  .logo { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: .95; margin: 0; color: var(--accent); text-shadow: 0 4px 0 var(--accent-deep); text-wrap: balance; letter-spacing: .01em; }
+  .logo small { display: block; font-family: var(--body); font-weight: 700; font-size: .3em; color: var(--pop); text-shadow: none; letter-spacing: .14em; text-transform: uppercase; margin-top: 10px; }
+  .lede { margin: 0; color: var(--text-dim); max-width: 60ch; line-height: 1.5; }
+  .field-row { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+  .label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    min-width: 52px; padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 2px solid var(--line); font-weight: 700; font-size: 1rem;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .seg.multi button[aria-pressed="true"]::before { content: "✓ "; }
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .name-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 6px 10px; border: 2px solid var(--line); min-width: 0; }
+  .name-row input { background: transparent; border: 0; padding: 6px 0; width: 100%; min-width: 0; font-weight: 600; }
+  .name-row input:focus { outline: none; }
+  .name-row:focus-within { border-color: var(--accent); }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  .start {
+    align-self: flex-start;
+    font-family: var(--display); font-size: 1.5rem; letter-spacing: .02em;
+    background: var(--pop); color: #fff; border: 0; border-radius: 14px; padding: 14px 30px;
+    box-shadow: 0 6px 0 var(--pop-deep);
+  }
+  .start:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--pop-deep); }
+  .how { margin: 0; padding-left: 1.2em; color: var(--text-dim); line-height: 1.6; font-size: .92rem; }
+
+  /* ---------- Game ---------- */
+  .game { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top .brand { font-family: var(--display); color: var(--accent); font-size: 1.4rem; margin-right: auto; letter-spacing: .02em; }
+  .round { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .tool {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; font-size: .88rem; font-weight: 600; white-space: nowrap;
+  }
+  .tool:hover { background: var(--panel-hi); }
+  .tool:disabled { opacity: .4; cursor: default; }
+  .tool.skip { background: var(--skip); border-color: var(--skip-line); }
+  .tool.armed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px); gap: 14px; min-height: 0; }
+  .play-box { position: relative; min-height: 0; min-width: 0; border-radius: 18px; overflow: hidden; background: var(--surface); border: 2px solid var(--line); }
+  canvas#play { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: pointer; }
+  .status { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .status .who { font-family: var(--display); font-size: clamp(1.1rem, 2.2vw, 1.6rem); line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .tokens { display: flex; gap: 6px; }
+  .tokens i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: inset -2px -3px 0 rgba(0,0,0,.3); display: block; }
+  .tokens i.used { background: transparent; box-shadow: inset 0 0 0 2px var(--text-dim); }
+  .hint {
+    position: absolute; left: 12px; bottom: 12px; z-index: 2;
+    background: var(--hint-bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: .9rem; white-space: nowrap; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+  }
+  .banner, .toast { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; pointer-events: none; }
+  .banner div, .toast div {
+    font-family: var(--display); font-size: clamp(1.6rem, 5vw, 3.4rem); text-align: center; line-height: 1.05; letter-spacing: .02em;
+    padding: 18px 28px; border-radius: 18px; background: var(--banner, var(--pop)); color: #fff;
+    box-shadow: 0 8px 0 rgba(0,0,0,.3); max-width: 86%; text-wrap: balance; overflow-wrap: anywhere;
+    animation: pop .45s cubic-bezier(.3,1.5,.5,1);
+  }
+  .toast { place-items: start center; padding-top: 14%; }
+  .toast div { background: var(--toast, var(--accent)); color: var(--toast-ink, #1a1a1a); }
+  .banner small, .toast small { display: block; font-family: var(--body); font-size: .36em; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; opacity: .9; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .board { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-top: 8px; }
+  .team {
+    flex: 1 1 0; max-height: 132px; min-height: 0;
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    background: var(--panel); border: 3px solid transparent; border-radius: 14px;
+    padding: 8px 12px; text-align: left; position: relative;
+  }
+  .team:hover { background: var(--panel-hi); }
+  .team.active { border-color: var(--tc); background: var(--panel-hi); }
+  .team .dot { grid-row: 1 / span 2; width: 22px; height: 22px; background: var(--tc); }
+  .team .tname { font-weight: 700; font-size: clamp(.9rem, 1.3vw, 1.1rem); line-height: 1.15; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team .meta { font-size: .76rem; color: var(--text-dim); grid-column: 2; font-variant-numeric: tabular-nums; }
+  .team .score { grid-row: 1 / span 2; grid-column: 3; font-family: var(--display); font-size: clamp(1.6rem, 3vw, 2.5rem); font-variant-numeric: tabular-nums; }
+  .team .up {
+    position: absolute; top: -9px; right: 10px; background: var(--tc); color: #14153d;
+    font-size: .66rem; font-weight: 700; letter-spacing: .12em; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  }
+  .team .bump { animation: bump .6s ease; display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.3); color: var(--accent); } }
+
+  /* ---------- Final ---------- */
+  .final { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--scrim); padding: 16px; overflow-y: auto; }
+  .final-card {
+    width: 100%; max-width: 560px; box-sizing: border-box;
+    background: var(--surface); border: 3px solid var(--accent); border-radius: 22px; padding: 26px;
+    display: flex; flex-direction: column; gap: 14px; animation: pop .5s cubic-bezier(.3,1.5,.5,1);
+  }
+  .final-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(1.9rem, 5vw, 3.1rem); line-height: 1; color: var(--accent); text-wrap: balance; overflow-wrap: anywhere; }
+  .final-kicker { font-size: .8rem; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--pop); }
+  .standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .standings li { display: grid; grid-template-columns: 2.4em auto 1fr auto; gap: 10px; align-items: center; background: var(--panel); border-radius: 12px; padding: 8px 12px; }
+  .standings .rank { font-family: var(--display); color: var(--text-dim); }
+  .standings li:first-child .rank { color: var(--accent); }
+  .standings .nm { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .standings .pts { font-family: var(--display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .final-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .final-actions button { border: 0; border-radius: 12px; padding: 12px 20px; font-weight: 700; background: var(--accent); color: var(--bg); }
+  .final-actions button.ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+
+  @media (max-width: 820px) {
+    body { overflow: auto; }
+    .wrap.game { height: auto; min-height: 100%; }
+    .stage { grid-template-columns: 1fr; }
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); order: -1; }
+    .team { max-height: none; }
+    .play-box { height: 74vh; min-height: 440px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner div, .toast div, .final-card, .team .bump { animation: none; }
+  }
+</style>
+
+<section class="wrap setup" id="setup">
+  <div class="setup-card">
+    <h1 class="logo">Sink the Fleet<small>Classroom review edition</small></h1>
+    <p class="lede">Hidden ships lurk on the grid. When a team answers correctly, they fire one shot. A hit bursts into flames, and sinking a whole ship earns a bonus. Play two teams with two fleets, or all teams against one hidden fleet. Wrong answer? Skip to the next team.</p>
+    <div class="field-row">
+      <span class="label" id="lblTeams">Number of teams</span>
+      <div class="seg" id="segTeams" role="group" aria-labelledby="lblTeams"></div>
+    </div>
+    <div class="field-row">
+      <span class="label">Team names</span>
+      <div class="names" id="names"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblPer">Shots per turn</span>
+      <div class="seg" id="segPer" role="group" aria-labelledby="lblPer"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblRounds">Rounds</span>
+      <div class="seg" id="segRounds" role="group" aria-labelledby="lblRounds"></div>
+    </div>
+    <div id="gameOpts" class="field-row"></div>
+    <ul class="how"><li>After a correct answer, the team clicks a square on the glowing target grid to fire. Squares already fired at cannot be picked again.</li><li>A white peg is a miss; a flame is a hit. When every square of a ship is hit, the whole ship appears and is crossed off the fleet list.</li><li>Two teams, two fleets: the first team to sink the other team&#39;s whole fleet wins (+50). All teams vs. one hidden fleet: the game ends when the last ship sinks.</li></ul>
+    <button class="start" id="startBtn" type="button">Start game</button>
+  </div>
+</section>
+
+<section class="wrap game" id="game" hidden>
+  <div class="top">
+    <div class="brand">Sink the Fleet</div>
+    <div class="round" id="roundLbl">Round 1</div>
+    <button class="tool skip" id="skipBtn" type="button">Wrong answer, skip <kbd>S</kbd></button>
+    <button class="tool" id="undoBtn" type="button" disabled>Undo <kbd>U</kbd></button>
+    <button class="tool" id="soundBtn" type="button" aria-pressed="true">Sound: On</button>
+    <button class="tool" id="fullBtn" type="button">Full screen</button>
+    <button class="tool" id="endBtn" type="button">End game</button>
+  </div>
+  <div class="stage">
+    <div class="play-box" id="playBox">
+      <canvas id="play" aria-label="Sink the Fleet target grid."></canvas>
+      <div class="status"><div class="who" id="whoLbl"></div><div class="tokens" id="tokensLbl"></div></div>
+      <div class="hint" id="hint"></div>
+      <div class="banner" id="banner" hidden><div id="bannerTxt"></div></div>
+      <div class="toast" id="toast" hidden><div id="toastTxt"></div></div>
+    </div>
+    <div class="board" id="board" aria-label="Scoreboard"></div>
+  </div>
+</section>
+
+<div class="final" id="final" hidden role="dialog" aria-modal="true" aria-labelledby="finalName">
+  <div class="final-card">
+    <div class="final-kicker" id="finalKicker">Game over · Winner</div>
+    <h2 id="finalName"></h2>
+    <ol class="standings" id="standings"></ol>
+    <div class="final-actions">
+      <button id="againBtn" type="button">Play again, same teams</button>
+      <button id="setupBtn" class="ghost" type="button">Change setup</button>
+      <button id="finalUndo" class="ghost" type="button">Undo last turn</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function makeGame(core) {
+  const SHIPS = {
+    10: [{ n: 'Carrier', l: 5 }, { n: 'Cruiser', l: 4 }, { n: 'Submarine', l: 3 }, { n: 'Destroyer', l: 3 }, { n: 'Patrol boat', l: 2 }],
+    8: [{ n: 'Cruiser', l: 4 }, { n: 'Submarine', l: 3 }, { n: 'Destroyer', l: 3 }, { n: 'Patrol boat', l: 2 }]
+  };
+  const LET = 'ABCDEFGHIJ';
+  let ui = null, o = {}, pick = null, mode = 'idle', timers = [], cs = 40, built = '';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+  const st = () => core.game && core.game.fl;
+  const inkFor = (hex) => { const h = hex.replace('#', ''); const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111' : '#fff'; };
+
+  /* ---------- fleet setup ---------- */
+  function placeFleet(n) {
+    for (let attempt = 0; attempt < 400; attempt++) {
+      const occ = new Set(), near = new Set(), ships = [];
+      let ok = true;
+      for (const sh of SHIPS[n]) {
+        let placed = false;
+        for (let t = 0; t < 200 && !placed; t++) {
+          const hor = Math.random() < .5, r = Math.floor(Math.random() * (hor ? n : n - sh.l + 1)), c = Math.floor(Math.random() * (hor ? n - sh.l + 1 : n));
+          const cells = Array.from({ length: sh.l }, (_, k) => (r + (hor ? 0 : k)) * n + (c + (hor ? k : 0)));
+          if (cells.some((x) => occ.has(x) || near.has(x))) continue;
+          cells.forEach((x) => {
+            occ.add(x);
+            const rr = Math.floor(x / n), cc = x % n;
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const a = rr + dr, b = cc + dc; if (a >= 0 && a < n && b >= 0 && b < n) near.add(a * n + b); }
+          });
+          ships.push({ n: sh.n, l: sh.l, cells, hor, sunk: false });
+          placed = true;
+        }
+        if (!placed) { ok = false; break; }
+      }
+      if (ok) return { ships, shots: {} };
+    }
+    return { ships: [], shots: {} };
+  }
+  const allSunk = (f) => f.ships.length > 0 && f.ships.every((s) => s.sunk);
+
+  /* which fleet does the active team fire at, and whose waters are they */
+  function targetIdx() { const S = st(); return S.mode === 'two' ? 1 - core.game.active : 0; }
+
+  /* ---------- UI ---------- */
+  function ensureCSS() {
+    if (document.getElementById('flCss')) return;
+    const css = document.createElement('style'); css.id = 'flCss';
+    css.textContent = `
+      #playBox .toast { place-items: end center !important; padding: 0 0 14px !important; }
+      #playBox .toast div { font-size: clamp(1.1rem, 2.6vw, 2rem) !important; }
+      .fl { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: clamp(14px, 3vw, 36px); padding: 40px 12px 50px; box-sizing: border-box; font-family: var(--body); color: var(--text); }
+      .fl.shake { animation: flshake .45s; }
+      @keyframes flshake { 15%, 55% { transform: translate(-9px, 4px); } 35%, 75% { transform: translate(9px, -4px); } }
+      .fl .side { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: opacity .3s; }
+      .fl .side.off { opacity: .45; }
+      .fl .ttl { text-align: center; line-height: 1.15; }
+      .fl .ttl b { display: block; font-family: var(--display); font-size: clamp(1rem, 2.2vw, 1.6rem); letter-spacing: .02em; }
+      .fl .ttl span { font-size: .85rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; display: inline-block; margin-top: 4px; }
+      .fl .fg { position: relative; flex: none; }
+      .fl .sea { position: absolute; border-radius: 10px; overflow: hidden; background: radial-gradient(circle at 50% 50%, #0f3d4f 0, #082433 70%); box-shadow: 0 0 0 3px rgba(62,224,200,.35), 0 14px 30px rgba(0,0,0,.5); }
+      .fl .sea::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(rgba(62,224,200,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(62,224,200,.18) 1px, transparent 1px); background-size: var(--cs) var(--cs); }
+      .fl .sea::after { content: ''; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; transform: translate(-50%, -50%); background: conic-gradient(from 0deg, rgba(62,224,200,.22), transparent 18%); animation: flsweep 6s linear infinite; pointer-events: none; }
+      .fl .side.off .sea::after { display: none; }
+      @keyframes flsweep { to { transform: translate(-50%, -50%) rotate(360deg); } }
+      .fl .lab { position: absolute; display: grid; place-items: center; font-weight: 800; color: rgba(234,246,255,.7); font-size: calc(var(--cs) * .38); }
+      .fl .cell { position: absolute; z-index: 2; border: 0; background: transparent; padding: 0; border-radius: 6px; display: grid; place-items: center; }
+      .fl .side.on .cell.open { cursor: crosshair; }
+      .fl .side.on .cell.open:hover, .fl .side.on .cell.open:focus-visible { background: rgba(62,224,200,.25); box-shadow: inset 0 0 0 3px #3ee0c8; outline: none; }
+      .fl .side.on .cell.open:hover::before, .fl .side.on .cell.open:focus-visible::before { content: ''; position: absolute; inset: 22%; border: 3px solid #3ee0c8; border-radius: 50%; }
+      .fl .side.on .cell.open:hover::after, .fl .side.on .cell.open:focus-visible::after { content: ''; position: absolute; inset: 0; background: linear-gradient(#3ee0c8, #3ee0c8) center / 3px 100% no-repeat, linear-gradient(#3ee0c8, #3ee0c8) center / 100% 3px no-repeat; opacity: .55; }
+      .fl .peg { width: 42%; height: 42%; border-radius: 50%; }
+      .fl .peg.miss { background: #eef6ff; box-shadow: 0 0 0 3px rgba(255,255,255,.25); }
+      .fl .peg.hit { width: 58%; height: 58%; background: radial-gradient(circle at 40% 35%, #fff3a0 0, #ffb020 30%, #ff4a1c 62%, #9a1608 100%); box-shadow: 0 0 calc(var(--cs) * .35) #ff6a2a; animation: flflame 1s ease-in-out infinite alternate; }
+      @keyframes flflame { to { transform: scale(1.12); box-shadow: 0 0 calc(var(--cs) * .5) #ffb020; } }
+      .fl .hull { position: absolute; z-index: 1; border-radius: 999px; background: linear-gradient(180deg, #a9b6c4 0, #6f7e8f 55%, #47525f 100%); box-shadow: inset 0 0 0 3px rgba(0,0,0,.35), 0 4px 10px rgba(0,0,0,.5); animation: flreveal .5s ease-out; }
+      .fl .hull::after { content: ''; position: absolute; inset: 30%; border-radius: 999px; background: rgba(255,255,255,.18); }
+      .fl .hull.mine { opacity: .0; }
+      @keyframes flreveal { from { transform: scale(.6); opacity: 0; } }
+      .fl .shell { position: absolute; z-index: 5; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px #fff, 0 0 26px #3ee0c8; pointer-events: none; }
+      .fl .fx { position: absolute; z-index: 4; pointer-events: none; border-radius: 50%; transform: translate(-50%, -50%); }
+      .fl .fx.splash { border: 4px solid #fff; animation: flring .8s ease-out forwards; }
+      .fl .fx.boom { background: radial-gradient(circle, #fff6b0 0, #ffb020 30%, #ff4a1c 55%, rgba(255,60,20,0) 72%); animation: flboom .7s ease-out forwards; }
+      @keyframes flring { from { width: 0; height: 0; opacity: 1; } to { width: calc(var(--cs) * 2.6); height: calc(var(--cs) * 2.6); opacity: 0; } }
+      @keyframes flboom { from { width: 0; height: 0; opacity: 1; } 60% { opacity: 1; } to { width: calc(var(--cs) * 3.4); height: calc(var(--cs) * 3.4); opacity: 0; } }
+      .fl .flst { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; max-width: 100%; }
+      .fl .ship { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 700; color: var(--text-dim); }
+      .fl .ship i { display: inline-flex; gap: 2px; }
+      .fl .ship i b { width: 11px; height: 11px; border-radius: 3px; background: #3ee0c8; }
+      .fl .ship.hitpart i b.h { background: #ff5a3c; }
+      .fl .ship.sunk { color: #ff8a73; text-decoration: line-through 2px; }
+      .fl .ship.sunk i b { background: #ff5a3c; opacity: .6; }
+      .fl.single .flst { flex: none; width: 200px; flex-direction: column; align-items: flex-start; gap: 10px; }
+      .fl.single .flst .ship { font-size: .95rem; }
+      .fl.single .flst .ship i b { width: 16px; height: 16px; }
+      .fl .big { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 8; }
+      .fl .big div { font-family: var(--display); font-size: clamp(2rem, 6vw, 4.4rem); padding: 12px 32px; border-radius: 20px; background: var(--bc); color: var(--bi); box-shadow: 0 0 0 6px #fff, 0 20px 50px rgba(0,0,0,.6); animation: flbig 1.9s ease-out forwards; text-align: center; line-height: 1.05; }
+      .fl .big small { display: block; font-family: var(--body); font-weight: 800; font-size: .4em; margin-top: 6px; }
+      @keyframes flbig { 0% { transform: scale(.3) rotate(-6deg); opacity: 0; } 15% { transform: scale(1.1) rotate(2deg); opacity: 1; } 85% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
+      .fl .big.stay div { animation: flbigstay .6s ease-out forwards; }
+      @keyframes flbigstay { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+      .fl canvas.conf { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 7; }
+      @media (prefers-reduced-motion: reduce) { .fl .sea::after, .fl .peg.hit, .fl .hull, .fl .big div, .fl.shake { animation: none; } .fl .fx { display: none; } }`;
+    document.head.appendChild(css);
+  }
+  function build() {
+    const S = st(); if (!S) return;
+    ensureCSS();
+    const key = S.mode + S.n;
+    if (ui && built === key) return;
+    if (ui) ui.remove();
+    built = key;
+    ui = document.createElement('div');
+    ui.className = 'fl' + (S.mode === 'two' ? '' : ' single');
+    const n = S.n;
+    const grids = S.mode === 'two' ? [0, 1] : [0];
+    ui.innerHTML = grids.map((g) => `<div class="side" id="flSide${g}"><div class="ttl" id="flTtl${g}"></div><div class="fg" id="flFg${g}"></div>${S.mode === 'two' ? `<div class="flst" id="flSt${g}"></div>` : ''}</div>`).join('') + (S.mode === 'two' ? '' : '<div class="flst" id="flSt0"></div>');
+    $('playBox').appendChild(ui);
+    grids.forEach((g) => {
+      const fg = $('flFg' + g);
+      let h = '<div class="sea"></div>';
+      for (let k = 0; k < n; k++) h += `<div class="lab" data-c="${k}" data-hdr="col">${k + 1}</div><div class="lab" data-r="${k}" data-hdr="row">${LET[k]}</div>`;
+      for (let i = 0; i < n * n; i++) h += `<button type="button" class="cell" data-g="${g}" data-i="${i}" aria-label="${LET[Math.floor(i / n)]}${i % n + 1}"></button>`;
+      fg.innerHTML = h;
+      fg.addEventListener('click', (e) => {
+        const c = e.target.closest('.cell'); if (!c || mode !== 'pick') return;
+        const gi = +c.dataset.g, i = +c.dataset.i, Sx = st();
+        if (gi !== targetIdx() || Sx.fleets[gi].shots[i]) return;
+        pick = { g: gi, i }; core.act();
+      });
+    });
+    const pb = $('playBox').getBoundingClientRect(); if (pb.width) layout(pb.width, pb.height);
+  }
+  function layout(W, H) {
+    const S = st(); if (!ui || !S) return;
+    const n = S.n;
+    if (S.mode === 'two') cs = Math.floor(Math.max(16, Math.min((W - 70) / (2 * (n + 1)), (H - 40 - 50 - 60 - 52) / (n + 1))));
+    else cs = Math.floor(Math.max(18, Math.min((W - 60 - 240) / (n + 1), (H - 40 - 50 - 70) / (n + 1))));
+    ui.style.setProperty('--cs', cs + 'px');
+    if (S.mode === 'two') ui.querySelectorAll('.flst').forEach((x) => { x.style.width = (cs * (n + 1)) + 'px'; });
+    ui.querySelectorAll('.fg').forEach((fg) => {
+      fg.style.width = fg.style.height = (cs * (n + 1)) + 'px';
+      const sea = fg.querySelector('.sea'); Object.assign(sea.style, { left: cs + 'px', top: cs + 'px', width: cs * n + 'px', height: cs * n + 'px' });
+      fg.querySelectorAll('.lab').forEach((l) => {
+        if (l.dataset.hdr === 'col') Object.assign(l.style, { left: cs * (+l.dataset.c + 1) + 'px', top: '0px', width: cs + 'px', height: cs + 'px' });
+        else Object.assign(l.style, { left: '0px', top: cs * (+l.dataset.r + 1) + 'px', width: cs + 'px', height: cs + 'px' });
+      });
+      fg.querySelectorAll('.cell').forEach((c) => { const i = +c.dataset.i; Object.assign(c.style, { left: cs * (i % n + 1) + 1 + 'px', top: cs * (Math.floor(i / n) + 1) + 1 + 'px', width: cs - 2 + 'px', height: cs - 2 + 'px' }); });
+    });
+    render();
+  }
+  function cellBox(g, i) { const n = st().n; return { x: cs * (i % n + 1) + cs / 2, y: cs * (Math.floor(i / n) + 1) + cs / 2 }; }
+
+  function render() {
+    const S = st(); if (!ui || !S) return;
+    const teams = core.cfg.teams, act = core.game.active, tgt = targetIdx(), n = S.n;
+    const grids = S.mode === 'two' ? [0, 1] : [0];
+    grids.forEach((g) => {
+      const f = S.fleets[g], fg = $('flFg' + g), side = $('flSide' + g), on = g === tgt && mode === 'pick';
+      side.classList.toggle('on', on);
+      side.classList.toggle('off', S.mode === 'two' && g !== tgt);
+      fg.querySelectorAll('.cell').forEach((c) => {
+        const i = +c.dataset.i, sh = f.shots[i];
+        c.classList.toggle('open', !sh);
+        c.innerHTML = sh ? `<span class="peg ${sh}"></span>` : '';
+        c.tabIndex = on && !sh ? 0 : -1;
+        c.setAttribute('aria-label', `${LET[Math.floor(i / n)]}${i % n + 1}${sh ? ': ' + sh : ''}`);
+      });
+      fg.querySelectorAll('.hull').forEach((h) => h.remove());
+      f.ships.filter((s) => s.sunk).forEach((s) => {
+        const a = cellBox(g, Math.min(...s.cells)), h = document.createElement('div');
+        h.className = 'hull';
+        const w = s.hor ? cs * s.l : cs, hh = s.hor ? cs : cs * s.l, pad = cs * .12;
+        Object.assign(h.style, { left: a.x - cs / 2 + pad + 'px', top: a.y - cs / 2 + pad + 'px', width: w - pad * 2 + 'px', height: hh - pad * 2 + 'px' });
+        fg.appendChild(h);
+      });
+      // title
+      const ttl = $('flTtl' + g);
+      if (S.mode === 'two') {
+        const owner = teams[g], shooter = teams[1 - g];
+        ttl.innerHTML = `<b style="color:${owner.color}">${esc(owner.name)}'s waters</b><span style="background:${shooter.color};color:${inkFor(shooter.color)}">${esc(shooter.name)} fires here</span>`;
+      } else {
+        ttl.innerHTML = `<b>Enemy waters</b><span style="background:${teams[act].color};color:${inkFor(teams[act].color)}">${esc(teams[act].name)} is up</span>`;
+      }
+      // status
+      const stEl = $('flSt' + g);
+      stEl.innerHTML = (S.mode === 'two' ? '' : '<div class="ttl" style="text-align:left"><b>The fleet</b></div>') + f.ships.map((s) => {
+        const hits = s.cells.filter((x) => f.shots[x] === 'hit').length;
+        return `<div class="ship ${s.sunk ? 'sunk' : hits ? 'hitpart' : ''}"><i>${s.cells.map((x, k) => `<b class="${k < hits ? 'h' : ''}"></b>`).join('')}</i>${esc(s.n)}</div>`;
+      }).join('');
+    });
+  }
+
+  /* ---------- effects ---------- */
+  function fx(g, i, kind) {
+    const fg = $('flFg' + g), b = cellBox(g, i), d = document.createElement('div');
+    d.className = 'fx ' + kind; d.style.left = b.x + 'px'; d.style.top = b.y + 'px';
+    fg.appendChild(d); setTimeout(() => d.remove(), 900);
+    if (kind === 'splash') { const d2 = d.cloneNode(); d2.style.animationDelay = '.18s'; fg.appendChild(d2); setTimeout(() => d2.remove(), 1100); }
+  }
+  function shell(g, i, cb) {
+    if (core.reduceMotion) { cb(); return; }
+    const fg = $('flFg' + g), b = cellBox(g, i), s = document.createElement('div');
+    s.className = 'shell';
+    const fr = fg.getBoundingClientRect(), pb = $('playBox').getBoundingClientRect();
+    const sx = pb.left + pb.width / 2 - fr.left, sy = pb.bottom - fr.top;
+    fg.appendChild(s);
+    s.animate([{ left: sx + 'px', top: sy + 'px', transform: 'scale(2)' }, { left: (sx + b.x) / 2 + 'px', top: Math.min(sy, b.y) - cs * 2 + 'px', transform: 'scale(1.6)', offset: .5 }, { left: b.x - 5 + 'px', top: b.y - 5 + 'px', transform: 'scale(1)' }], { duration: 420, easing: 'ease-in' }).onfinish = () => { s.remove(); cb(); };
+  }
+  function banner(text, sub, col, stay) {
+    const b = document.createElement('div'); b.className = 'big' + (stay ? ' stay' : '');
+    b.innerHTML = `<div style="--bc:${col};--bi:${inkFor(col)}">${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+    ui.appendChild(b); if (!stay) setTimeout(() => b.remove(), 2000);
+  }
+  function shake() { if (core.reduceMotion) return; ui.classList.remove('shake'); void ui.offsetWidth; ui.classList.add('shake'); }
+  function confetti(col) {
+    if (core.reduceMotion) return;
+    const cv = document.createElement('canvas'); cv.className = 'conf'; ui.appendChild(cv);
+    const r = ui.getBoundingClientRect(), d = devicePixelRatio || 1; cv.width = r.width * d; cv.height = r.height * d;
+    const ctx = cv.getContext('2d'), pal = [col, '#ffffff', '#3ee0c8', '#ffb020', '#ff5a3c'];
+    const ps = Array.from({ length: 180 }, () => ({ x: Math.random() * cv.width, y: -Math.random() * cv.height * .6, vx: (Math.random() - .5) * 3 * d, vy: (2 + Math.random() * 4) * d, a: Math.random() * 6, va: (Math.random() - .5) * .3, r: (6 + Math.random() * 8) * d, c: pal[Math.floor(Math.random() * pal.length)] }));
+    const t0 = performance.now();
+    const step = (t) => { ctx.clearRect(0, 0, cv.width, cv.height); ps.forEach((p) => { p.x += p.vx; p.y += p.vy; p.a += p.va; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }); if (t - t0 < 5000 && cv.isConnected) requestAnimationFrame(step); else cv.remove(); };
+    requestAnimationFrame(step);
+  }
+
+  /* ---------- sound ---------- */
+  function noise(dur, type, freq, vol) { const a = core.audio(); if (!a) return; const t = a.currentTime, n = core.noiseSrc(dur), f = a.createBiquadFilter(), g = a.createGain(); f.type = type; f.frequency.value = freq; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); n.connect(f).connect(g).connect(a.destination); n.start(t); }
+  const boom = () => { noise(.7, 'lowpass', 300, .6); const a = core.audio(); if (a) core.tone(70, a.currentTime, .4, 'sine', .25); };
+  const splash = () => noise(.5, 'highpass', 1500, .25);
+  const whistle = () => { const a = core.audio(); if (!a) return; const t = a.currentTime, os = a.createOscillator(), g = a.createGain(); os.frequency.setValueAtTime(1400, t); os.frequency.exponentialRampToValueAtTime(500, t + .4); g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + .42); os.connect(g).connect(a.destination); os.start(t); os.stop(t + .45); };
+
+  /* ---------- shot ---------- */
+  function resolve(g, i) {
+    const S = st(), f = S.fleets[g], team = core.game.active, t = core.cfg.teams[team];
+    const ship = f.ships.find((s) => s.cells.includes(i));
+    f.shots[i] = ship ? 'hit' : 'miss';
+    let sunk = null;
+    if (ship && ship.cells.every((x) => f.shots[x] === 'hit')) { ship.sunk = true; sunk = ship; }
+    const done = allSunk(f);
+    render();
+    if (!ship) {
+      fx(g, i, 'splash'); splash();
+      later(() => core.finish({ kind: 'adjust', deltas: {}, text: 'Splash! A miss.', mood: 'neutral', label: 'Miss' }), 700);
+      return;
+    }
+    fx(g, i, 'boom'); boom(); shake();
+    const hitP = o.hit, sinkP = sunk ? o.sink : 0;
+    if (!sunk) { later(() => core.finish({ kind: 'pts', pts: hitP, text: `Hit! +${hitP}`, label: 'Hit' }), 800); return; }
+    const owner = S.mode === 'two' ? core.cfg.teams[g].name + "'s " : '';
+    if (done) {
+      S.over = true;
+      const winP = S.mode === 'two' ? 50 : 0, total = hitP + sinkP + winP;
+      later(() => {
+        if (S.mode === 'two') { banner(`${t.name} wins!`, `Sank ${owner}whole fleet`, t.color, true); confetti(t.color); }
+        else { banner('Fleet destroyed!', `${t.name} sank the last ship`, t.color, true); confetti(t.color); }
+      }, 500);
+      later(() => core.finish({ kind: 'adjust', deltas: { [team]: total }, text: S.mode === 'two' ? `Sank the whole fleet! +${total}` : `Sank the ${sunk.n}! +${total}`, mood: 'good', label: 'Won' }), 2600);
+      return;
+    }
+    later(() => banner('SUNK!', `${owner}${sunk.n}`, '#ff5a3c'), 450);
+    later(() => core.finish({ kind: 'adjust', deltas: { [team]: hitP + sinkP }, text: `Sank the ${sunk.n}! +${hitP + sinkP}`, mood: 'special', label: `Sank ${sunk.n}` }), 2300);
+  }
+
+  return {
+    perTurn: [1, 2, 3],
+    defaultPer: 1,
+    defaultRounds: 0,
+    simpleBoard: true,
+    defaultOpts: { mode: 'two', size: 10, hit: 10, sink: 20 },
+    get hint() {
+      const S = st(); if (!S || !core.cfg) return '';
+      const t = core.cfg.teams[core.game.active];
+      if (S.over) return '';
+      return S.mode === 'two' ? `${t.name} answered correctly: fire one shot at ${core.cfg.teams[1 - core.game.active].name}'s waters.` : `${t.name} answered correctly: fire one shot at the enemy fleet.`;
+    },
+    renderOptions(el, opts) {
+      el.innerHTML = `<div class="field-row"><span class="label" id="lblFm">Mode</span><div class="seg" id="segFm" role="group" aria-labelledby="lblFm"></div></div>
+        <p style="margin:2px 0 10px;font-size:.85rem;opacity:.75">Two teams, two fleets needs exactly 2 teams. With 3 or more teams, everyone fires at one hidden fleet.</p>
+        <div class="field-row"><span class="label" id="lblFs">Grid size</span><div class="seg" id="segFs" role="group" aria-labelledby="lblFs"></div></div>
+        <div class="field-row"><span class="label" id="lblFh">Points per hit</span><div class="seg" id="segFh" role="group" aria-labelledby="lblFh"></div></div>
+        <div class="field-row"><span class="label" id="lblFk">Bonus for sinking a ship</span><div class="seg" id="segFk" role="group" aria-labelledby="lblFk"></div></div>`;
+      const set = (k) => (v) => { opts[k] = v; core.save(); core.renderSetup(); };
+      core.seg(el.querySelector('#segFm'), [{ value: 'two', label: 'Two teams, two fleets' }, { value: 'all', label: 'All teams vs. one hidden fleet' }], (v) => opts.mode === v, set('mode'));
+      core.seg(el.querySelector('#segFs'), [{ value: 8, label: '8 × 8' }, { value: 10, label: '10 × 10' }], (v) => opts.size === v, set('size'));
+      core.seg(el.querySelector('#segFh'), [{ value: 1, label: '1' }, { value: 5, label: '5' }, { value: 10, label: '10' }], (v) => opts.hit === v, set('hit'));
+      core.seg(el.querySelector('#segFk'), [{ value: 0, label: 'None' }, { value: 20, label: '+20' }, { value: 50, label: '+50' }], (v) => opts.sink === v, set('sink'));
+    },
+    start(cfg) {
+      o = cfg.opts;
+      if (!core.game.fl) {
+        const m = o.mode === 'two' && cfg.n === 2 ? 'two' : 'all', n = o.size === 8 ? 8 : 10;
+        core.game.fl = { mode: m, n, fleets: m === 'two' ? [placeFleet(n), placeFleet(n)] : [placeFleet(n)], over: false };
+      }
+      build();
+    },
+    ready() {
+      timers.forEach(clearTimeout); timers = [];
+      build();
+      if (ui) ui.querySelectorAll('.big, canvas.conf').forEach((e) => e.remove());
+      pick = null; mode = 'pick'; render();
+    },
+    isOver() { const S = st(); return !!(S && S.over); },
+    resize(W, H) { layout(W, H); },
+    pointer() {},
+    key() { return false; },
+    act() {
+      if (mode !== 'pick' || !pick) return false;
+      const { g, i } = pick; mode = 'busy'; render();
+      whistle();
+      shell(g, i, () => resolve(g, i));
+      return true;
+    },
+    draw() {}
+  };
+}
+
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = [
+    { c: '#ef5350', n: 'Red Team' }, { c: '#f7913d', n: 'Orange Team' }, { c: '#f6c445', n: 'Gold Team' },
+    { c: '#43b96d', n: 'Green Team' }, { c: '#4a8cf0', n: 'Blue Team' }, { c: '#b07cf0', n: 'Purple Team' }
+  ];
+  const ROUND_OPTS = [3, 5, 8, 10, 0];
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const STORE = 'classgame-' + 'fleet';
+
+  let setup = { n: 4, names: COLORS.map((c) => c.n), per: 1, rounds: 5, sound: true, opts: {} };
+  let cfg = null, game = null, history = [], phase = 'ready', pending = [];
+
+  const core = {
+    get cfg() { return cfg; }, get game() { return game; }, get phase() { return phase; },
+    reduceMotion, colors: COLORS, W: 0, H: 0,
+    finish, audio, tone, noiseSrc, seg, save: saveSetup, renderSetup: () => renderSetup(),
+    teamColor: () => cfg.teams[game.active].color,
+    act: () => act(),
+    award: (i, pts, text) => award(i, pts, text)
+  };
+  const G = makeGame(core);
+  if (G.defaultPer) setup.per = G.defaultPer;
+  if (G.defaultRounds !== undefined) setup.rounds = G.defaultRounds;
+  const TC = (i) => (G.teamColors && G.teamColors[i]) || COLORS[i];
+  const TEAM_OPTS = G.teamOptions || [2, 3, 4, 5, 6];
+  if (G.teamColors) setup.names = setup.names.map((n, i) => TC(i).n);
+  try { const s = JSON.parse(localStorage.getItem(STORE) || '{}'); Object.assign(setup, s); if (s.per == null && G.defaultPer) setup.per = G.defaultPer; setup.opts = Object.assign({}, G.defaultOpts, s.opts || {}); } catch (e) { setup.opts = Object.assign({}, G.defaultOpts); }
+  if (!G.perTurn.includes(setup.per)) setup.per = G.perTurn[0];
+  if (!TEAM_OPTS.includes(setup.n)) setup.n = TEAM_OPTS[0];
+
+  function saveSetup() { try { localStorage.setItem(STORE, JSON.stringify(setup)); } catch (e) {} }
+
+  /* ---------- Setup ---------- */
+  function seg(el, opts, isOn, onPick, multi) {
+    el.innerHTML = '';
+    el.classList.toggle('multi', !!multi);
+    opts.forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.label; b.setAttribute('aria-pressed', String(isOn(o.value)));
+      b.addEventListener('click', () => onPick(o.value));
+      el.appendChild(b);
+    });
+  }
+  function renderSetup() {
+    const pick = (key) => (v) => { setup[key] = v; saveSetup(); renderSetup(); };
+    seg($('segTeams'), TEAM_OPTS.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.n, pick('n'));
+    seg($('segPer'), G.perTurn.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.per, pick('per'));
+    seg($('segRounds'), ROUND_OPTS.map((v) => ({ value: v, label: v ? String(v) : 'No limit' })), (v) => v === setup.rounds, pick('rounds'));
+    G.renderOptions($('gameOpts'), setup.opts);
+    const box = $('names');
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null;
+    box.innerHTML = '';
+    for (let i = 0; i < setup.n; i++) {
+      const row = document.createElement('label');
+      row.className = 'name-row';
+      row.innerHTML = `<span class="dot" style="background:${TC(i).c}"></span><input id="tn${i}" data-i="${i}" maxlength="22" spellcheck="false" aria-label="Team ${i + 1} name">`;
+      const inp = row.querySelector('input');
+      inp.value = setup.names[i] || TC(i).n;
+      inp.addEventListener('input', () => { setup.names[i] = inp.value; saveSetup(); });
+      box.appendChild(row);
+    }
+    if (focused != null && $('tn' + focused)) $('tn' + focused).focus();
+  }
+
+  function startGame(keepCfg) {
+    if (!keepCfg) {
+      cfg = {
+        n: setup.n, per: setup.per, rounds: setup.rounds, opts: Object.assign({}, setup.opts),
+        teams: Array.from({ length: setup.n }, (_, i) => ({ name: (setup.names[i] || '').trim() || TC(i).n, color: TC(i).c }))
+      };
+    }
+    game = { scores: Array(cfg.n).fill(0), turns: Array(cfg.n).fill(0), last: Array(cfg.n).fill(null), active: 0, used: 0, over: false };
+    history = [];
+    clearPending();
+    $('setup').hidden = true; $('final').hidden = true; $('game').hidden = false; $('toast').hidden = true;
+    G.start(cfg);
+    resize();
+    renderBoard();
+    showBanner(cfg.teams[0].name, 'First up', cfg.teams[0].color);
+    toReady();
+  }
+
+  /* ---------- Scoreboard ---------- */
+  function renderBoard(bumpIdx) {
+    const b = $('board');
+    b.innerHTML = '';
+    cfg.teams.forEach((t, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      const on = i === game.active && !game.over;
+      el.className = 'team' + (on ? ' active' : '');
+      el.style.setProperty('--tc', t.color);
+      const turns = cfg.rounds ? `Turns ${game.turns[i]}/${cfg.rounds}` : `Turns ${game.turns[i]}`;
+      const last = game.last[i] == null ? '' : ` · Last: ${game.last[i]}`;
+      el.innerHTML = `${on ? '<span class="up">Up now</span>' : ''}<span class="dot"></span>
+        <span class="tname"></span><span class="score"><span class="${i === bumpIdx ? 'bump' : ''}">${game.scores[i]}</span></span>
+        <span class="meta"></span>`;
+      el.querySelector('.tname').textContent = t.name;
+      el.querySelector('.meta').textContent = G.simpleBoard ? '' : `${turns}${last} · key ${i + 1}`;
+      if (G.simpleBoard) el.querySelector('.meta').remove();
+      el.setAttribute('aria-label', `${t.name}, ${game.scores[i]} points. Make this team active.`);
+      el.addEventListener('click', () => selectTeam(i));
+      b.appendChild(el);
+    });
+    const t = cfg.teams[game.active];
+    $('whoLbl').textContent = t.name;
+    $('whoLbl').style.color = t.color;
+    $('tokensLbl').innerHTML = cfg.per > 1 ? Array.from({ length: cfg.per }, (_, k) => `<i class="${k < game.used ? 'used' : ''}"></i>`).join('') : '';
+    const minTurns = Math.min(...game.turns);
+    $('roundLbl').textContent = cfg.rounds ? `Round ${Math.min(minTurns + 1, cfg.rounds)} of ${cfg.rounds}` : `Round ${minTurns + 1}`;
+    $('undoBtn').disabled = history.length === 0;
+    $('soundBtn').textContent = 'Sound: ' + (setup.sound ? 'On' : 'Off');
+    $('soundBtn').setAttribute('aria-pressed', String(setup.sound));
+  }
+
+  function setHint(txt) { $('hint').textContent = txt || ''; $('hint').hidden = !txt; }
+  let bannerTimer, toastTimer;
+  function fill(el, kicker, text) {
+    el.innerHTML = '<small></small><span></span>';
+    el.querySelector('small').textContent = kicker || '';
+    el.querySelector('small').hidden = !kicker;
+    el.querySelector('span').textContent = text;
+  }
+  function showBanner(name, kicker, color) {
+    fill($('bannerTxt'), kicker, name);
+    $('banner').style.setProperty('--banner', color);
+    $('banner').hidden = false;
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { $('banner').hidden = true; }, 1500);
+  }
+  function showToast(text, kicker, bg, ink) {
+    $('toast').hidden = true; void $('toast').offsetWidth;
+    fill($('toastTxt'), kicker, text);
+    $('toast').style.setProperty('--toast', bg);
+    $('toast').style.setProperty('--toast-ink', ink || '#1a1a1a');
+    $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1700);
+  }
+
+  /* ---------- Turn flow ---------- */
+  function snap() { history.push(JSON.stringify(game)); if (history.length > 300) history.shift(); }
+  function clearPending() { pending.forEach(clearTimeout); pending = []; }
+  function later(fn, ms) { pending.push(setTimeout(fn, ms)); }
+
+  function toReady() { phase = 'ready'; G.ready(); setHint(G.hint); }
+  function act() {
+    if (!game || game.over || phase !== 'ready') return;
+    audio();
+    snap();
+    phase = 'busy'; setHint('');
+    $('toast').hidden = true;
+    if (G.act() === false) { history.pop(); phase = 'ready'; setHint(G.hint); }
+    renderBoard();
+  }
+  function selectTeam(i) {
+    if (phase === 'busy' || game.over || i >= cfg.n) return;
+    if (i === game.active && game.used === 0) return;
+    snap();
+    game.active = i; game.used = 0;
+    clearPending(); $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+  function skipTurn() {
+    if (phase === 'busy' || game.over) return;
+    snap(); clearPending(); $('toast').hidden = true;
+    endTurn('Wrong answer');
+  }
+  function endTurn(reason) {
+    game.turns[game.active]++;
+    if (G.isOver && G.isOver()) { gameOver(); return; }
+    const next = findNext();
+    if (next < 0) { gameOver(); return; }
+    game.active = next; game.used = 0;
+    renderBoard();
+    const t = cfg.teams[next];
+    showBanner(t.name, reason ? `${reason} · Next up` : 'Next up', t.color);
+    toReady();
+  }
+  function findNext() {
+    for (let k = 1; k <= cfg.n; k++) {
+      const j = (game.active + k) % cfg.n;
+      if (!cfg.rounds || game.turns[j] < cfg.rounds) return j;
+    }
+    return -1;
+  }
+  function undo() {
+    if (phase === 'busy') return;
+    const last = history.pop();
+    if (!last) return;
+    clearPending();
+    game = JSON.parse(last);
+    $('final').hidden = true; $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+
+  function finish(res) {
+    const i = game.active, me = cfg.teams[i];
+    let text, kicker = me.name, bg = 'var(--accent)', ink = '#1a1a1a';
+    switch (res.kind) {
+      case 'pts':
+        game.scores[i] += res.pts; text = res.text || `+${res.pts}`; ding(res.pts); break;
+      case 'double': {
+        const d = game.scores[i]; game.scores[i] += d;
+        text = d ? `Double! +${d}` : 'Double! 0 × 2 = 0'; bg = '#ffffff'; fanfare(); break;
+      }
+      case 'bankrupt': {
+        const lost = game.scores[i]; game.scores[i] = 0;
+        text = lost ? `Bankrupt! −${lost}` : 'Bankrupt!'; bg = '#14141c'; ink = '#ffffff'; buzz(); break;
+      }
+      case 'steal': {
+        let j = -1;
+        game.scores.forEach((s, k) => { if (k !== i && s > 0 && (j < 0 || s > game.scores[j])) j = k; });
+        if (j < 0) { text = 'Nothing to steal!'; buzz(); }
+        else {
+          const amt = Math.min(res.pts || 50, game.scores[j]);
+          game.scores[j] -= amt; game.scores[i] += amt;
+          text = `Stole ${amt} from ${cfg.teams[j].name}`; fanfare();
+        }
+        bg = '#b07cf0'; ink = '#ffffff'; break;
+      }
+      case 'miss':
+        text = res.text || 'Missed!'; buzz(); bg = '#14141c'; ink = '#ffffff'; break;
+      case 'adjust': {
+        Object.keys(res.deltas || {}).forEach((k) => { game.scores[k] = Math.max(0, game.scores[k] + res.deltas[k]); });
+        text = res.text;
+        if (res.mood === 'good') { bg = '#2bb673'; ink = '#04170c'; fanfare(); }
+        else if (res.mood === 'bad') { bg = '#e2384d'; ink = '#ffffff'; buzz(); }
+        else if (res.mood === 'special') { bg = '#8b5cf6'; ink = '#ffffff'; fanfare(); }
+        else { bg = '#9aa3b2'; ink = '#14141c'; ding(10); }
+        break;
+      }
+      case 'again':
+        text = res.label || 'Go again!'; ding(20); bg = '#43b96d'; ink = '#ffffff'; break;
+    }
+    game.last[i] = res.label;
+    if (res.kind !== 'again') game.used++;
+    if (!res.quiet) showToast(text, kicker, bg, ink);
+    renderBoard(i);
+    phase = 'between';
+    if (G.isOver && G.isOver()) later(() => gameOver(), 1900);
+    else if (game.used >= cfg.per) later(() => endTurn(), 1700);
+    else later(toReady, 1100);
+  }
+
+  function award(i, pts, text) {
+    if (!game || game.over) return;
+    snap();
+    game.scores[i] += pts;
+    showToast(text, cfg.teams[i].name, '#8b5cf6', '#ffffff');
+    fanfare();
+    renderBoard(i);
+  }
+
+  function gameOver() {
+    game.over = true; phase = 'over';
+    renderBoard(); setHint('');
+    const order = cfg.teams.map((t, i) => ({ ...t, s: game.scores[i] })).sort((a, b) => b.s - a.s);
+    const top = order[0].s;
+    const winners = order.filter((o) => o.s === top);
+    $('finalKicker').textContent = winners.length > 1 ? 'Game over · It’s a tie' : 'Game over · Winner';
+    $('finalName').textContent = winners.map((w) => w.name).join(' & ');
+    let rank = 0, prev = null;
+    $('standings').innerHTML = '';
+    order.forEach((o, idx) => {
+      if (o.s !== prev) { rank = idx + 1; prev = o.s; }
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="rank">${rank}</span><span class="dot" style="background:${o.color}"></span><span class="nm"></span><span class="pts">${o.s}</span>`;
+      li.querySelector('.nm').textContent = o.name;
+      $('standings').appendChild(li);
+    });
+    $('final').hidden = false;
+    $('againBtn').focus();
+    victory();
+  }
+
+  /* ---------- Canvas ---------- */
+  const cv = $('play'), ctx = cv.getContext('2d');
+  function resize() {
+    const box = $('playBox').getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(box.width * dpr)); cv.height = Math.max(1, Math.round(box.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    core.W = box.width; core.H = box.height;
+    G.resize(box.width, box.height);
+  }
+  let lastT = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    if (!$('game').hidden && cfg && core.W) { ctx.clearRect(0, 0, core.W, core.H); G.draw(ctx, now, dt); }
+    requestAnimationFrame(loop);
+  }
+  function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+  /* ---------- Sound ---------- */
+  let ac;
+  function audio() {
+    if (!setup.sound) return null;
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; } catch (e) { return null; }
+  }
+  function noiseSrc(dur) { const a = ac, n = Math.max(1, Math.floor(a.sampleRate * dur)), b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const s = a.createBufferSource(); s.buffer = b; return s; }
+  function tone(f, s, d, type, vol) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d);
+    o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02);
+  }
+  function ding(pts) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    const steps = Math.max(1, Math.min(6, Math.round(pts / 20) + 1));
+    const scale = [523, 659, 784, 1047, 1319, 1568];
+    for (let i = 0; i < steps; i++) tone(scale[i], t + i * .08, .14, 'square', .08);
+  }
+  function buzz() { const a = audio(); if (!a) return; const t = a.currentTime; tone(150, t, .4, 'sawtooth', .08); tone(105, t + .18, .45, 'sawtooth', .08); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + i * .09, i === 3 ? .4 : .12, 'triangle', .14)); }
+  function victory() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, t + i * .14, i === 5 ? .7 : .16, 'triangle', .14)); }
+
+  /* ---------- Wiring ---------- */
+  function armed(btn, label, armedLabel, fn) {
+    let timer;
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.textContent = armedLabel;
+        timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3500);
+        return;
+      }
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; fn();
+    });
+  }
+  $('startBtn').addEventListener('click', () => { audio(); startGame(false); });
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); const [x, y] = localXY(e); G.pointer && G.pointer('move', x, y); act(); });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && G.pointer) { const [x, y] = localXY(e); G.pointer('move', x, y); } });
+  cv.addEventListener('pointerleave', () => { G.pointer && G.pointer('leave'); });
+  $('skipBtn').addEventListener('click', skipTurn);
+  $('undoBtn').addEventListener('click', undo);
+  $('finalUndo').addEventListener('click', undo);
+  $('soundBtn').addEventListener('click', () => { setup.sound = !setup.sound; saveSetup(); renderBoard(); });
+  $('fullBtn').addEventListener('click', () => {
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  });
+  armed($('endBtn'), 'End game', 'Click again to end', () => { if (phase === 'busy') return; clearPending(); gameOver(); });
+  $('againBtn').addEventListener('click', () => startGame(true));
+  $('setupBtn').addEventListener('click', () => { $('final').hidden = true; $('game').hidden = true; $('setup').hidden = false; renderSetup(); });
+  document.addEventListener('keydown', (e) => {
+    if ($('game').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    const k = e.key.toLowerCase();
+    if ((k === ' ' || k === 'enter') && tag !== 'BUTTON') { e.preventDefault(); act(); }
+    else if (k === 's') skipTurn();
+    else if (k === 'u') undo();
+    else if (/^[1-6]$/.test(k)) selectTeam(+k - 1);
+    else if (G.key && G.key(k, e)) e.preventDefault();
+  });
+  new ResizeObserver(() => { if (!$('game').hidden) resize(); }).observe($('playBox'));
+
+  function boot(data) {
+    renderSetup();
+    const s = data && data.saved;
+    if (s && s.cfg && s.game) {
+      cfg = s.cfg; game = s.game; history = s.history || [];
+      $('setup').hidden = true; $('game').hidden = false;
+      G.start(cfg); resize(); renderBoard();
+      if (game.over) gameOver(); else toReady();
+    }
+    window.claude?.hot?.snapshot?.(() => ({ saved: cfg && !$('game').hidden ? { cfg, game, history } : null }));
+    requestAnimationFrame(loop);
+  }
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>

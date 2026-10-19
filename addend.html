@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Missing Number</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: one problem at a time. Star bar on top, the big number sentence in the middle with a dot helper under it, big number buttons at the bottom. */
+  :root {
+    --bg: #fff8ec; --sky: #e6f4ff; --ink: #24314a; --ink-2: #5b6780;
+    --tile: #ffffff; --tile-edge: #d9cdb6; --blank: #fff1c2; --blank-edge: #f0c64a;
+    --good: #22b35e; --good-deep: #148043; --try: #ff8a3d; --try-deep: #c95a14;
+    --btn: #4f8df5; --btn-deep: #2c5fc0; --star: #ffc93d; --dot: #ef5a5a; --dot2: #4f8df5;
+    --display: "Fredoka", "Andika", system-ui, sans-serif;
+    --num: "Andika", "Fredoka", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: linear-gradient(var(--sky), var(--bg) 60%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--btn); outline-offset: 3px; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 12px 16px 16px; max-width: 1100px; margin: 0 auto; }
+  .top { display: flex; align-items: center; gap: 12px; }
+  .stars { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+  .stars svg { width: clamp(26px, 5vh, 44px); height: clamp(26px, 5vh, 44px); }
+  .stars svg.on path { fill: var(--star); stroke: #d89c00; }
+  .stars svg.on.new { animation: starpop .7s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes starpop { 0% { transform: scale(0) rotate(-90deg); } 100% { transform: scale(1) rotate(0); } }
+  .gear { border: 0; background: #fff; border-radius: 14px; padding: 8px 14px; font-weight: 600; color: var(--ink-2); box-shadow: 0 3px 0 #e2d8c4; font-size: .95rem; }
+
+  .stage { position: relative; display: grid; align-content: center; justify-items: center; gap: clamp(10px, 3vh, 28px); min-height: 0; }
+  .eq { display: flex; align-items: center; gap: clamp(8px, 2vw, 22px); }
+  .t { width: var(--ts); height: calc(var(--ts) * 1.1); border-radius: 24px; background: var(--tile); border-bottom: 10px solid var(--tile-edge); display: grid; place-items: center; font-family: var(--num); font-weight: 700; font-size: calc(var(--ts) * .66); line-height: 1; box-shadow: 0 10px 24px rgba(36,49,74,.12); }
+  .t.blank { background: var(--blank); border-bottom-color: var(--blank-edge); color: #c99a10; }
+  .t.blank span { animation: wiggle 1.6s ease-in-out infinite; display: inline-block; }
+  @keyframes wiggle { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg) scale(1.08); } }
+  .t.right { background: #d9f7e5; border-bottom-color: var(--good); color: var(--good-deep); animation: bounce .6s cubic-bezier(.3,1.7,.5,1); }
+  .t.wrong { background: #ffe4d2; border-bottom-color: var(--try); color: var(--try-deep); animation: shake .45s; }
+  @keyframes bounce { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+  @keyframes shake { 20%, 60% { transform: translateX(-14px) rotate(-3deg); } 40%, 80% { transform: translateX(14px) rotate(3deg); } }
+  .op { font-family: var(--num); font-weight: 700; font-size: calc(var(--ts) * .6); color: var(--ink-2); }
+
+  .dots { display: flex; gap: clamp(14px, 3vw, 34px); align-items: flex-start; flex-wrap: wrap; justify-content: center; min-height: 40px; }
+  .frame { display: grid; grid-template-columns: repeat(5, var(--ds)); gap: 6px; padding: 8px; background: #fff; border-radius: 14px; box-shadow: 0 4px 0 #e2d8c4; }
+  .frame i { width: var(--ds); height: var(--ds); border-radius: 50%; border: 3px dashed #c9c0ad; }
+  .frame i.a { background: var(--dot); border: 3px solid #c43d3d; }
+  .frame i.b { background: var(--dot2); border: 3px solid #2c5fc0; }
+  .frame i.e { border-color: transparent; }
+
+  .msg { font-size: clamp(1.8rem, 6vh, 3.4rem); font-weight: 700; min-height: 1.3em; text-align: center; line-height: 1.1; }
+  .msg.good { color: var(--good); animation: bounce .5s cubic-bezier(.3,1.7,.5,1); }
+  .msg.try { color: var(--try); animation: bounce .4s ease-out; }
+
+  .pad { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: clamp(6px, 1.2vw, 12px); }
+  .pad button { border: 0; border-radius: 20px; background: var(--btn); color: #fff; font-family: var(--num); font-weight: 700; font-size: clamp(1.6rem, 6vh, 3.2rem); padding: clamp(6px, 1.6vh, 14px) 0; box-shadow: 0 7px 0 var(--btn-deep); transition: transform .08s; }
+  .pad button:active { transform: translateY(5px); box-shadow: 0 2px 0 var(--btn-deep); }
+  .pad button:disabled { background: #d6dbe5; color: #9aa3b5; box-shadow: 0 7px 0 #b8bfcc; cursor: default; text-decoration: line-through; text-decoration-thickness: 4px; }
+  .pad button.hit { background: var(--good); box-shadow: 0 7px 0 var(--good-deep); }
+
+  .buddy { position: absolute; right: 2%; bottom: 4%; width: clamp(70px, 14vh, 130px); pointer-events: none; }
+  .buddy.jump { animation: jump .8s cubic-bezier(.3,1.5,.5,1); }
+  @keyframes jump { 0%, 100% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-60%) rotate(-12deg); } 70% { transform: translateY(0) rotate(8deg); } }
+  .buddy.sad { animation: tilt .6s ease-in-out; }
+  @keyframes tilt { 30% { transform: rotate(-10deg); } 70% { transform: rotate(8deg); } }
+
+  canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+  .big { position: fixed; inset: 0; z-index: 6; display: grid; place-items: center; background: rgba(255,248,236,.9); }
+  .big .card { text-align: center; background: #fff; border-radius: 32px; padding: clamp(24px, 5vw, 48px); box-shadow: 0 20px 60px rgba(36,49,74,.25); border: 6px solid var(--star); animation: bounce .6s cubic-bezier(.3,1.7,.5,1); max-width: calc(100% - 32px); }
+  .big .card h2 { font-size: clamp(2.2rem, 8vw, 4.4rem); margin: 6px 0; color: var(--good); }
+  .big .card p { font-size: 1.3rem; color: var(--ink-2); margin: 0 0 20px; }
+  .big .card button, .sheet .done { border: 0; border-radius: 18px; background: var(--good); color: #fff; font-size: 1.5rem; font-weight: 700; padding: 12px 30px; box-shadow: 0 6px 0 var(--good-deep); }
+  .trophy { font-size: clamp(4rem, 14vw, 7rem); line-height: 1; }
+
+  .sheet { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; background: rgba(36,49,74,.45); padding: 16px; }
+  .sheet .card { background: #fff; border-radius: 24px; padding: 24px; width: min(560px, 100%); max-height: 100%; overflow: auto; }
+  .sheet h2 { margin: 0 0 6px; }
+  .sheet .lbl { display: block; font-weight: 700; color: var(--ink-2); margin: 16px 0 8px; font-size: .95rem; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg button { border: 2px solid #e2d8c4; background: #fffaf0; border-radius: 14px; padding: 8px 14px; font-weight: 600; }
+  .seg button[aria-pressed="true"] { background: var(--btn); border-color: var(--btn); color: #fff; }
+  .sheet .done { margin-top: 22px; width: 100%; font-size: 1.3rem; }
+
+  @media (prefers-reduced-motion: reduce) { .t.blank span, .t.right, .t.wrong, .msg.good, .msg.try, .buddy.jump, .buddy.sad, .stars svg.on.new, .big .card { animation: none; } }
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="stars" id="stars" aria-label="Stars earned"></div>
+    <button class="gear" id="gearBtn" type="button">Settings</button>
+  </div>
+  <div class="stage" id="stage">
+    <div class="eq" id="eq" aria-live="polite"></div>
+    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="msg" id="msg" role="status" aria-live="assertive"></div>
+    <svg class="buddy" id="buddy" viewBox="0 0 120 120" aria-hidden="true">
+      <path d="M60 6 L74 42 L113 44 L82 68 L93 106 L60 84 L27 106 L38 68 L7 44 L46 42 Z" fill="#ffc93d" stroke="#d89c00" stroke-width="5" stroke-linejoin="round"/>
+      <circle cx="48" cy="56" r="6" fill="#24314a"/><circle cx="72" cy="56" r="6" fill="#24314a"/>
+      <circle cx="50" cy="54" r="2" fill="#fff"/><circle cx="74" cy="54" r="2" fill="#fff"/>
+      <path id="mouth" d="M48 70 Q60 82 72 70" stroke="#24314a" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle cx="40" cy="68" r="5" fill="#ff9b9b" opacity=".7"/><circle cx="80" cy="68" r="5" fill="#ff9b9b" opacity=".7"/>
+    </svg>
+  </div>
+  <div class="pad" id="pad" aria-label="Number buttons"></div>
+</div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div class="big" id="big" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="bigH">
+    <div class="trophy" aria-hidden="true">🏆</div>
+    <h2 id="bigH">10 stars!</h2>
+    <p>You are a math star. Keep going!</p>
+    <button id="moreBtn" type="button">Play more</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Settings</h2>
+    <span class="lbl" id="l1">Numbers up to</span><div class="seg" id="sMax" role="group" aria-labelledby="l1"></div>
+    <span class="lbl" id="l2">Where is the missing number?</span><div class="seg" id="sPos" role="group" aria-labelledby="l2"></div>
+    <span class="lbl" id="l3">Dot helper</span><div class="seg" id="sDots" role="group" aria-labelledby="l3"></div>
+    <span class="lbl" id="l4">Sound</span><div class="seg" id="sSnd" role="group" aria-labelledby="l4"></div>
+    <button class="done" id="doneBtn" type="button">Done</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const STORE = 'missing-addend-v1';
+  let set = { max: 10, pos: 'second', dots: true, sound: true };
+  try { Object.assign(set, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(set)); } catch (e) {} };
+  const PRAISE = ['Great job!', 'You got it!', 'Awesome!', 'Super!', 'Yes! Way to go!', 'Fantastic!', 'Nice work!'];
+  let p = null, stars = 0, locked = false, last = '';
+
+  function newProblem() {
+    let a, b, sum, key;
+    do {
+      sum = 2 + Math.floor(Math.random() * (set.max - 1));
+      a = Math.random() < .08 ? (Math.random() < .5 ? 0 : sum) : 1 + Math.floor(Math.random() * (sum - 1)); b = sum - a;
+      key = a + '+' + b;
+    } while (key === last || (set.max > 5 && sum < 3));
+    last = key;
+    const missFirst = set.pos === 'first' || (set.pos === 'mix' && Math.random() < .5);
+    p = { a, b, sum, missFirst, answer: missFirst ? a : b, tried: [] };
+    locked = false;
+    render(); buildPad();
+    setMsg('', '');
+  }
+
+  function render(state, val) {
+    const ts = Math.min(window.innerWidth * .15, window.innerHeight * .2, 170);
+    const eq = $('eq'); eq.style.setProperty('--ts', ts + 'px');
+    const blank = `<div class="t blank${state ? ' ' + state : ''}" id="blank">${val != null ? val : '<span>?</span>'}</div>`;
+    const A = p.missFirst ? blank : `<div class="t">${p.a}</div>`;
+    const B = p.missFirst ? `<div class="t">${p.b}</div>` : blank;
+    eq.innerHTML = `${A}<div class="op">+</div>${B}<div class="op">=</div><div class="t">${p.sum}</div>`;
+    eq.setAttribute('aria-label', `${p.missFirst ? 'blank' : p.a} plus ${p.missFirst ? p.b : 'blank'} equals ${p.sum}`);
+    // dot helper: known part filled, missing part as empty circles (filled in when solved)
+    const d = $('dots');
+    if (!set.dots) { d.innerHTML = ''; return; }
+    const ds = Math.max(18, Math.min(ts * .26, 40));
+    d.style.setProperty('--ds', ds + 'px');
+    const known = p.missFirst ? p.b : p.a, miss = p.answer, solved = state === 'right';
+    const marks = [];
+    if (p.missFirst) { for (let i = 0; i < miss; i++) marks.push(solved ? 'a' : ''); for (let i = 0; i < known; i++) marks.push('b'); }
+    else { for (let i = 0; i < known; i++) marks.push('a'); for (let i = 0; i < miss; i++) marks.push(solved ? 'b' : ''); }
+    const frames = Math.max(1, Math.ceil(p.sum / 10));
+    let h = '';
+    for (let f = 0; f < frames; f++) {
+      h += '<div class="frame">';
+      for (let k = 0; k < 10; k++) { const m = marks[f * 10 + k]; h += `<i class="${m === undefined ? 'e' : m}"></i>`; }
+      h += '</div>';
+    }
+    d.innerHTML = h;
+  }
+
+  function buildPad() {
+    const pad = $('pad'), n = set.max;
+    pad.style.setProperty('--cols', n <= 10 ? n + 1 : 11);
+    pad.innerHTML = '';
+    for (let i = 0; i <= n; i++) {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = i;
+      b.setAttribute('aria-label', String(i));
+      b.onclick = () => answer(i, b);
+      pad.appendChild(b);
+    }
+  }
+
+  function answer(v, btn) {
+    if (locked) return;
+    if (v === p.answer) {
+      locked = true;
+      btn.classList.add('hit');
+      render('right', v);
+      setMsg(PRAISE[Math.floor(Math.random() * PRAISE.length)], 'good');
+      buddy('jump', true); cheer(); confetti(60);
+      stars++; drawStars(true);
+      if (stars % 10 === 0) setTimeout(bigWin, 1100);
+      else setTimeout(newProblem, 1900);
+    } else {
+      btn.disabled = true;
+      render('wrong', v);
+      setMsg('Try again!', 'try');
+      buddy('sad', false); oops();
+      setTimeout(() => { if (!locked) render(); }, 900);
+    }
+  }
+
+  function setMsg(t, cls) { const m = $('msg'); m.className = 'msg'; void m.offsetWidth; m.textContent = t; if (cls) m.classList.add(cls); }
+  function buddy(cls, happy) {
+    const b = $('buddy'); b.classList.remove('jump', 'sad'); void b.getBoundingClientRect(); b.classList.add(cls);
+    $('mouth').setAttribute('d', happy ? 'M46 68 Q60 86 74 68' : 'M50 76 Q60 68 70 76');
+    setTimeout(() => $('mouth').setAttribute('d', 'M48 70 Q60 82 72 70'), 1200);
+  }
+  function drawStars(pop) {
+    const el = $('stars'), shown = 10, on = stars % 10 === 0 && stars > 0 ? 10 : stars % 10;
+    el.innerHTML = '';
+    for (let i = 0; i < shown; i++) {
+      el.insertAdjacentHTML('beforeend', `<svg viewBox="0 0 40 40" class="${i < on ? 'on' : ''}${pop && i === on - 1 ? ' new' : ''}"><path d="M20 3 L25 15 L38 15.5 L28 24 L31.5 37 L20 29.5 L8.5 37 L12 24 L2 15.5 L15 15 Z" fill="#fff" stroke="#e2d8c4" stroke-width="2.5" stroke-linejoin="round"/></svg>`);
+    }
+    el.setAttribute('aria-label', `${stars} stars earned`);
+  }
+  function bigWin() {
+    $('bigH').textContent = `${stars} stars!`;
+    $('big').hidden = false; confetti(260); fanfare();
+    $('moreBtn').focus();
+  }
+
+  /* ---------- confetti ---------- */
+  let parts = [], raf = 0;
+  function confetti(n) {
+    if (reduce) return;
+    const cv = $('fx'), d = devicePixelRatio; cv.width = innerWidth * d; cv.height = innerHeight * d;
+    const pal = ['#ffc93d', '#22b35e', '#ef5a5a', '#4f8df5', '#b06ef5', '#ff8a3d'];
+    const cx = cv.width / 2, cy = cv.height * .35;
+    for (let i = 0; i < n; i++) parts.push({ x: cx, y: cy, vx: (Math.random() - .5) * 22 * d, vy: (-6 - Math.random() * 14) * d, r: (6 + Math.random() * 8) * d, a: Math.random() * 6, va: (Math.random() - .5) * .4, c: pal[i % pal.length], star: Math.random() < .3 });
+    if (!raf) step();
+  }
+  function step() {
+    const cv = $('fx'), ctx = cv.getContext('2d'), d = devicePixelRatio;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    parts.forEach((q) => { q.vy += .45 * d; q.x += q.vx; q.y += q.vy; q.vx *= .99; q.a += q.va; ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.a); ctx.fillStyle = q.c;
+      if (q.star) { ctx.beginPath(); for (let k = 0; k < 10; k++) { const rr = k % 2 ? q.r * .45 : q.r, an = k * Math.PI / 5 - Math.PI / 2; ctx.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); } ctx.fill(); }
+      else ctx.fillRect(-q.r / 2, -q.r / 4, q.r, q.r / 2);
+      ctx.restore(); });
+    parts = parts.filter((q) => q.y < cv.height + 40);
+    raf = parts.length ? requestAnimationFrame(step) : 0;
+    if (!raf) ctx.clearRect(0, 0, cv.width, cv.height);
+  }
+
+  /* ---------- sound (optional; everything is visual) ---------- */
+  let ac = null;
+  function audio() { if (!set.sound) return null; try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { return null; } return ac; }
+  function tone(f, s, d, type, vol) { const a = audio(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d); o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02); }
+  function cheer() { const a = audio(); if (!a) return; const t = a.currentTime; [659, 784, 1046].forEach((f, k) => tone(f, t + k * .1, .22)); }
+  function oops() { const a = audio(); if (!a) return; const t = a.currentTime; tone(392, t, .15, 'sine', .1); tone(330, t + .14, .22, 'sine', .1); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1046, 784, 1046].forEach((f, k) => tone(f, t + k * .13, k === 5 ? .6 : .18, 'square', .07)); }
+
+  /* ---------- settings ---------- */
+  function seg(el, opts, cur, pick) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(v === cur)); b.onclick = () => { pick(v); save(); renderSheet(); }; el.appendChild(b); });
+  }
+  function renderSheet() {
+    seg($('sMax'), [[5, '5'], [10, '10'], [20, '20']], set.max, (v) => { set.max = v; });
+    seg($('sPos'), [['second', '3 + ? = 7'], ['first', '? + 4 = 7'], ['mix', 'Mix them']], set.pos, (v) => { set.pos = v; });
+    seg($('sDots'), [[true, 'On'], [false, 'Off']], set.dots, (v) => { set.dots = v; });
+    seg($('sSnd'), [[true, 'On'], [false, 'Off']], set.sound, (v) => { set.sound = v; });
+  }
+  $('gearBtn').onclick = () => { renderSheet(); $('sheet').hidden = false; $('doneBtn').focus(); };
+  $('doneBtn').onclick = () => { $('sheet').hidden = true; newProblem(); };
+  $('moreBtn').onclick = () => { $('big').hidden = true; newProblem(); };
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden || !$('big').hidden) { if (e.key === 'Escape') { $('sheet').hidden = true; } return; }
+    if (/^[0-9]$/.test(e.key)) { const b = $('pad').children[+e.key]; if (b && !b.disabled) b.click(); }
+  });
+  addEventListener('resize', () => { if (p && !locked) render(); });
+  drawStars(false);
+  newProblem();
+})();
+</script>
+
+</body>
+</html>

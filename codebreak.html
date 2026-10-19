@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Code Breaker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Righteous&family=Lexend:wght@400;600;700;800&display=swap">
+<style>
+  /* Layout: vault. Header strip, shared guess board with the hidden code on the left panel, team score cards on the right. */
+  :root {
+    --bg: #0b0a16; --glow: #2a2150; --surface: #121026; --panel: #1a1734; --panel-hi: #242046;
+    --line: rgba(235, 230, 255, .16); --text: #f3f1ff; --text-dim: rgba(243, 241, 255, .64);
+    --accent: #a78bfa; --accent-deep: #6d4fd8; --pop: #22d3a6; --pop-deep: #0e8f6f;
+    --skip: #23202a; --skip-line: #48404f; --hint-bg: rgba(11, 10, 22, .88); --scrim: rgba(6, 5, 12, .84);
+    --display: "Righteous", "Arial Black", Impact, system-ui, sans-serif;
+    --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 50% -20%, var(--glow) 0, transparent 60%);
+    color: var(--text);
+    font-family: var(--body);
+    overflow: hidden;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: var(--body); font-size: .75em; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .85; }
+
+  .wrap {
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+  }
+
+  /* ---------- Setup ---------- */
+  .setup { display: grid; place-items: center; overflow-y: auto; }
+  .setup-card {
+    width: 100%; max-width: 720px; margin-block: auto;
+    background: var(--surface); border: 2px solid var(--line); border-radius: 22px;
+    padding: clamp(20px, 4vw, 36px);
+    display: flex; flex-direction: column; gap: 20px; box-sizing: border-box;
+  }
+  .logo { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: .95; margin: 0; color: var(--accent); text-shadow: 0 4px 0 var(--accent-deep); text-wrap: balance; letter-spacing: .01em; }
+  .logo small { display: block; font-family: var(--body); font-weight: 700; font-size: .3em; color: var(--pop); text-shadow: none; letter-spacing: .14em; text-transform: uppercase; margin-top: 10px; }
+  .lede { margin: 0; color: var(--text-dim); max-width: 60ch; line-height: 1.5; }
+  .field-row { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+  .label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    min-width: 52px; padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 2px solid var(--line); font-weight: 700; font-size: 1rem;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .seg.multi button[aria-pressed="true"]::before { content: "✓ "; }
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .name-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 6px 10px; border: 2px solid var(--line); min-width: 0; }
+  .name-row input { background: transparent; border: 0; padding: 6px 0; width: 100%; min-width: 0; font-weight: 600; }
+  .name-row input:focus { outline: none; }
+  .name-row:focus-within { border-color: var(--accent); }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  .start {
+    align-self: flex-start;
+    font-family: var(--display); font-size: 1.5rem; letter-spacing: .02em;
+    background: var(--pop); color: #fff; border: 0; border-radius: 14px; padding: 14px 30px;
+    box-shadow: 0 6px 0 var(--pop-deep);
+  }
+  .start:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--pop-deep); }
+  .how { margin: 0; padding-left: 1.2em; color: var(--text-dim); line-height: 1.6; font-size: .92rem; }
+
+  /* ---------- Game ---------- */
+  .game { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top .brand { font-family: var(--display); color: var(--accent); font-size: 1.4rem; margin-right: auto; letter-spacing: .02em; }
+  .round { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .tool {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; font-size: .88rem; font-weight: 600; white-space: nowrap;
+  }
+  .tool:hover { background: var(--panel-hi); }
+  .tool:disabled { opacity: .4; cursor: default; }
+  .tool.skip { background: var(--skip); border-color: var(--skip-line); }
+  .tool.armed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px); gap: 14px; min-height: 0; }
+  .play-box { position: relative; min-height: 0; min-width: 0; border-radius: 18px; overflow: hidden; background: var(--surface); border: 2px solid var(--line); }
+  canvas#play { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: pointer; }
+  .status { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .status .who { font-family: var(--display); font-size: clamp(1.1rem, 2.2vw, 1.6rem); line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .tokens { display: flex; gap: 6px; }
+  .tokens i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: inset -2px -3px 0 rgba(0,0,0,.3); display: block; }
+  .tokens i.used { background: transparent; box-shadow: inset 0 0 0 2px var(--text-dim); }
+  .hint {
+    position: absolute; left: 12px; bottom: 12px; z-index: 2;
+    background: var(--hint-bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: .9rem; white-space: nowrap; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+  }
+  .banner, .toast { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; pointer-events: none; }
+  .banner div, .toast div {
+    font-family: var(--display); font-size: clamp(1.6rem, 5vw, 3.4rem); text-align: center; line-height: 1.05; letter-spacing: .02em;
+    padding: 18px 28px; border-radius: 18px; background: var(--banner, var(--pop)); color: #fff;
+    box-shadow: 0 8px 0 rgba(0,0,0,.3); max-width: 86%; text-wrap: balance; overflow-wrap: anywhere;
+    animation: pop .45s cubic-bezier(.3,1.5,.5,1);
+  }
+  .toast { place-items: start center; padding-top: 14%; }
+  .toast div { background: var(--toast, var(--accent)); color: var(--toast-ink, #1a1a1a); }
+  .banner small, .toast small { display: block; font-family: var(--body); font-size: .36em; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; opacity: .9; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .board { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-top: 8px; }
+  .team {
+    flex: 1 1 0; max-height: 132px; min-height: 0;
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    background: var(--panel); border: 3px solid transparent; border-radius: 14px;
+    padding: 8px 12px; text-align: left; position: relative;
+  }
+  .team:hover { background: var(--panel-hi); }
+  .team.active { border-color: var(--tc); background: var(--panel-hi); }
+  .team .dot { grid-row: 1 / span 2; width: 22px; height: 22px; background: var(--tc); }
+  .team .tname { font-weight: 700; font-size: clamp(.9rem, 1.3vw, 1.1rem); line-height: 1.15; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team .meta { font-size: .76rem; color: var(--text-dim); grid-column: 2; font-variant-numeric: tabular-nums; }
+  .team .score { grid-row: 1 / span 2; grid-column: 3; font-family: var(--display); font-size: clamp(1.6rem, 3vw, 2.5rem); font-variant-numeric: tabular-nums; }
+  .team .up {
+    position: absolute; top: -9px; right: 10px; background: var(--tc); color: #14153d;
+    font-size: .66rem; font-weight: 700; letter-spacing: .12em; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  }
+  .team .bump { animation: bump .6s ease; display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.3); color: var(--accent); } }
+
+  /* ---------- Final ---------- */
+  .final { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--scrim); padding: 16px; overflow-y: auto; }
+  .final-card {
+    width: 100%; max-width: 560px; box-sizing: border-box;
+    background: var(--surface); border: 3px solid var(--accent); border-radius: 22px; padding: 26px;
+    display: flex; flex-direction: column; gap: 14px; animation: pop .5s cubic-bezier(.3,1.5,.5,1);
+  }
+  .final-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(1.9rem, 5vw, 3.1rem); line-height: 1; color: var(--accent); text-wrap: balance; overflow-wrap: anywhere; }
+  .final-kicker { font-size: .8rem; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--pop); }
+  .standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .standings li { display: grid; grid-template-columns: 2.4em auto 1fr auto; gap: 10px; align-items: center; background: var(--panel); border-radius: 12px; padding: 8px 12px; }
+  .standings .rank { font-family: var(--display); color: var(--text-dim); }
+  .standings li:first-child .rank { color: var(--accent); }
+  .standings .nm { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .standings .pts { font-family: var(--display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .final-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .final-actions button { border: 0; border-radius: 12px; padding: 12px 20px; font-weight: 700; background: var(--accent); color: var(--bg); }
+  .final-actions button.ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+
+  @media (max-width: 820px) {
+    body { overflow: auto; }
+    .wrap.game { height: auto; min-height: 100%; }
+    .stage { grid-template-columns: 1fr; }
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); order: -1; }
+    .team { max-height: none; }
+    .play-box { height: 74vh; min-height: 440px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner div, .toast div, .final-card, .team .bump { animation: none; }
+  }
+</style>
+
+<section class="wrap setup" id="setup">
+  <div class="setup-card">
+    <h1 class="logo">Code Breaker<small>Classroom review edition</small></h1>
+    <p class="lede">The whole class races to crack one secret color code. When a team answers correctly, they make a guess and get clues about the code. The team that cracks the code wins the big points. Wrong answer? Skip to the next team.</p>
+    <div class="field-row">
+      <span class="label" id="lblTeams">Number of teams</span>
+      <div class="seg" id="segTeams" role="group" aria-labelledby="lblTeams"></div>
+    </div>
+    <div class="field-row">
+      <span class="label">Team names</span>
+      <div class="names" id="names"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblPer">Guesses per turn</span>
+      <div class="seg" id="segPer" role="group" aria-labelledby="lblPer"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblRounds">Rounds</span>
+      <div class="seg" id="segRounds" role="group" aria-labelledby="lblRounds"></div>
+    </div>
+    <div id="gameOpts" class="field-row"></div>
+    <ul class="how"><li>After a correct answer, the team builds a guess: click colors to fill the slots, click a slot to clear it, then click <b>Check</b> (or press <kbd>Enter</kbd>).</li><li>Clues: a solid peg means a right color in the right spot; a ring means a right color in the wrong spot. Each team sees its own guesses and clues (or turn on Everyone sees all guesses).</li></ul>
+    <button class="start" id="startBtn" type="button">Start game</button>
+  </div>
+</section>
+
+<section class="wrap game" id="game" hidden>
+  <div class="top">
+    <div class="brand">Code Breaker</div>
+    <div class="round" id="roundLbl">Round 1</div>
+    <button class="tool skip" id="skipBtn" type="button">Wrong answer, skip <kbd>S</kbd></button>
+    <button class="tool" id="undoBtn" type="button" disabled>Undo <kbd>U</kbd></button>
+    <button class="tool" id="soundBtn" type="button" aria-pressed="true">Sound: On</button>
+    <button class="tool" id="fullBtn" type="button">Full screen</button>
+    <button class="tool" id="endBtn" type="button">End game</button>
+  </div>
+  <div class="stage">
+    <div class="play-box" id="playBox">
+      <canvas id="play" aria-label="Code Breaker board with a hidden color code and everyone’s guesses."></canvas>
+      <div class="status"><div class="who" id="whoLbl"></div><div class="tokens" id="tokensLbl"></div></div>
+      <div class="hint" id="hint"></div>
+      <div class="banner" id="banner" hidden><div id="bannerTxt"></div></div>
+      <div class="toast" id="toast" hidden><div id="toastTxt"></div></div>
+    </div>
+    <div class="board" id="board" aria-label="Scoreboard"></div>
+  </div>
+</section>
+
+<div class="final" id="final" hidden role="dialog" aria-modal="true" aria-labelledby="finalName">
+  <div class="final-card">
+    <div class="final-kicker" id="finalKicker">Game over · Winner</div>
+    <h2 id="finalName"></h2>
+    <ol class="standings" id="standings"></ol>
+    <div class="final-actions">
+      <button id="againBtn" type="button">Play again, same teams</button>
+      <button id="setupBtn" class="ghost" type="button">Change setup</button>
+      <button id="finalUndo" class="ghost" type="button">Undo last turn</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function makeGame(core) {
+  const PAL = [
+    { n: 'Red', c: '#e23a3a', k: 'r', ink: '#fff', sym: 'tri' },
+    { n: 'Blue', c: '#3b82f6', k: 'b', ink: '#fff', sym: 'diamond' },
+    { n: 'Yellow', c: '#f6c445', k: 'y', ink: '#3a2a00', sym: 'star' },
+    { n: 'Green', c: '#2bb673', k: 'g', ink: '#fff', sym: 'circle' },
+    { n: 'Orange', c: '#f7913d', k: 'o', ink: '#3a1a00', sym: 'square' },
+    { n: 'Purple', c: '#8b5cf6', k: 'p', ink: '#fff', sym: 'plus' },
+    { n: 'Pink', c: '#ec4899', k: 'k', ink: '#fff', sym: 'heart' },
+    { n: 'White', c: '#eef2f7', k: 'w', ink: '#1e293b', sym: 'x' }
+  ];
+  const SYM = {
+    tri: '<path d="M12 4 L21 19 H3 Z"/>',
+    diamond: '<path d="M12 2.5 L21 12 L12 21.5 L3 12 Z"/>',
+    star: '<path d="M12 2.5 L14.8 9 L21.8 9.4 L16.4 13.8 L18.2 20.8 L12 16.9 L5.8 20.8 L7.6 13.8 L2.2 9.4 L9.2 9 Z"/>',
+    circle: '<circle cx="12" cy="12" r="8"/>',
+    square: '<rect x="4.5" y="4.5" width="15" height="15" rx="1.5"/>',
+    plus: '<path d="M9.5 3.5 H14.5 V9.5 H20.5 V14.5 H14.5 V20.5 H9.5 V14.5 H3.5 V9.5 H9.5 Z"/>',
+    heart: '<path d="M12 21 C6 16.5 2.5 13.2 2.5 8.8 C2.5 5.8 4.8 3.6 7.6 3.6 C9.5 3.6 11 4.6 12 6.2 C13 4.6 14.5 3.6 16.4 3.6 C19.2 3.6 21.5 5.8 21.5 8.8 C21.5 13.2 18 16.5 12 21 Z"/>',
+    x: '<path d="M6 3.5 L12 9.5 L18 3.5 L20.5 6 L14.5 12 L20.5 18 L18 20.5 L12 14.5 L6 20.5 L3.5 18 L9.5 12 L3.5 6 Z"/>'
+  };
+  let ui = null, o = {}, len = 4, ncol = 6, draft = [], W = 0, H = 0;
+  let celebrate = null, armT = 0, armTimer = null, busyT = [];
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const cb = () => core.game.cb;
+
+  function peg(ci, extra) {
+    const p = PAL[ci];
+    return `<span class="peg ${extra || ''}" style="--pc:${p.c};--pi:${p.ink}" title="${p.n}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="var(--pi)">${SYM[p.sym]}</svg><span class="sr">${p.n}</span></span>`;
+  }
+  function newCode() {
+    const rep = o.repeats === 'yes' || len > ncol, code = [];
+    const pool = Array.from({ length: ncol }, (_, i) => i);
+    for (let i = 0; i < len; i++) {
+      if (rep) code.push(Math.floor(Math.random() * ncol));
+      else code.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    return code;
+  }
+  function score(guess, code) {
+    let exact = 0; const cg = {}, cc = {};
+    guess.forEach((g, i) => { if (g === code[i]) exact++; else { cg[g] = (cg[g] || 0) + 1; cc[code[i]] = (cc[code[i]] || 0) + 1; } });
+    let close = 0; Object.keys(cg).forEach((k) => { close += Math.min(cg[k], cc[k] || 0); });
+    return { exact, close };
+  }
+  function clueText(e, c) {
+    if (e === 0 && c === 0) return 'No matching colors';
+    return `${e} exact · ${c} close`;
+  }
+
+  /* ---------- UI ---------- */
+  function ensureUI() {
+    if (ui) return;
+    const st = document.createElement('style');
+    st.textContent = `
+      #playBox .hint { display: none !important; }
+      #playBox .toast { place-items: end center !important; padding: 0 0 18px !important; }
+      #playBox .toast div { font-size: clamp(1.1rem, 2.6vw, 2rem) !important; }
+      .cb { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding: 48px 14px 12px; box-sizing: border-box; font-family: var(--body); color: var(--text); }
+      .cb .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .cb .vault { display: flex; align-items: center; gap: 14px; background: linear-gradient(180deg, #2a2450, #1a1734); border: 2px solid rgba(167,139,250,.45); border-radius: 16px; padding: 10px 14px; position: relative; overflow: hidden; }
+      .cb .vlbl { font-family: var(--display); font-size: clamp(.9rem, 1.6vw, 1.2rem); letter-spacing: .06em; line-height: 1.1; }
+      .cb .vlbl small { display: block; font-family: var(--body); font-weight: 600; font-size: .78em; color: var(--text-dim); letter-spacing: 0; }
+      .cb .slots { display: flex; gap: clamp(6px, 1vw, 12px); }
+      .cb .lock { width: clamp(38px, 5.4vw, 60px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; background: repeating-linear-gradient(45deg, #3a3366 0 6px, #2f2956 6px 12px); border: 3px solid #6d5fc0; font-family: var(--display); font-size: clamp(1.2rem, 2.4vw, 1.8rem); color: #cfc4ff; box-shadow: inset 0 3px 8px rgba(0,0,0,.5); }
+      .cb .legend { margin-left: auto; display: grid; gap: 4px; font-size: clamp(.72rem, 1.1vw, .9rem); color: var(--text-dim); }
+      .cb .legend span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+      @media (max-width: 1000px) { .cb .legend { display: none; } }
+      .cb .reveal { background: transparent; color: var(--text-dim); border: 1px solid var(--line); border-radius: 999px; font: 600 .8rem var(--body); padding: 6px 12px; cursor: pointer; }
+      .cb .reveal.armed { background: #e2384d; color: #fff; border-color: #e2384d; }
+      .cb .peg { position: relative; width: clamp(34px, 4.6vw, 52px); aspect-ratio: 1; border-radius: 50%; display: inline-grid; place-items: center; background: radial-gradient(circle at 34% 30%, rgba(255,255,255,.55), transparent 42%), var(--pc); box-shadow: inset 0 -4px 6px rgba(0,0,0,.28), 0 3px 6px rgba(0,0,0,.4); flex: none; }
+      .cb .peg svg { width: 52%; height: 52%; }
+      .cb .peg.big { width: clamp(38px, 5.4vw, 60px); }
+      .cb .peg.pop { animation: cbPop .45s cubic-bezier(.3,1.6,.5,1) both; }
+      @keyframes cbPop { from { transform: scale(.2) rotate(-90deg); } to { transform: none; } }
+      .cb .ck { width: 13px; height: 13px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.22); box-sizing: border-box; }
+      .cb .ck.e { background: #fff; border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,.6); }
+      .cb .ck.c { border-color: #fff; border-width: 3.5px; }
+      .cb .rows { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; scrollbar-width: thin; }
+      .cb .rh { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; gap: 12px; padding: 4px 4px 6px; background: linear-gradient(#15122b 80%, transparent); }
+      .cb .rh b { font-family: var(--display); font-weight: 400; color: var(--tc); font-size: clamp(1rem, 1.8vw, 1.4rem); }
+      .cb .rh span { color: var(--text-dim); font-size: clamp(.75rem, 1.1vw, .9rem); }
+      .cb .empty { margin: auto; text-align: center; color: var(--text-dim); font-size: clamp(1rem, 1.8vw, 1.4rem); max-width: 34ch; line-height: 1.45; }
+      .cb .row { display: grid; grid-template-columns: 2.2em minmax(6em, 11em) auto 1fr; align-items: center; gap: 12px; background: var(--panel); border-radius: 12px; padding: 6px 12px; border-left: 6px solid var(--tc); }
+      .cb .row.new { animation: cbIn .4s ease-out both; }
+      @keyframes cbIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+      .cb .num { font-family: var(--display); color: var(--text-dim); font-size: 1.1rem; }
+      .cb .tm { font-weight: 700; font-size: clamp(.85rem, 1.4vw, 1.1rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--tc); }
+      .cb .gp { display: flex; gap: 8px; }
+      .cb .fb { display: flex; align-items: center; gap: 14px; justify-self: end; }
+      .cb .cks { display: grid; grid-template-columns: repeat(3, 13px); gap: 4px; }
+      .cb .ft { font-weight: 800; font-size: clamp(.9rem, 1.5vw, 1.2rem); white-space: nowrap; }
+      .cb .ft b { color: #fff; }
+      .cb .row.win { background: linear-gradient(90deg, rgba(34,211,166,.32), var(--panel)); }
+      .cb .panel { background: rgba(10,9,20,.9); border: 1px solid var(--line); border-radius: 16px; padding: 8px 14px 10px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px 18px; min-height: 40px; }
+      .cb .panel > .q { grid-column: 1 / -1; }
+      .cb .q { font-weight: 700; font-size: clamp(1rem, 1.8vw, 1.35rem); text-align: center; }
+      .cb .draft { display: flex; gap: 10px; align-items: center; }
+      .cb .dslot { width: clamp(38px, 4.8vw, 56px); aspect-ratio: 1; border-radius: 50%; border: 3px dashed rgba(255,255,255,.35); background: rgba(255,255,255,.04); cursor: pointer; padding: 0; display: grid; place-items: center; }
+      .cb .dslot.next { border-color: var(--accent); border-style: solid; box-shadow: 0 0 0 4px rgba(167,139,250,.25); }
+      .cb .dslot .peg { width: 100%; }
+      .cb .pal { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+      .cb .pal .peg { width: clamp(32px, 3.8vw, 46px); }
+      .cb .pb { display: grid; justify-items: center; gap: 3px; background: none; border: 0; cursor: pointer; color: var(--text-dim); font: 700 .78rem var(--body); padding: 2px; border-radius: 12px; }
+      .cb .pb:hover .peg, .cb .pb:focus-visible .peg { transform: translateY(-3px); outline: 3px solid #fff; outline-offset: 2px; }
+      .cb .pb kbd, .cb .act kbd { font: 700 .72rem var(--body); background: rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; }
+      .cb .acts { display: flex; flex-direction: column; gap: 6px; }
+      .cb .act { border: 0; border-radius: 999px; padding: 8px 20px; white-space: nowrap; font: 800 clamp(.95rem, 1.5vw, 1.15rem) var(--body); cursor: pointer; background: #2b2750; color: var(--text); }
+      .cb .act.go { background: var(--pop); color: #04170c; }
+      .cb .act:disabled { opacity: .4; cursor: default; }
+      .cb .cele { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; align-content: center; gap: 18px; background: rgba(8,6,20,.82); text-align: center; pointer-events: none; }
+      .cb .cele h2 { margin: 0; font-family: var(--display); font-size: clamp(2.2rem, 7vw, 5rem); color: #22d3a6; text-shadow: 0 6px 0 rgba(0,0,0,.4); line-height: 1; }
+      .cb .cele.rev h2 { color: #f6c445; font-size: clamp(1.8rem, 5vw, 3.6rem); }
+      .cb .cele p { margin: 0; font-weight: 800; font-size: clamp(1.1rem, 2.4vw, 1.8rem); }
+      .cb .cele .slots .peg { width: clamp(56px, 8vw, 96px); }
+      .cb .conf { position: absolute; top: -20px; width: 12px; height: 18px; border-radius: 3px; animation: cbFall 2.6s linear forwards; }
+      @keyframes cbFall { to { transform: translateY(110vh) rotate(720deg); } }
+      @media (prefers-reduced-motion: reduce) { .cb .conf { display: none; } .cb .peg.pop, .cb .row.new { animation: none; } }`;
+    document.head.appendChild(st);
+    ui = document.createElement('div'); ui.className = 'cb';
+    ui.innerHTML = `<div class="vault"><div class="vlbl" id="cbV">SECRET CODE<small></small></div><div class="slots" id="cbLocks"></div>
+        <div class="legend"><span><i class="ck e"></i> right color, right spot (exact)</span><span><i class="ck c"></i> right color, wrong spot (close)</span></div>
+        <button class="reveal" type="button" id="cbReveal">Reveal code</button></div>
+      <div class="rows" id="cbRows"></div>
+      <div class="panel" id="cbPanel"></div><div id="cbCele"></div>`;
+    $('playBox').appendChild(ui);
+    $('cbReveal').addEventListener('click', onReveal);
+  }
+
+  function renderVault() {
+    const s = cb();
+    $('cbV').querySelector('small').textContent = `Code #${s.round} · ${len} colors, ${o.repeats === 'yes' || len > ncol ? 'repeats allowed' : 'no repeats'}`;
+    $('cbLocks').innerHTML = Array.from({ length: len }, () => '<span class="lock">?</span>').join('');
+  }
+  function rowHTML(r, i, isNew) {
+    const t = core.cfg.teams[r.t];
+    const cks = Array.from({ length: len }, (_, k) => `<i class="ck ${k < r.e ? 'e' : k < r.e + r.c ? 'c' : ''}"></i>`).join('');
+    const win = r.e === len;
+    return `<div class="row ${isNew ? 'new' : ''} ${win ? 'win' : ''}" style="--tc:${t.color}"><span class="num">${i + 1}</span><span class="tm">${esc(t.name)}</span>
+      <span class="gp">${r.g.map((c) => peg(c)).join('')}</span>
+      <span class="fb"><span class="cks" style="grid-template-columns:repeat(${len > 4 ? 3 : 2},13px)">${cks}</span><span class="ft">${win ? '<b>Cracked!</b>' : r.e || r.c ? `<b>${r.e}</b> exact · <b>${r.c}</b> close` : 'No matching colors'}</span></span></div>`;
+  }
+  function renderRows(newIdx) {
+    const s = cb(), el = $('cbRows'), own = o.view !== 'all', a = core.game.active, t = core.cfg.teams[a];
+    const list = s.rows.map((r, i) => ({ r, i })).filter((x) => !own || x.r.t === a);
+    const head = own ? `<div class="rh" style="--tc:${t.color}"><b>${esc(t.name)}'s guesses</b><span>Other teams' guesses are hidden</span></div>`
+      : `<div class="rh" style="--tc:var(--accent)"><b>All guesses</b><span>Every team can use every clue</span></div>`;
+    const empty = own ? 'No guesses yet. Answer a question to make your first guess!'
+      : 'Every team works on the same secret code. Answer correctly to make a guess, and use the clues from every team\'s guesses.';
+    el.innerHTML = head + (list.length ? list.map((x, k) => rowHTML(x.r, k, x.i === newIdx)).join('') : `<div class="empty">${empty}</div>`);
+    el.scrollTop = el.scrollHeight;
+  }
+  function renderPanel() {
+    const p = $('cbPanel');
+    if (core.phase !== 'ready') { return; }
+    const t = core.cfg.teams[core.game.active];
+    const slots = Array.from({ length: len }, (_, i) => `<button class="dslot ${i === draft.length ? 'next' : ''}" type="button" data-i="${i}" aria-label="Slot ${i + 1}${draft[i] != null ? ': ' + PAL[draft[i]].n + ', click to clear' : ''}">${draft[i] != null ? peg(draft[i]) : ''}</button>`).join('');
+    const pal = PAL.slice(0, ncol).map((c, i) => `<button class="pb" type="button" data-c="${i}" aria-label="${c.n}">${peg(i)}<kbd>${c.k.toUpperCase()}</kbd></button>`).join('');
+    p.innerHTML = `<div class="q"><span style="color:${t.color}">${esc(t.name)}</span> answered correctly. Make a guess:</div>
+      <div class="draft">${slots}</div><div class="pal">${pal}</div>
+      <div class="acts"><button class="act" type="button" id="cbClr" ${draft.length ? '' : 'disabled'}>Clear <kbd>⌫</kbd></button><button class="act go" type="button" id="cbChk" ${draft.length === len ? '' : 'disabled'}>Check <kbd>Enter</kbd></button></div>`;
+    p.querySelectorAll('.dslot').forEach((b) => b.addEventListener('click', () => { const i = +b.dataset.i; if (draft[i] != null) { draft.splice(i, 1); renderPanel(); } }));
+    p.querySelectorAll('.pb').forEach((b) => b.addEventListener('click', () => addColor(+b.dataset.c)));
+    $('cbClr').addEventListener('click', () => { draft = []; renderPanel(); });
+    $('cbChk').addEventListener('click', () => core.act());
+  }
+  function addColor(c) {
+    if (core.phase !== 'ready' || draft.length >= len) return;
+    draft.push(c); renderPanel();
+    const last = $('cbPanel').querySelectorAll('.dslot .peg')[draft.length - 1]; if (last) last.classList.add('pop');
+  }
+  function showCele(code, title, sub, conf, cls) {
+    const el = $('cbCele');
+    let confetti = '';
+    if (conf && !core.reduceMotion) for (let i = 0; i < 60; i++) confetti += `<i class="conf" style="left:${Math.random() * 100}%;background:${PAL[i % 8].c};animation-delay:${Math.random() * .8}s;animation-duration:${1.8 + Math.random() * 1.4}s"></i>`;
+    el.innerHTML = `<div class="cele ${cls || ''}">${confetti}<h2>${esc(title)}</h2><div class="slots">${code.map((c) => peg(c, 'pop')).join('')}</div><p>${esc(sub)}</p></div>`;
+    clearTimeout(celebrate); celebrate = setTimeout(() => { el.innerHTML = ''; }, 2900);
+  }
+  function onReveal() {
+    if (core.phase === 'busy') return;
+    const b = $('cbReveal');
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed'); b.textContent = 'Click again to reveal';
+      clearTimeout(armTimer); armTimer = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Reveal code'; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer); b.classList.remove('armed'); b.textContent = 'Reveal code';
+    const s = cb(), old = s.code;
+    s.code = newCode(); s.rows = []; s.round++;
+    showCele(old, 'The code was…', 'No points this time. A new secret code is ready!', false, 'rev');
+    renderVault(); renderRows();
+  }
+
+  return {
+    perTurn: [1, 2, 3],
+    defaultPer: 1,
+    defaultOpts: { len: '4', colors: '6', repeats: 'no', crack: '10', peg: '0', view: 'own' },
+    hint: '',
+    renderOptions(el, opts) {
+      el.innerHTML = `<div class="field-row"><span class="label" id="lblLen">Code length</span><div class="seg" id="segLen" role="group" aria-labelledby="lblLen"></div></div>
+        <div class="field-row"><span class="label" id="lblCol">Colors to choose from</span><div class="seg" id="segCol" role="group" aria-labelledby="lblCol"></div></div>
+        <div class="field-row"><span class="label" id="lblRep">Repeated colors in the code</span><div class="seg" id="segRep" role="group" aria-labelledby="lblRep"></div></div>
+        <div class="field-row"><span class="label" id="lblCr">Points for cracking the code</span><div class="seg" id="segCr" role="group" aria-labelledby="lblCr"></div></div>
+        <div class="field-row"><span class="label" id="lblVw">Guess board</span><div class="seg" id="segVw" role="group" aria-labelledby="lblVw"></div></div>
+        <div class="field-row"><span class="label" id="lblPg">Points per exact peg</span><div class="seg" id="segPg" role="group" aria-labelledby="lblPg"></div></div>`;
+      const set = (k) => (v) => { opts[k] = v; core.save(); core.renderSetup(); };
+      core.seg(el.querySelector('#segLen'), ['3', '4', '5'].map((v) => ({ value: v, label: v })), (v) => opts.len === v, set('len'));
+      core.seg(el.querySelector('#segCol'), ['4', '6', '8'].map((v) => ({ value: v, label: v })), (v) => opts.colors === v, set('colors'));
+      core.seg(el.querySelector('#segRep'), [{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }], (v) => opts.repeats === v, set('repeats'));
+      core.seg(el.querySelector('#segCr'), ['5', '10', '20'].map((v) => ({ value: v, label: v })), (v) => opts.crack === v, set('crack'));
+      core.seg(el.querySelector('#segVw'), [{ value: 'own', label: 'Each team sees only its own guesses' }, { value: 'all', label: 'Everyone sees all guesses' }], (v) => (opts.view || 'own') === v, set('view'));
+      core.seg(el.querySelector('#segPg'), [{ value: '0', label: 'None' }, { value: '1', label: '1 point' }], (v) => opts.peg === v, set('peg'));
+    },
+    start(cfg) {
+      o = cfg.opts; len = +o.len || 4; ncol = +o.colors || 6;
+      ensureUI();
+      if (!core.game.cb) core.game.cb = { code: newCode(), rows: [], round: 1 };
+      draft = []; $('cbCele').innerHTML = '';
+      renderVault(); renderRows();
+      $('cbPanel').innerHTML = '';
+    },
+    ready() {
+      ensureUI(); busyT.forEach(clearTimeout); busyT = [];
+      draft = []; renderVault(); renderRows(); renderPanel();
+    },
+    resize(w, h) { W = w; H = h; },
+    key(k) {
+      if (core.phase !== 'ready') return false;
+      if (k === 'backspace') { draft.pop(); renderPanel(); return true; }
+      if (k === 'enter' || k === ' ') { core.act(); return true; }
+      const i = PAL.slice(0, ncol).findIndex((c) => c.k === k);
+      if (i >= 0) { addColor(i); return true; }
+      return false;
+    },
+    act() {
+      if (draft.length !== len) return false;
+      const s = cb(), g = draft.slice(), { exact, close } = score(g, s.code), t = core.game.active;
+      s.rows.push({ t, g, e: exact, c: close });
+      draft = [];
+      $('cbPanel').innerHTML = `<div class="q">Checking the code…</div>`;
+      renderRows(s.rows.length - 1);
+      const cracked = exact === len, crack = +o.crack || 10, pp = (+o.peg || 0) * exact;
+      if (cracked) {
+        const code = s.code, name = core.cfg.teams[t].name;
+        s.code = newCode(); s.rows = []; s.round++;
+        busyT.push(setTimeout(() => {
+          showCele(code, 'CRACKED!', `${name} broke the code! +${crack}`, true);
+          core.finish({ kind: 'pts', pts: crack, text: `Cracked the code! +${crack}`, label: 'Cracked the code' });
+          $('cbPanel').innerHTML = `<div class="q">New code! Everyone starts fresh.</div>`;
+        }, 700));
+      } else {
+        busyT.push(setTimeout(() => {
+          const txt = clueText(exact, close), lbl = o.view === 'all' ? txt : 'Made a guess';
+          if (pp > 0) core.finish({ kind: 'pts', pts: pp, text: `${txt} · +${pp}`, label: lbl });
+          else core.finish({ kind: 'adjust', deltas: {}, text: txt, mood: 'neutral', label: lbl });
+          $('cbPanel').innerHTML = `<div class="q">${esc(txt)}</div>`;
+        }, 700));
+      }
+      return true;
+    },
+    draw(ctx) {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#15122b'); g.addColorStop(1, '#0b0a16');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+  };
+}
+
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = [
+    { c: '#ef5350', n: 'Red Team' }, { c: '#f7913d', n: 'Orange Team' }, { c: '#f6c445', n: 'Gold Team' },
+    { c: '#43b96d', n: 'Green Team' }, { c: '#4a8cf0', n: 'Blue Team' }, { c: '#b07cf0', n: 'Purple Team' }
+  ];
+  const ROUND_OPTS = [3, 5, 8, 10, 0];
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const STORE = 'classgame-' + 'codebreak';
+
+  let setup = { n: 4, names: COLORS.map((c) => c.n), per: 1, rounds: 5, sound: true, opts: {} };
+  let cfg = null, game = null, history = [], phase = 'ready', pending = [];
+
+  const core = {
+    get cfg() { return cfg; }, get game() { return game; }, get phase() { return phase; },
+    reduceMotion, colors: COLORS, W: 0, H: 0,
+    finish, audio, tone, noiseSrc, seg, save: saveSetup, renderSetup: () => renderSetup(),
+    teamColor: () => cfg.teams[game.active].color,
+    act: () => act()
+  };
+  const G = makeGame(core);
+  if (G.defaultPer) setup.per = G.defaultPer;
+  try { const s = JSON.parse(localStorage.getItem(STORE) || '{}'); Object.assign(setup, s); if (s.per == null && G.defaultPer) setup.per = G.defaultPer; setup.opts = Object.assign({}, G.defaultOpts, s.opts || {}); } catch (e) { setup.opts = Object.assign({}, G.defaultOpts); }
+  if (!G.perTurn.includes(setup.per)) setup.per = G.perTurn[0];
+
+  function saveSetup() { try { localStorage.setItem(STORE, JSON.stringify(setup)); } catch (e) {} }
+
+  /* ---------- Setup ---------- */
+  function seg(el, opts, isOn, onPick, multi) {
+    el.innerHTML = '';
+    el.classList.toggle('multi', !!multi);
+    opts.forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.label; b.setAttribute('aria-pressed', String(isOn(o.value)));
+      b.addEventListener('click', () => onPick(o.value));
+      el.appendChild(b);
+    });
+  }
+  function renderSetup() {
+    const pick = (key) => (v) => { setup[key] = v; saveSetup(); renderSetup(); };
+    seg($('segTeams'), [2, 3, 4, 5, 6].map((v) => ({ value: v, label: String(v) })), (v) => v === setup.n, pick('n'));
+    seg($('segPer'), G.perTurn.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.per, pick('per'));
+    seg($('segRounds'), ROUND_OPTS.map((v) => ({ value: v, label: v ? String(v) : 'No limit' })), (v) => v === setup.rounds, pick('rounds'));
+    G.renderOptions($('gameOpts'), setup.opts);
+    const box = $('names');
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null;
+    box.innerHTML = '';
+    for (let i = 0; i < setup.n; i++) {
+      const row = document.createElement('label');
+      row.className = 'name-row';
+      row.innerHTML = `<span class="dot" style="background:${COLORS[i].c}"></span><input id="tn${i}" data-i="${i}" maxlength="22" spellcheck="false" aria-label="Team ${i + 1} name">`;
+      const inp = row.querySelector('input');
+      inp.value = setup.names[i] || COLORS[i].n;
+      inp.addEventListener('input', () => { setup.names[i] = inp.value; saveSetup(); });
+      box.appendChild(row);
+    }
+    if (focused != null && $('tn' + focused)) $('tn' + focused).focus();
+  }
+
+  function startGame(keepCfg) {
+    if (!keepCfg) {
+      cfg = {
+        n: setup.n, per: setup.per, rounds: setup.rounds, opts: Object.assign({}, setup.opts),
+        teams: Array.from({ length: setup.n }, (_, i) => ({ name: (setup.names[i] || '').trim() || COLORS[i].n, color: COLORS[i].c }))
+      };
+    }
+    game = { scores: Array(cfg.n).fill(0), turns: Array(cfg.n).fill(0), last: Array(cfg.n).fill(null), active: 0, used: 0, over: false };
+    history = [];
+    clearPending();
+    $('setup').hidden = true; $('final').hidden = true; $('game').hidden = false; $('toast').hidden = true;
+    G.start(cfg);
+    resize();
+    renderBoard();
+    showBanner(cfg.teams[0].name, 'First up', cfg.teams[0].color);
+    toReady();
+  }
+
+  /* ---------- Scoreboard ---------- */
+  function renderBoard(bumpIdx) {
+    const b = $('board');
+    b.innerHTML = '';
+    cfg.teams.forEach((t, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      const on = i === game.active && !game.over;
+      el.className = 'team' + (on ? ' active' : '');
+      el.style.setProperty('--tc', t.color);
+      const turns = cfg.rounds ? `Turns ${game.turns[i]}/${cfg.rounds}` : `Turns ${game.turns[i]}`;
+      const last = game.last[i] == null ? '' : ` · Last: ${game.last[i]}`;
+      el.innerHTML = `${on ? '<span class="up">Up now</span>' : ''}<span class="dot"></span>
+        <span class="tname"></span><span class="score"><span class="${i === bumpIdx ? 'bump' : ''}">${game.scores[i]}</span></span>
+        <span class="meta"></span>`;
+      el.querySelector('.tname').textContent = t.name;
+      el.querySelector('.meta').textContent = `${turns}${last} · key ${i + 1}`;
+      el.setAttribute('aria-label', `${t.name}, ${game.scores[i]} points. Make this team active.`);
+      el.addEventListener('click', () => selectTeam(i));
+      b.appendChild(el);
+    });
+    const t = cfg.teams[game.active];
+    $('whoLbl').textContent = t.name;
+    $('whoLbl').style.color = t.color;
+    $('tokensLbl').innerHTML = cfg.per > 1 ? Array.from({ length: cfg.per }, (_, k) => `<i class="${k < game.used ? 'used' : ''}"></i>`).join('') : '';
+    const minTurns = Math.min(...game.turns);
+    $('roundLbl').textContent = cfg.rounds ? `Round ${Math.min(minTurns + 1, cfg.rounds)} of ${cfg.rounds}` : `Round ${minTurns + 1}`;
+    $('undoBtn').disabled = history.length === 0;
+    $('soundBtn').textContent = 'Sound: ' + (setup.sound ? 'On' : 'Off');
+    $('soundBtn').setAttribute('aria-pressed', String(setup.sound));
+  }
+
+  function setHint(txt) { $('hint').textContent = txt || ''; $('hint').hidden = !txt; }
+  let bannerTimer, toastTimer;
+  function fill(el, kicker, text) {
+    el.innerHTML = '<small></small><span></span>';
+    el.querySelector('small').textContent = kicker || '';
+    el.querySelector('small').hidden = !kicker;
+    el.querySelector('span').textContent = text;
+  }
+  function showBanner(name, kicker, color) {
+    fill($('bannerTxt'), kicker, name);
+    $('banner').style.setProperty('--banner', color);
+    $('banner').hidden = false;
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { $('banner').hidden = true; }, 1500);
+  }
+  function showToast(text, kicker, bg, ink) {
+    $('toast').hidden = true; void $('toast').offsetWidth;
+    fill($('toastTxt'), kicker, text);
+    $('toast').style.setProperty('--toast', bg);
+    $('toast').style.setProperty('--toast-ink', ink || '#1a1a1a');
+    $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1700);
+  }
+
+  /* ---------- Turn flow ---------- */
+  function snap() { history.push(JSON.stringify(game)); if (history.length > 300) history.shift(); }
+  function clearPending() { pending.forEach(clearTimeout); pending = []; }
+  function later(fn, ms) { pending.push(setTimeout(fn, ms)); }
+
+  function toReady() { phase = 'ready'; G.ready(); setHint(G.hint); }
+  function act() {
+    if (!game || game.over || phase !== 'ready') return;
+    audio();
+    snap();
+    phase = 'busy'; setHint('');
+    $('toast').hidden = true;
+    if (G.act() === false) { history.pop(); phase = 'ready'; setHint(G.hint); }
+    renderBoard();
+  }
+  function selectTeam(i) {
+    if (phase === 'busy' || game.over || i >= cfg.n) return;
+    if (i === game.active && game.used === 0) return;
+    snap();
+    game.active = i; game.used = 0;
+    clearPending(); $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+  function skipTurn() {
+    if (phase === 'busy' || game.over) return;
+    snap(); clearPending(); $('toast').hidden = true;
+    endTurn('Wrong answer');
+  }
+  function endTurn(reason) {
+    game.turns[game.active]++;
+    const next = findNext();
+    if (next < 0) { gameOver(); return; }
+    game.active = next; game.used = 0;
+    renderBoard();
+    const t = cfg.teams[next];
+    showBanner(t.name, reason ? `${reason} · Next up` : 'Next up', t.color);
+    toReady();
+  }
+  function findNext() {
+    for (let k = 1; k <= cfg.n; k++) {
+      const j = (game.active + k) % cfg.n;
+      if (!cfg.rounds || game.turns[j] < cfg.rounds) return j;
+    }
+    return -1;
+  }
+  function undo() {
+    if (phase === 'busy') return;
+    const last = history.pop();
+    if (!last) return;
+    clearPending();
+    game = JSON.parse(last);
+    $('final').hidden = true; $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+
+  function finish(res) {
+    const i = game.active, me = cfg.teams[i];
+    let text, kicker = me.name, bg = 'var(--accent)', ink = '#1a1a1a';
+    switch (res.kind) {
+      case 'pts':
+        game.scores[i] += res.pts; text = res.text || `+${res.pts}`; ding(res.pts); break;
+      case 'double': {
+        const d = game.scores[i]; game.scores[i] += d;
+        text = d ? `Double! +${d}` : 'Double! 0 × 2 = 0'; bg = '#ffffff'; fanfare(); break;
+      }
+      case 'bankrupt': {
+        const lost = game.scores[i]; game.scores[i] = 0;
+        text = lost ? `Bankrupt! −${lost}` : 'Bankrupt!'; bg = '#14141c'; ink = '#ffffff'; buzz(); break;
+      }
+      case 'steal': {
+        let j = -1;
+        game.scores.forEach((s, k) => { if (k !== i && s > 0 && (j < 0 || s > game.scores[j])) j = k; });
+        if (j < 0) { text = 'Nothing to steal!'; buzz(); }
+        else {
+          const amt = Math.min(res.pts || 50, game.scores[j]);
+          game.scores[j] -= amt; game.scores[i] += amt;
+          text = `Stole ${amt} from ${cfg.teams[j].name}`; fanfare();
+        }
+        bg = '#b07cf0'; ink = '#ffffff'; break;
+      }
+      case 'miss':
+        text = res.text || 'Missed!'; buzz(); bg = '#14141c'; ink = '#ffffff'; break;
+      case 'adjust': {
+        Object.keys(res.deltas || {}).forEach((k) => { game.scores[k] = Math.max(0, game.scores[k] + res.deltas[k]); });
+        text = res.text;
+        if (res.mood === 'good') { bg = '#2bb673'; ink = '#04170c'; fanfare(); }
+        else if (res.mood === 'bad') { bg = '#e2384d'; ink = '#ffffff'; buzz(); }
+        else if (res.mood === 'special') { bg = '#8b5cf6'; ink = '#ffffff'; fanfare(); }
+        else { bg = '#9aa3b2'; ink = '#14141c'; ding(10); }
+        break;
+      }
+      case 'again':
+        text = res.label || 'Go again!'; ding(20); bg = '#43b96d'; ink = '#ffffff'; break;
+    }
+    game.last[i] = res.label;
+    if (res.kind !== 'again') game.used++;
+    showToast(text, kicker, bg, ink);
+    renderBoard(i);
+    phase = 'between';
+    if (game.used >= cfg.per) later(() => endTurn(), 1700);
+    else later(toReady, 1100);
+  }
+
+  function gameOver() {
+    game.over = true; phase = 'over';
+    renderBoard(); setHint('');
+    const order = cfg.teams.map((t, i) => ({ ...t, s: game.scores[i] })).sort((a, b) => b.s - a.s);
+    const top = order[0].s;
+    const winners = order.filter((o) => o.s === top);
+    $('finalKicker').textContent = winners.length > 1 ? 'Game over · It’s a tie' : 'Game over · Winner';
+    $('finalName').textContent = winners.map((w) => w.name).join(' & ');
+    let rank = 0, prev = null;
+    $('standings').innerHTML = '';
+    order.forEach((o, idx) => {
+      if (o.s !== prev) { rank = idx + 1; prev = o.s; }
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="rank">${rank}</span><span class="dot" style="background:${o.color}"></span><span class="nm"></span><span class="pts">${o.s}</span>`;
+      li.querySelector('.nm').textContent = o.name;
+      $('standings').appendChild(li);
+    });
+    $('final').hidden = false;
+    $('againBtn').focus();
+    victory();
+  }
+
+  /* ---------- Canvas ---------- */
+  const cv = $('play'), ctx = cv.getContext('2d');
+  function resize() {
+    const box = $('playBox').getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(box.width * dpr)); cv.height = Math.max(1, Math.round(box.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    core.W = box.width; core.H = box.height;
+    G.resize(box.width, box.height);
+  }
+  let lastT = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    if (!$('game').hidden && cfg && core.W) { ctx.clearRect(0, 0, core.W, core.H); G.draw(ctx, now, dt); }
+    requestAnimationFrame(loop);
+  }
+  function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+  /* ---------- Sound ---------- */
+  let ac;
+  function audio() {
+    if (!setup.sound) return null;
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; } catch (e) { return null; }
+  }
+  function noiseSrc(dur) { const a = ac, n = Math.max(1, Math.floor(a.sampleRate * dur)), b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const s = a.createBufferSource(); s.buffer = b; return s; }
+  function tone(f, s, d, type, vol) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d);
+    o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02);
+  }
+  function ding(pts) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    const steps = Math.max(1, Math.min(6, Math.round(pts / 20) + 1));
+    const scale = [523, 659, 784, 1047, 1319, 1568];
+    for (let i = 0; i < steps; i++) tone(scale[i], t + i * .08, .14, 'square', .08);
+  }
+  function buzz() { const a = audio(); if (!a) return; const t = a.currentTime; tone(150, t, .4, 'sawtooth', .08); tone(105, t + .18, .45, 'sawtooth', .08); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + i * .09, i === 3 ? .4 : .12, 'triangle', .14)); }
+  function victory() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, t + i * .14, i === 5 ? .7 : .16, 'triangle', .14)); }
+
+  /* ---------- Wiring ---------- */
+  function armed(btn, label, armedLabel, fn) {
+    let timer;
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.textContent = armedLabel;
+        timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3500);
+        return;
+      }
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; fn();
+    });
+  }
+  $('startBtn').addEventListener('click', () => { audio(); startGame(false); });
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); const [x, y] = localXY(e); G.pointer && G.pointer('move', x, y); act(); });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && G.pointer) { const [x, y] = localXY(e); G.pointer('move', x, y); } });
+  cv.addEventListener('pointerleave', () => { G.pointer && G.pointer('leave'); });
+  $('skipBtn').addEventListener('click', skipTurn);
+  $('undoBtn').addEventListener('click', undo);
+  $('finalUndo').addEventListener('click', undo);
+  $('soundBtn').addEventListener('click', () => { setup.sound = !setup.sound; saveSetup(); renderBoard(); });
+  $('fullBtn').addEventListener('click', () => {
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  });
+  armed($('endBtn'), 'End game', 'Click again to end', () => { if (phase === 'busy') return; clearPending(); gameOver(); });
+  $('againBtn').addEventListener('click', () => startGame(true));
+  $('setupBtn').addEventListener('click', () => { $('final').hidden = true; $('game').hidden = true; $('setup').hidden = false; renderSetup(); });
+  document.addEventListener('keydown', (e) => {
+    if ($('game').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    const k = e.key.toLowerCase();
+    if ((k === ' ' || k === 'enter') && tag !== 'BUTTON') { e.preventDefault(); act(); }
+    else if (k === 's') skipTurn();
+    else if (k === 'u') undo();
+    else if (/^[1-6]$/.test(k)) selectTeam(+k - 1);
+    else if (G.key && G.key(k, e)) e.preventDefault();
+  });
+  new ResizeObserver(() => { if (!$('game').hidden) resize(); }).observe($('playBox'));
+
+  function boot(data) {
+    renderSetup();
+    const s = data && data.saved;
+    if (s && s.cfg && s.game) {
+      cfg = s.cfg; game = s.game; history = s.history || [];
+      $('setup').hidden = true; $('game').hidden = false;
+      G.start(cfg); resize(); renderBoard();
+      if (game.over) gameOver(); else toReady();
+    }
+    window.claude?.hot?.snapshot?.(() => ({ saved: cfg && !$('game').hidden ? { cfg, game, history } : null }));
+    requestAnimationFrame(loop);
+  }
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>

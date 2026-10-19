@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Classroom Basketball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Lexend:wght@400;600;700;800&display=swap">
+<style>
+  /* Layout: arena. Header strip, side-view court with the hoop on the left panel, team score cards on the right. */
+  :root {
+    --bg: #140b06; --glow: #4a2410; --surface: #1d110a; --panel: #2a180e; --panel-hi: #3a2214;
+    --line: rgba(240, 240, 255, .16); --text: #f4f6fb; --text-dim: rgba(244, 246, 251, .64);
+    --accent: #ff8a2b; --accent-deep: #b2530c; --pop: #3b82f6; --pop-deep: #1d4ed8;
+    --skip: #23202a; --skip-line: #48404f; --hint-bg: rgba(10, 10, 16, .88); --scrim: rgba(6, 6, 10, .84);
+    --display: "Bowlby One", "Arial Black", Impact, system-ui, sans-serif;
+    --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 50% -20%, var(--glow) 0, transparent 60%);
+    color: var(--text);
+    font-family: var(--body);
+    overflow: hidden;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: var(--body); font-size: .75em; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .85; }
+
+  .wrap {
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+  }
+
+  /* ---------- Setup ---------- */
+  .setup { display: grid; place-items: center; overflow-y: auto; }
+  .setup-card {
+    width: 100%; max-width: 720px; margin-block: auto;
+    background: var(--surface); border: 2px solid var(--line); border-radius: 22px;
+    padding: clamp(20px, 4vw, 36px);
+    display: flex; flex-direction: column; gap: 20px; box-sizing: border-box;
+  }
+  .logo { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: .95; margin: 0; color: var(--accent); text-shadow: 0 4px 0 var(--accent-deep); text-wrap: balance; letter-spacing: .01em; }
+  .logo small { display: block; font-family: var(--body); font-weight: 700; font-size: .3em; color: var(--pop); text-shadow: none; letter-spacing: .14em; text-transform: uppercase; margin-top: 10px; }
+  .lede { margin: 0; color: var(--text-dim); max-width: 60ch; line-height: 1.5; }
+  .field-row { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+  .label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    min-width: 52px; padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 2px solid var(--line); font-weight: 700; font-size: 1rem;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .seg.multi button[aria-pressed="true"]::before { content: "✓ "; }
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .name-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 6px 10px; border: 2px solid var(--line); min-width: 0; }
+  .name-row input { background: transparent; border: 0; padding: 6px 0; width: 100%; min-width: 0; font-weight: 600; }
+  .name-row input:focus { outline: none; }
+  .name-row:focus-within { border-color: var(--accent); }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  .start {
+    align-self: flex-start;
+    font-family: var(--display); font-size: 1.5rem; letter-spacing: .02em;
+    background: var(--pop); color: #fff; border: 0; border-radius: 14px; padding: 14px 30px;
+    box-shadow: 0 6px 0 var(--pop-deep);
+  }
+  .start:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--pop-deep); }
+  .how { margin: 0; padding-left: 1.2em; color: var(--text-dim); line-height: 1.6; font-size: .92rem; }
+
+  /* ---------- Game ---------- */
+  .game { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top .brand { font-family: var(--display); color: var(--accent); font-size: 1.4rem; margin-right: auto; letter-spacing: .02em; }
+  .round { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .tool {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; font-size: .88rem; font-weight: 600; white-space: nowrap;
+  }
+  .tool:hover { background: var(--panel-hi); }
+  .tool:disabled { opacity: .4; cursor: default; }
+  .tool.skip { background: var(--skip); border-color: var(--skip-line); }
+  .tool.armed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px); gap: 14px; min-height: 0; }
+  .play-box { position: relative; min-height: 0; min-width: 0; border-radius: 18px; overflow: hidden; background: var(--surface); border: 2px solid var(--line); }
+  canvas#play { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: pointer; }
+  .status { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .status .who { font-family: var(--display); font-size: clamp(1.1rem, 2.2vw, 1.6rem); line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .tokens { display: flex; gap: 6px; }
+  .tokens i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: inset -2px -3px 0 rgba(0,0,0,.3); display: block; }
+  .tokens i.used { background: transparent; box-shadow: inset 0 0 0 2px var(--text-dim); }
+  .hint {
+    position: absolute; left: 12px; bottom: 12px; z-index: 2;
+    background: var(--hint-bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: .9rem; white-space: nowrap; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+  }
+  .banner, .toast { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; pointer-events: none; }
+  .banner div, .toast div {
+    font-family: var(--display); font-size: clamp(1.6rem, 5vw, 3.4rem); text-align: center; line-height: 1.05; letter-spacing: .02em;
+    padding: 18px 28px; border-radius: 18px; background: var(--banner, var(--pop)); color: #fff;
+    box-shadow: 0 8px 0 rgba(0,0,0,.3); max-width: 86%; text-wrap: balance; overflow-wrap: anywhere;
+    animation: pop .45s cubic-bezier(.3,1.5,.5,1);
+  }
+  .toast { place-items: start center; padding-top: 14%; }
+  .toast div { background: var(--toast, var(--accent)); color: var(--toast-ink, #1a1a1a); }
+  .banner small, .toast small { display: block; font-family: var(--body); font-size: .36em; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; opacity: .9; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .board { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-top: 8px; }
+  .team {
+    flex: 1 1 0; max-height: 132px; min-height: 0;
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    background: var(--panel); border: 3px solid transparent; border-radius: 14px;
+    padding: 8px 12px; text-align: left; position: relative;
+  }
+  .team:hover { background: var(--panel-hi); }
+  .team.active { border-color: var(--tc); background: var(--panel-hi); }
+  .team .dot { grid-row: 1 / span 2; width: 22px; height: 22px; background: var(--tc); }
+  .team .tname { font-weight: 700; font-size: clamp(.9rem, 1.3vw, 1.1rem); line-height: 1.15; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team .meta { font-size: .76rem; color: var(--text-dim); grid-column: 2; font-variant-numeric: tabular-nums; }
+  .team .score { grid-row: 1 / span 2; grid-column: 3; font-family: var(--display); font-size: clamp(1.6rem, 3vw, 2.5rem); font-variant-numeric: tabular-nums; }
+  .team .up {
+    position: absolute; top: -9px; right: 10px; background: var(--tc); color: #14153d;
+    font-size: .66rem; font-weight: 700; letter-spacing: .12em; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  }
+  .team .bump { animation: bump .6s ease; display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.3); color: var(--accent); } }
+
+  /* ---------- Final ---------- */
+  .final { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--scrim); padding: 16px; overflow-y: auto; }
+  .final-card {
+    width: 100%; max-width: 560px; box-sizing: border-box;
+    background: var(--surface); border: 3px solid var(--accent); border-radius: 22px; padding: 26px;
+    display: flex; flex-direction: column; gap: 14px; animation: pop .5s cubic-bezier(.3,1.5,.5,1);
+  }
+  .final-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(1.9rem, 5vw, 3.1rem); line-height: 1; color: var(--accent); text-wrap: balance; overflow-wrap: anywhere; }
+  .final-kicker { font-size: .8rem; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--pop); }
+  .standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .standings li { display: grid; grid-template-columns: 2.4em auto 1fr auto; gap: 10px; align-items: center; background: var(--panel); border-radius: 12px; padding: 8px 12px; }
+  .standings .rank { font-family: var(--display); color: var(--text-dim); }
+  .standings li:first-child .rank { color: var(--accent); }
+  .standings .nm { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .standings .pts { font-family: var(--display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .final-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .final-actions button { border: 0; border-radius: 12px; padding: 12px 20px; font-weight: 700; background: var(--accent); color: var(--bg); }
+  .final-actions button.ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+
+  @media (max-width: 820px) {
+    body { overflow: auto; }
+    .wrap.game { height: auto; min-height: 100%; }
+    .stage { grid-template-columns: 1fr; }
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); order: -1; }
+    .team { max-height: none; }
+    .play-box { height: 74vh; min-height: 440px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner div, .toast div, .final-card, .team .bump { animation: none; }
+  }
+</style>
+
+<section class="wrap setup" id="setup">
+  <div class="setup-card">
+    <h1 class="logo">Basketball<small>Classroom review edition</small></h1>
+    <p class="lede">Ask a question. When a team answers correctly, they pick a shot: a layup, a jump shot or a three-pointer. Time the shot meter to sink it. Wrong answer? Skip to the next team.</p>
+    <div class="field-row">
+      <span class="label" id="lblTeams">Number of teams</span>
+      <div class="seg" id="segTeams" role="group" aria-labelledby="lblTeams"></div>
+    </div>
+    <div class="field-row">
+      <span class="label">Team names</span>
+      <div class="names" id="names"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblPer">Shots per turn</span>
+      <div class="seg" id="segPer" role="group" aria-labelledby="lblPer"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblRounds">Rounds</span>
+      <div class="seg" id="segRounds" role="group" aria-labelledby="lblRounds"></div>
+    </div>
+    <div id="gameOpts" class="field-row"></div>
+    <ul class="how"><li>After a correct answer, the team picks a shot: <b>Layup</b>, <b>Jump shot</b> or <b>Three-pointer</b> (click, or press <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd>). Longer shots are worth more and are harder.</li><li>The shot meter slides up and down. Click the court (or press <kbd>Space</kbd>) when it is in the green zone.</li></ul>
+    <button class="start" id="startBtn" type="button">Start game</button>
+  </div>
+</section>
+
+<section class="wrap game" id="game" hidden>
+  <div class="top">
+    <div class="brand">Basketball</div>
+    <div class="round" id="roundLbl">Round 1</div>
+    <button class="tool skip" id="skipBtn" type="button">Wrong answer, skip <kbd>S</kbd></button>
+    <button class="tool" id="undoBtn" type="button" disabled>Undo <kbd>U</kbd></button>
+    <button class="tool" id="soundBtn" type="button" aria-pressed="true">Sound: On</button>
+    <button class="tool" id="fullBtn" type="button">Full screen</button>
+    <button class="tool" id="endBtn" type="button">End game</button>
+  </div>
+  <div class="stage">
+    <div class="play-box" id="playBox">
+      <canvas id="play" aria-label="Basketball court with a hoop. Pick a shot, then click or press Space to shoot."></canvas>
+      <div class="status"><div class="who" id="whoLbl"></div><div class="tokens" id="tokensLbl"></div></div>
+      <div class="hint" id="hint"></div>
+      <div class="banner" id="banner" hidden><div id="bannerTxt"></div></div>
+      <div class="toast" id="toast" hidden><div id="toastTxt"></div></div>
+    </div>
+    <div class="board" id="board" aria-label="Scoreboard"></div>
+  </div>
+</section>
+
+<div class="final" id="final" hidden role="dialog" aria-modal="true" aria-labelledby="finalName">
+  <div class="final-card">
+    <div class="final-kicker" id="finalKicker">Game over · Winner</div>
+    <h2 id="finalName"></h2>
+    <ol class="standings" id="standings"></ol>
+    <div class="final-actions">
+      <button id="againBtn" type="button">Play again, same teams</button>
+      <button id="setupBtn" class="ghost" type="button">Change setup</button>
+      <button id="finalUndo" class="ghost" type="button">Undo last turn</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function makeGame(core) {
+  const BW = 1600, BH = 900;
+  const FLOOR = 770;                       // where players' feet touch
+  const RIM_Y = 430, RIM_F = 1308, RIM_B = 1402, RIM_C = (RIM_F + RIM_B) / 2, RIM_R = 5;
+  const BOARD_X = 1424, BOARD_T = 290, BOARD_B = 418;
+  const BALL_R = 22, GRAV = 1800;
+  const SKINS = ['#f1c9a5', '#8d5a3b', '#c68b5e', '#5a3825', '#e0ac7e', '#a0673f'];
+  const HAIR = ['#2b1a10', '#141010', '#3a2412', '#0f0c0a', '#6b4423', '#1c1410'];
+  const SHOTS = {
+    layup: { x: 1170, rel: 470, apex: 150, zone: .17, name: 'Layup', key: '←', idx: 0 },
+    jump:  { x: 900,  rel: 505, apex: 230, zone: .105, name: 'Jump shot', key: '↑', idx: 1 },
+    three: { x: 600,  rel: 515, apex: 255, zone: .068, name: 'Three-pointer', key: '→', idx: 2 }
+  };
+  const DIFF = { easy: { zone: 1.45, speed: .75 }, medium: { zone: 1, speed: 1.05 }, hard: { zone: .7, speed: 1.45 } };
+  const CENTER = .6;   // meter sweet-spot centre (0 = bottom, 1 = top)
+
+  let s = 1, ox = 0, oy = 0, o = {}, cw = 0, ch = 0;
+  let shot = null, lastShot = 'jump', meterT0 = 0, meterV = 0, shooterX = SHOTS.jump.x;
+  let ball = null, relT = -1e9, netT = -1e9, flash = null, rimGlow = -1e9, ended = false;
+  let ui = null, panelEl = null;
+  const crowd = [];
+  (function seedCrowd() {
+    let r = 7;
+    const rnd = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
+    const shirt = ['#e23a3a', '#f6c445', '#3b82f6', '#2bb673', '#f7913d', '#8b5cf6', '#ffffff', '#14141c', '#ec4899'];
+    for (let row = 0; row < 7; row++) {
+      const y = 175 + row * 62, step = 46 - row;
+      for (let x = 10 + (row % 2) * 20; x < BW; x += step + rnd() * 10) {
+        crowd.push({ x, y: y + rnd() * 6, k: .72 + row * .06, skin: SKINS[Math.floor(rnd() * SKINS.length)], shirt: shirt[Math.floor(rnd() * shirt.length)], hair: HAIR[Math.floor(rnd() * HAIR.length)] });
+      }
+    }
+  })();
+
+  /* ---------- helpers ---------- */
+  const $ = (id) => document.getElementById(id);
+  function tri(t) { const x = ((t % 1) + 1) % 1; return x < .5 ? x * 2 : 2 - x * 2; }
+  function meterVal(now) { const d = DIFF[o.diff] || DIFF.medium; return tri((now - meterT0) / 1000 * d.speed * .5 + .25); }
+  function zoneHalf() { const d = DIFF[o.diff] || DIFF.medium; return SHOTS[shot].zone * d.zone / 2; }
+  function ptsFor(k) { const p = o.pts === '235' ? [2, 3, 5] : [1, 2, 3]; return p[SHOTS[k].idx]; }
+  function teamIdx() { return core.game ? core.game.active : 0; }
+
+  /* ---------- sound ---------- */
+  function swishSnd() {
+    const a = core.audio(); if (!a) return; const t = a.currentTime;
+    const n = core.noiseSrc(.35), f = a.createBiquadFilter(), g = a.createGain();
+    f.type = 'highpass'; f.frequency.value = 2500;
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.16, t + .06); g.gain.exponentialRampToValueAtTime(.001, t + .35);
+    n.connect(f).connect(g).connect(a.destination); n.start(t);
+  }
+  function clang() {
+    const a = core.audio(); if (!a) return; const t = a.currentTime;
+    core.tone(620, t, .25, 'triangle', .08); core.tone(930, t, .18, 'triangle', .05);
+  }
+  function bounceSnd() { const a = core.audio(); if (!a) return; core.tone(90, a.currentTime, .12, 'sine', .2); }
+  function thudBoard() { const a = core.audio(); if (!a) return; core.tone(180, a.currentTime, .1, 'square', .06); }
+
+  /* ---------- DOM overlay ---------- */
+  function ensureUI() {
+    if (ui) return;
+    const st = document.createElement('style');
+    st.textContent = `
+      #playBox .hint { display: none !important; }
+      #playBox .toast { place-items: end center !important; padding: 0 0 18px !important; }
+      #playBox .toast div { font-size: clamp(1.2rem, 2.8vw, 2.1rem) !important; }
+      .bb { position: absolute; left: 0; right: 0; bottom: 12px; z-index: 2; display: flex; justify-content: center; pointer-events: none; padding: 0 12px; }
+      .bb .panel { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; background: rgba(10,6,3,.82); border: 1px solid var(--line); border-radius: 18px; padding: 10px 16px; max-width: 100%; box-sizing: border-box; text-align: center; }
+      .bb .q { font-weight: 700; font-size: clamp(.9rem, 1.6vw, 1.1rem); }
+      .bb .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+      .bb .b { border: 0; border-radius: 14px; padding: 10px 16px; font-weight: 800; font-size: clamp(.9rem, 1.5vw, 1.05rem); color: #1a0f05; background: #fff; box-shadow: 0 5px 0 rgba(0,0,0,.35); display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 120px; cursor: pointer; font-family: var(--body); }
+      .bb .b small { font-weight: 700; opacity: .7; font-size: .78em; }
+      .bb .b[aria-pressed="true"] { background: var(--accent); outline: 3px solid #fff; }
+      .bb .b:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+      .bb kbd { font-family: var(--body); font-size: .72em; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .85; }
+      .bb .go { color: var(--accent); font-family: var(--display); font-size: clamp(1rem, 2vw, 1.4rem); letter-spacing: .02em; }
+      [hidden] { display: none !important; }`;
+    document.head.appendChild(st);
+    ui = document.createElement('div'); ui.className = 'bb'; ui.hidden = true;
+    ui.innerHTML = '<div class="panel" id="bbPanel"></div>';
+    $('playBox').appendChild(ui);
+    panelEl = $('bbPanel');
+  }
+  function renderPanel() {
+    ensureUI();
+    const team = core.cfg.teams[teamIdx()].name;
+    const q = shot
+      ? `<div class="go">Shoot when the meter is in the green!</div><div class="q">Click the court or press <kbd>Space</kbd></div>`
+      : `<div class="q">${team.replace(/[&<>"]/g, '')} answered correctly. Pick a shot:</div>`;
+    panelEl.innerHTML = q + '<div class="row">' + Object.keys(SHOTS).map((k) => {
+      const S = SHOTS[k], p = ptsFor(k);
+      return `<button type="button" class="b" data-k="${k}" aria-pressed="${shot === k}">${S.name} <small>${p} point${p > 1 ? 's' : ''} · <kbd>${S.key}</kbd></small></button>`;
+    }).join('') + '</div>';
+    panelEl.querySelectorAll('button').forEach((b) => b.addEventListener('click', (e) => { pick(b.dataset.k); e.currentTarget.blur(); }));
+    ui.hidden = false;
+  }
+  function pick(k) {
+    if (core.phase !== 'ready') return;
+    shot = k; lastShot = k; shooterX = SHOTS[k].x; meterT0 = performance.now();
+    renderPanel();
+  }
+
+  /* ---------- physics ---------- */
+  function launch(m) {
+    const S = SHOTS[shot];
+    const x0 = S.x + 22, y0 = FLOOR - 318;
+    const w = zoneHalf(), e = m - CENTER, out = Math.abs(e) - w;
+    // where the ball would cross the rim plane: inside the green zone it stays within the hoop
+    // (rattling near the edges); outside it heads for the front rim, back rim or backboard
+    let dx, apex = S.apex;
+    if (out <= 0) dx = (e / w) * 21 + (Math.random() - .5) * 6;
+    else if (e < 0) dx = -(34 + out * 500) + (Math.random() - .5) * 14;
+    else if (out < .12) dx = 52 + out * 100 + (Math.random() - .5) * 8;   // back rim
+    else dx = 330 + out * 300;   // way too hard: sails over the backboard
+    const apexY = RIM_Y - apex;
+    const vy0 = -Math.sqrt(2 * GRAV * (y0 - apexY));
+    const t1 = -vy0 / GRAV, t2 = Math.sqrt(2 * (RIM_Y - apexY) / GRAV);
+    const vx0 = (RIM_C + 4 + dx - x0) / (t1 + t2);
+    ball = { x: x0, y: y0, vx: vx0, vy: vy0, spin: 0, rim: false, board: false, made: false, madeT: 0, t: performance.now(), bounces: 0 };
+  }
+  function collideCircle(cx, cy, r) {
+    const b = ball, dx = b.x - cx, dy = b.y - cy, d2 = dx * dx + dy * dy, R = BALL_R + r;
+    if (d2 >= R * R) return false;
+    const d = Math.sqrt(d2) || .001, nx = dx / d, ny = dy / d;
+    b.x = cx + nx * R; b.y = cy + ny * R;
+    const vn = b.vx * nx + b.vy * ny;
+    if (vn < 0) { b.vx -= 1.55 * vn * nx; b.vy -= 1.55 * vn * ny; b.vx *= .92; b.vy *= .92; return true; }
+    return false;
+  }
+  function step(h, now) {
+    const b = ball, py = b.y;
+    b.vy += GRAV * h; b.x += b.vx * h; b.y += b.vy * h; b.spin += b.vx * h * .02;
+    if (collideCircle(RIM_F, RIM_Y, RIM_R) || collideCircle(RIM_B, RIM_Y, RIM_R)) { if (now - (b.lastClang || 0) > 120) { clang(); b.lastClang = now; rimGlow = now; } b.rim = true; }
+    // backboard (front face)
+    if (b.x + BALL_R > BOARD_X && b.x < BOARD_X + 12 && b.y > BOARD_T - 6 && b.y < BOARD_B + 6 && b.vx > 0) { b.x = BOARD_X - BALL_R; b.vx *= -.85; b.vy *= .9; b.board = true; thudBoard(); }
+    // bracket between rim and board
+    if (b.y + BALL_R > RIM_Y - 4 && b.y - BALL_R < RIM_Y + 8 && b.x > RIM_B + 2 && b.x < BOARD_X && py + BALL_R <= RIM_Y - 4 && b.vy > 0) { b.y = RIM_Y - 4 - BALL_R; b.vy *= -.5; }
+    // made basket: centre crosses rim plane downward between the rims
+    if (b.x > BOARD_X + 6) b.behind = true;
+    if (!b.made && !b.behind && py < RIM_Y && b.y >= RIM_Y && b.vy > 0 && b.x > RIM_F + RIM_R && b.x < RIM_B - RIM_R) {
+      b.made = true; b.madeT = now; netT = now; swishSnd();
+      b.vx *= .35;  // net slows the ball
+    }
+    // floor
+    if (b.y + BALL_R > FLOOR + 10) { b.y = FLOOR + 10 - BALL_R; if (b.vy > 120) bounceSnd(); b.vy *= -.62; b.vx *= .8; b.bounces++; }
+    // stanchion pad on the right
+    if (b.x + BALL_R > 1488 && b.y > 600 && b.vx > 0) { b.x = 1488 - BALL_R; b.vx *= -.5; }
+  }
+  function settle(now) {
+    const b = ball;
+    if (ended) return;
+    const t = now - b.t;
+    let done = false;
+    if (b.made && now - b.madeT > 900) done = true;
+    else if (!b.made && (b.bounces >= 1 || b.x < -60 || b.x > BW + 60 || t > 4200)) done = true;
+    if (!done) return;
+    ended = true;
+    const pts = ptsFor(shot), S = SHOTS[shot];
+    if (b.made) {
+      const swish = !b.rim && !b.board;
+      const word = swish ? 'SWISH!' : b.board && !b.rim ? 'BANK SHOT!' : 'BUCKET!';
+      flash = { text: word, good: true, t: now };
+      setTimeout(() => core.finish({ kind: 'pts', pts, text: `${word.replace('!', '')}! +${pts}`, label: `${S.name} ${swish ? 'swish' : 'made'}` }), 500);
+    } else {
+      const word = b.behind && !b.rim && !b.board ? 'TOO HARD' : b.rim ? 'OFF THE RIM' : b.board ? 'OFF THE BOARD' : 'AIR BALL';
+      flash = { text: word, good: false, t: now };
+      setTimeout(() => core.finish({ kind: 'miss', text: `${word.charAt(0) + word.slice(1).toLowerCase()}! +0`, label: `${S.name} missed` }), 500);
+    }
+  }
+
+  /* ---------- drawing ---------- */
+  function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawArena(ctx) {
+    // upper arena
+    const g = ctx.createLinearGradient(0, 0, 0, 640);
+    g.addColorStop(0, '#0b0806'); g.addColorStop(1, '#24170e');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, BW, 640);
+    // lights
+    for (let i = 0; i < 6; i++) { const x = 140 + i * 265; const lg = ctx.createRadialGradient(x, 40, 4, x, 40, 120); lg.addColorStop(0, 'rgba(255,240,200,.55)'); lg.addColorStop(1, 'rgba(255,240,200,0)'); ctx.fillStyle = lg; ctx.fillRect(x - 120, 0, 240, 160); ctx.fillStyle = '#fff6d8'; rr(ctx, x - 26, 30, 52, 14, 5); ctx.fill(); }
+    // stands
+    for (let r = 0; r < 7; r++) { ctx.fillStyle = r % 2 ? '#2a1b12' : '#311f14'; ctx.fillRect(0, 150 + r * 62, BW, 62); }
+    crowd.forEach((p) => {
+      const k = p.k;
+      ctx.fillStyle = p.shirt; rr(ctx, p.x - 15 * k, p.y + 14 * k, 30 * k, 34 * k, 10 * k); ctx.fill();
+      ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(p.x, p.y + 4 * k, 11 * k, 0, 6.29); ctx.fill();
+      ctx.fillStyle = p.hair; ctx.beginPath(); ctx.arc(p.x, p.y + 1 * k, 11 * k, Math.PI, 0); ctx.fill();
+    });
+    ctx.fillStyle = 'rgba(8,5,3,.55)'; ctx.fillRect(0, 150, BW, 434);
+    // courtside wall with ad-free banner
+    ctx.fillStyle = '#1b3a6b'; ctx.fillRect(0, 584, BW, 56);
+    ctx.fillStyle = '#ff8a2b'; ctx.fillRect(0, 584, BW, 6);
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '30px "Bowlby One", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ['DEFENSE', 'TEAMWORK', 'HUSTLE', 'DEFENSE', 'TEAMWORK'].forEach((w, i) => ctx.fillText(w, 160 + i * 320, 615));
+  }
+  function drawFloor(ctx) {
+    const g = ctx.createLinearGradient(0, 640, 0, BH);
+    g.addColorStop(0, '#b8763c'); g.addColorStop(1, '#d9995a');
+    ctx.fillStyle = g; ctx.fillRect(0, 640, BW, BH - 640);
+    // planks
+    ctx.strokeStyle = 'rgba(90,50,20,.18)'; ctx.lineWidth = 2;
+    for (let y = 652; y < BH; y += 16 + (y - 640) * .06) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(BW, y); ctx.stroke(); }
+    // shine
+    const sh = ctx.createLinearGradient(0, 640, 0, BH); sh.addColorStop(0, 'rgba(255,255,255,.12)'); sh.addColorStop(.4, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sh; ctx.fillRect(0, 640, BW, BH - 640);
+    // painted key under the hoop
+    ctx.fillStyle = 'rgba(30,64,140,.82)';
+    ctx.beginPath(); ctx.moveTo(1090, 668); ctx.lineTo(1600, 668); ctx.lineTo(1600, 868); ctx.lineTo(1050, 868); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 5;
+    ctx.stroke();
+    // free-throw circle (half, foreshortened)
+    ctx.beginPath(); ctx.ellipse(1070, 768, 46, 100, 0, Math.PI / 2, Math.PI * 1.5); ctx.stroke();
+    // three-point arc
+    ctx.beginPath(); ctx.ellipse(1480, 768, 845, 112, 0, Math.PI * .5, Math.PI * 1.5); ctx.stroke();
+    // baseline + sidelines
+    ctx.beginPath(); ctx.moveTo(0, 656); ctx.lineTo(BW, 656); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 884); ctx.lineTo(BW, 884); ctx.stroke();
+    // centre circle at far left
+    ctx.beginPath(); ctx.ellipse(-20, 768, 120, 70, 0, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+    // spot markers
+    Object.keys(SHOTS).forEach((k) => {
+      const x = SHOTS[k].x, on = shot === k;
+      ctx.fillStyle = on ? 'rgba(255,138,43,.9)' : 'rgba(255,255,255,.35)';
+      ctx.beginPath(); ctx.ellipse(x, FLOOR + 8, 44, 10, 0, 0, 6.29); ctx.fill();
+    });
+  }
+  function drawHoopBack(ctx, now) {
+    // stanchion
+    ctx.fillStyle = '#22262e'; ctx.fillRect(1500, 300, 26, FLOOR - 270);
+    ctx.fillStyle = '#1e40af'; rr(ctx, 1488, 600, 60, 210, 10); ctx.fill();
+    ctx.fillStyle = '#2a2f38'; ctx.fillRect(1436, 330, 70, 16);
+    // backboard (slight 3/4 view)
+    ctx.fillStyle = 'rgba(220,235,245,.55)';
+    ctx.beginPath(); ctx.moveTo(BOARD_X, BOARD_T); ctx.lineTo(BOARD_X + 22, BOARD_T - 14); ctx.lineTo(BOARD_X + 22, BOARD_B - 10); ctx.lineTo(BOARD_X, BOARD_B); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#f4f6fb'; ctx.lineWidth = 5; ctx.stroke();
+    ctx.strokeStyle = '#e23a3a'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(BOARD_X + 4, 352); ctx.lineTo(BOARD_X + 18, 344); ctx.lineTo(BOARD_X + 18, 392); ctx.lineTo(BOARD_X + 4, 400); ctx.closePath(); ctx.stroke();
+    // bracket
+    ctx.fillStyle = '#9aa3b2'; ctx.fillRect(RIM_B, RIM_Y - 3, BOARD_X - RIM_B, 8);
+    // back half of rim
+    const glow = Math.max(0, 1 - (now - rimGlow) / 300);
+    ctx.strokeStyle = glow > 0 ? `rgb(255,${140 + 80 * glow},${60 + 120 * glow})` : '#e8590c'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.ellipse(RIM_C, RIM_Y, (RIM_B - RIM_F) / 2, 10, 0, Math.PI, Math.PI * 2); ctx.stroke();
+  }
+  function drawNetAndFront(ctx, now) {
+    const age = now - netT, k = core.reduceMotion ? 0 : Math.max(0, 1 - age / 700);
+    const stretch = k * 26 * Math.abs(Math.sin(age / 70));
+    const topL = RIM_F, topR = RIM_B, botY = RIM_Y + 70 + stretch, botL = RIM_F + 18 + stretch * .2, botR = RIM_B - 18 - stretch * .2;
+    ctx.strokeStyle = 'rgba(255,255,255,.88)'; ctx.lineWidth = 2.5;
+    const n = 7;
+    for (let i = 0; i <= n; i++) {
+      const tx = topL + (topR - topL) * i / n, bx = botL + (botR - botL) * i / n;
+      const tx2 = topL + (topR - topL) * Math.min(n, i + 1) / n, bx2 = botL + (botR - botL) * Math.max(0, i - 1) / n;
+      ctx.beginPath(); ctx.moveTo(tx, RIM_Y + 4); ctx.lineTo(bx2, botY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tx2, RIM_Y + 4); ctx.lineTo(bx, botY); ctx.stroke();
+    }
+    for (let j = 1; j <= 3; j++) {
+      const y = RIM_Y + 4 + (botY - RIM_Y - 4) * j / 3, l = topL + (botL - topL) * j / 3, r = topR + (botR - topR) * j / 3;
+      ctx.beginPath(); ctx.moveTo(l, y); ctx.lineTo(r, y); ctx.stroke();
+    }
+    // front half of rim
+    const glow = Math.max(0, 1 - (now - rimGlow) / 300);
+    ctx.strokeStyle = glow > 0 ? `rgb(255,${140 + 80 * glow},${60 + 120 * glow})` : '#f76707'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.ellipse(RIM_C, RIM_Y, (RIM_B - RIM_F) / 2, 10, 0, 0, Math.PI); ctx.stroke();
+  }
+  function drawBall(ctx, x, y, spin) {
+    ctx.fillStyle = 'rgba(0,0,0,.22)';
+    const sh = Math.max(.25, 1 - (FLOOR - y) / 600);
+    ctx.beginPath(); ctx.ellipse(x, FLOOR + 12, BALL_R * sh, 6 * sh, 0, 0, 6.29); ctx.fill();
+    const g = ctx.createRadialGradient(x - 7, y - 8, 3, x, y, BALL_R);
+    g.addColorStop(0, '#ffb066'); g.addColorStop(1, '#d9480f');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, BALL_R, 0, 6.29); ctx.fill();
+    ctx.save(); ctx.translate(x, y); ctx.rotate(spin);
+    ctx.strokeStyle = '#3b1a06'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(-BALL_R, 0); ctx.lineTo(BALL_R, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -BALL_R); ctx.lineTo(0, BALL_R); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-BALL_R * 1.1, 0, BALL_R * .8, -1, 1); ctx.stroke();
+    ctx.beginPath(); ctx.arc(BALL_R * 1.1, 0, BALL_R * .8, Math.PI - 1, Math.PI + 1); ctx.stroke();
+    ctx.restore();
+  }
+  function limb(ctx, pts, w, col) {
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
+  }
+  function drawPlayer(ctx, now) {
+    const i = teamIdx(), col = core.cfg ? core.cfg.teams[i].color : '#e23a3a';
+    const skin = SKINS[i % SKINS.length], hair = HAIR[i % HAIR.length];
+    const x = shooterX;
+    // jump arc after release
+    const since = now - relT, jumpDur = 620;
+    const jump = since >= 0 && since < jumpDur && !core.reduceMotion ? Math.sin(Math.PI * since / jumpDur) * (shot === 'layup' ? 70 : 46) : 0;
+    const follow = since >= 0 && since < 1600;
+    const y = FLOOR - jump;
+    const dark = 'rgba(0,0,0,.25)';
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, FLOOR + 10, 46 - jump * .2, 9, 0, 0, 6.29); ctx.fill();
+    // legs (side view, facing right)
+    const bend = jump > 0 ? 6 : 14;
+    limb(ctx, [[x - 8, y - 112], [x - 14 + bend, y - 58], [x - 16, y - 6]], 19, skin);
+    limb(ctx, [[x + 8, y - 112], [x + 4 + bend, y - 58], [x + 6, y - 6]], 19, skin);
+    // shoes
+    ctx.fillStyle = '#f4f6fb'; rr(ctx, x - 30, y - 12, 32, 14, 6); ctx.fill(); rr(ctx, x - 8, y - 12, 34, 14, 6); ctx.fill();
+    ctx.fillStyle = col; ctx.fillRect(x - 26, y - 6, 24, 3); ctx.fillRect(x - 4, y - 6, 26, 3);
+    // socks
+    ctx.fillStyle = '#fff'; ctx.fillRect(x - 25, y - 30, 18, 16); ctx.fillRect(x - 3, y - 30, 18, 16);
+    // shorts
+    ctx.fillStyle = col; rr(ctx, x - 26, y - 140, 52, 64, 10); ctx.fill();
+    ctx.fillStyle = dark; ctx.fillRect(x - 26, y - 84, 52, 6);
+    // torso / jersey
+    ctx.fillStyle = col; rr(ctx, x - 24, y - 232, 48, 100, 14); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(x - 24, y - 232, 48, 5);
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = '26px "Bowlby One", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), x + 2, y - 186);
+    // neck + head
+    ctx.fillStyle = skin; ctx.fillRect(x - 7, y - 248, 14, 20);
+    ctx.beginPath(); ctx.ellipse(x + 4, y - 268, 22, 25, 0, 0, 6.29); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + 24, y - 270); ctx.lineTo(x + 31, y - 262); ctx.lineTo(x + 24, y - 258); ctx.fill(); // nose
+    ctx.fillStyle = hair; ctx.beginPath(); ctx.ellipse(x, y - 280, 22, 15, 0, Math.PI * .9, Math.PI * 2.05); ctx.fill();
+    ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(x + 14, y - 272, 2.8, 0, 6.29); ctx.fill();
+    ctx.fillStyle = col; ctx.fillRect(x - 18, y - 284, 40, 7); // headband
+    // arms
+    if (follow) {
+      // follow-through: arm extended toward the hoop, wrist flicked
+      limb(ctx, [[x + 6, y - 222], [x + 30, y - 268], [x + 54, y - 306], [x + 64, y - 296]], 15, skin);
+      limb(ctx, [[x - 6, y - 222], [x + 16, y - 262], [x + 36, y - 292]], 14, skin);
+    } else if (shot) {
+      // set position: ball above the forehead
+      limb(ctx, [[x + 6, y - 222], [x + 30, y - 250], [x + 30, y - 292]], 15, skin);
+      limb(ctx, [[x - 6, y - 222], [x + 8, y - 256], [x + 14, y - 296]], 14, skin);
+    } else {
+      // holding the ball at the waist
+      limb(ctx, [[x + 6, y - 222], [x + 18, y - 176], [x + 42, y - 160]], 15, skin);
+      limb(ctx, [[x - 6, y - 222], [x + 4, y - 176], [x + 26, y - 156]], 14, skin);
+    }
+    return { y, follow };
+  }
+  function drawMeter(ctx, now) {
+    if (!shot || core.phase !== 'ready') return;
+    const visL = -ox / s, x = Math.max(visL + 24, shooterX - 140), top = 330, h = 330, w = 50;
+    const m = meterVal(now), zh = zoneHalf();
+    meterV = m;
+    rr(ctx, x - 10, top - 50, w + 20, h + 64, 16); ctx.fillStyle = 'rgba(10,6,3,.82)'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '22px "Bowlby One", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('SHOOT', x + w / 2, top - 26);
+    const gg = ctx.createLinearGradient(0, top + h, 0, top);
+    gg.addColorStop(0, '#e23a3a'); gg.addColorStop(.5, '#f6c445'); gg.addColorStop(1, '#e23a3a');
+    rr(ctx, x, top, w, h, 10); ctx.fillStyle = gg; ctx.fill();
+    // green zone
+    const zy0 = top + h * (1 - (CENTER + zh)), zy1 = top + h * (1 - (CENTER - zh));
+    ctx.fillStyle = '#2bb673'; ctx.fillRect(x, zy0, w, zy1 - zy0);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(x, zy0, w, zy1 - zy0);
+    // marker
+    const my = top + h * (1 - m);
+    const inZone = Math.abs(m - CENTER) <= zh;
+    ctx.fillStyle = inZone ? '#ffffff' : '#14141c'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    rr(ctx, x - 14, my - 7, w + 28, 14, 7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + w + 30, my); ctx.lineTo(x + w + 14, my - 12); ctx.lineTo(x + w + 14, my + 12); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+  }
+  function drawFlash(ctx, now) {
+    if (!flash) return;
+    const a = now - flash.t; if (a > 1600) return;
+    const k = core.reduceMotion ? 1 : Math.min(1, a / 160);
+    ctx.save(); ctx.translate(RIM_C - 260, 210); ctx.scale(.6 + .4 * k, .6 + .4 * k);
+    ctx.font = '96px "Bowlby One", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 14; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(flash.text, 0, 0);
+    ctx.fillStyle = flash.good ? '#ffd23f' : '#ff5a5a'; ctx.fillText(flash.text, 0, 0);
+    ctx.restore();
+  }
+
+  return {
+    perTurn: [1, 2, 3],
+    defaultPer: 1,
+    defaultOpts: { diff: 'medium', pts: '123' },
+    hint: 'Pick a shot, then click or press Space when the meter is in the green',
+    renderOptions(el, opts) {
+      el.innerHTML = `<div class="field-row"><span class="label" id="lblDf">Difficulty</span><div class="seg" id="segDf" role="group" aria-labelledby="lblDf"></div></div>
+        <div class="field-row"><span class="label" id="lblPv">Points (layup / jump shot / three-pointer)</span><div class="seg" id="segPv" role="group" aria-labelledby="lblPv"></div></div>`;
+      const set = (k) => (v) => { opts[k] = v; core.save(); core.renderSetup(); };
+      core.seg(el.querySelector('#segDf'), [{ value: 'easy', label: 'Easy' }, { value: 'medium', label: 'Medium' }, { value: 'hard', label: 'Hard' }], (v) => opts.diff === v, set('diff'));
+      core.seg(el.querySelector('#segPv'), [{ value: '123', label: '1 / 2 / 3' }, { value: '235', label: '2 / 3 / 5' }], (v) => opts.pts === v, set('pts'));
+    },
+    start(cfg) { o = cfg.opts; ensureUI(); ball = null; flash = null; shot = null; },
+    ready() {
+      ensureUI();
+      ball = null; ended = false; relT = -1e9;
+      shot = core.game.used > 0 ? lastShot : null;
+      if (shot) { shooterX = SHOTS[shot].x; meterT0 = performance.now(); }
+      renderPanel();
+    },
+    resize(W, H) {
+      // camera: show the right-hand part of the court, anchored to the bottom-right corner
+      cw = W; ch = H;
+      const VW = 1180, VH = 740;
+      s = Math.min(W / VW, H / VH);
+      ox = W - BW * s; oy = H - BH * s;
+      if (ox > 0) ox = (W - BW * s) / 2;
+    },
+    key(k) {
+      if (core.phase !== 'ready') return false;
+      const m = { arrowleft: 'layup', arrowup: 'jump', arrowright: 'three' };
+      if (m[k]) { pick(m[k]); return true; }
+      return false;
+    },
+    act() {
+      if (!shot) return false;
+      const now = performance.now();
+      launch(meterVal(now));
+      relT = now; flash = null; ended = false;
+      ui.hidden = true;
+      return true;
+    },
+    draw(ctx, now, dt) {
+      if (ball && !ended) {
+        const n = 10, h = Math.min(dt, .05) / n;
+        for (let i = 0; i < n; i++) step(h, now);
+        settle(now);
+      } else if (ball && ended) {
+        const n = 6, h = Math.min(dt, .05) / n;
+        for (let i = 0; i < n; i++) step(h, now);
+      }
+      ctx.fillStyle = '#0b0806'; ctx.fillRect(0, 0, cw, ch);
+      ctx.save();
+      ctx.translate(ox, oy); ctx.scale(s, s);
+      ctx.beginPath(); ctx.rect(0, 0, BW, BH); ctx.clip();
+      drawArena(ctx);
+      drawFloor(ctx);
+      drawHoopBack(ctx, now);
+      const pl = drawPlayer(ctx, now);
+      if (ball) drawBall(ctx, ball.x, ball.y, ball.spin);
+      else {
+        const S = shot ? SHOTS[shot] : null;
+        if (S) drawBall(ctx, shooterX + 22, pl.y - 318, 0);
+        else drawBall(ctx, shooterX + 40, pl.y - 140, 0);
+      }
+      drawNetAndFront(ctx, now);
+      drawMeter(ctx, now);
+      drawFlash(ctx, now);
+      ctx.restore();
+    }
+  };
+}
+
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = [
+    { c: '#ef5350', n: 'Red Team' }, { c: '#f7913d', n: 'Orange Team' }, { c: '#f6c445', n: 'Gold Team' },
+    { c: '#43b96d', n: 'Green Team' }, { c: '#4a8cf0', n: 'Blue Team' }, { c: '#b07cf0', n: 'Purple Team' }
+  ];
+  const ROUND_OPTS = [3, 5, 8, 10, 0];
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const STORE = 'classgame-' + 'basketball';
+
+  let setup = { n: 4, names: COLORS.map((c) => c.n), per: 1, rounds: 5, sound: true, opts: {} };
+  let cfg = null, game = null, history = [], phase = 'ready', pending = [];
+
+  const core = {
+    get cfg() { return cfg; }, get game() { return game; }, get phase() { return phase; },
+    reduceMotion, colors: COLORS, W: 0, H: 0,
+    finish, audio, tone, noiseSrc, seg, save: saveSetup, renderSetup: () => renderSetup(),
+    teamColor: () => cfg.teams[game.active].color,
+    act: () => act()
+  };
+  const G = makeGame(core);
+  if (G.defaultPer) setup.per = G.defaultPer;
+  try { const s = JSON.parse(localStorage.getItem(STORE) || '{}'); Object.assign(setup, s); if (s.per == null && G.defaultPer) setup.per = G.defaultPer; setup.opts = Object.assign({}, G.defaultOpts, s.opts || {}); } catch (e) { setup.opts = Object.assign({}, G.defaultOpts); }
+  if (!G.perTurn.includes(setup.per)) setup.per = G.perTurn[0];
+
+  function saveSetup() { try { localStorage.setItem(STORE, JSON.stringify(setup)); } catch (e) {} }
+
+  /* ---------- Setup ---------- */
+  function seg(el, opts, isOn, onPick, multi) {
+    el.innerHTML = '';
+    el.classList.toggle('multi', !!multi);
+    opts.forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.label; b.setAttribute('aria-pressed', String(isOn(o.value)));
+      b.addEventListener('click', () => onPick(o.value));
+      el.appendChild(b);
+    });
+  }
+  function renderSetup() {
+    const pick = (key) => (v) => { setup[key] = v; saveSetup(); renderSetup(); };
+    seg($('segTeams'), [2, 3, 4, 5, 6].map((v) => ({ value: v, label: String(v) })), (v) => v === setup.n, pick('n'));
+    seg($('segPer'), G.perTurn.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.per, pick('per'));
+    seg($('segRounds'), ROUND_OPTS.map((v) => ({ value: v, label: v ? String(v) : 'No limit' })), (v) => v === setup.rounds, pick('rounds'));
+    G.renderOptions($('gameOpts'), setup.opts);
+    const box = $('names');
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null;
+    box.innerHTML = '';
+    for (let i = 0; i < setup.n; i++) {
+      const row = document.createElement('label');
+      row.className = 'name-row';
+      row.innerHTML = `<span class="dot" style="background:${COLORS[i].c}"></span><input id="tn${i}" data-i="${i}" maxlength="22" spellcheck="false" aria-label="Team ${i + 1} name">`;
+      const inp = row.querySelector('input');
+      inp.value = setup.names[i] || COLORS[i].n;
+      inp.addEventListener('input', () => { setup.names[i] = inp.value; saveSetup(); });
+      box.appendChild(row);
+    }
+    if (focused != null && $('tn' + focused)) $('tn' + focused).focus();
+  }
+
+  function startGame(keepCfg) {
+    if (!keepCfg) {
+      cfg = {
+        n: setup.n, per: setup.per, rounds: setup.rounds, opts: Object.assign({}, setup.opts),
+        teams: Array.from({ length: setup.n }, (_, i) => ({ name: (setup.names[i] || '').trim() || COLORS[i].n, color: COLORS[i].c }))
+      };
+    }
+    game = { scores: Array(cfg.n).fill(0), turns: Array(cfg.n).fill(0), last: Array(cfg.n).fill(null), active: 0, used: 0, over: false };
+    history = [];
+    clearPending();
+    $('setup').hidden = true; $('final').hidden = true; $('game').hidden = false; $('toast').hidden = true;
+    G.start(cfg);
+    resize();
+    renderBoard();
+    showBanner(cfg.teams[0].name, 'First up', cfg.teams[0].color);
+    toReady();
+  }
+
+  /* ---------- Scoreboard ---------- */
+  function renderBoard(bumpIdx) {
+    const b = $('board');
+    b.innerHTML = '';
+    cfg.teams.forEach((t, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      const on = i === game.active && !game.over;
+      el.className = 'team' + (on ? ' active' : '');
+      el.style.setProperty('--tc', t.color);
+      const turns = cfg.rounds ? `Turns ${game.turns[i]}/${cfg.rounds}` : `Turns ${game.turns[i]}`;
+      const last = game.last[i] == null ? '' : ` · Last: ${game.last[i]}`;
+      el.innerHTML = `${on ? '<span class="up">Up now</span>' : ''}<span class="dot"></span>
+        <span class="tname"></span><span class="score"><span class="${i === bumpIdx ? 'bump' : ''}">${game.scores[i]}</span></span>
+        <span class="meta"></span>`;
+      el.querySelector('.tname').textContent = t.name;
+      el.querySelector('.meta').textContent = `${turns}${last} · key ${i + 1}`;
+      el.setAttribute('aria-label', `${t.name}, ${game.scores[i]} points. Make this team active.`);
+      el.addEventListener('click', () => selectTeam(i));
+      b.appendChild(el);
+    });
+    const t = cfg.teams[game.active];
+    $('whoLbl').textContent = t.name;
+    $('whoLbl').style.color = t.color;
+    $('tokensLbl').innerHTML = cfg.per > 1 ? Array.from({ length: cfg.per }, (_, k) => `<i class="${k < game.used ? 'used' : ''}"></i>`).join('') : '';
+    const minTurns = Math.min(...game.turns);
+    $('roundLbl').textContent = cfg.rounds ? `Round ${Math.min(minTurns + 1, cfg.rounds)} of ${cfg.rounds}` : `Round ${minTurns + 1}`;
+    $('undoBtn').disabled = history.length === 0;
+    $('soundBtn').textContent = 'Sound: ' + (setup.sound ? 'On' : 'Off');
+    $('soundBtn').setAttribute('aria-pressed', String(setup.sound));
+  }
+
+  function setHint(txt) { $('hint').textContent = txt || ''; $('hint').hidden = !txt; }
+  let bannerTimer, toastTimer;
+  function fill(el, kicker, text) {
+    el.innerHTML = '<small></small><span></span>';
+    el.querySelector('small').textContent = kicker || '';
+    el.querySelector('small').hidden = !kicker;
+    el.querySelector('span').textContent = text;
+  }
+  function showBanner(name, kicker, color) {
+    fill($('bannerTxt'), kicker, name);
+    $('banner').style.setProperty('--banner', color);
+    $('banner').hidden = false;
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { $('banner').hidden = true; }, 1500);
+  }
+  function showToast(text, kicker, bg, ink) {
+    $('toast').hidden = true; void $('toast').offsetWidth;
+    fill($('toastTxt'), kicker, text);
+    $('toast').style.setProperty('--toast', bg);
+    $('toast').style.setProperty('--toast-ink', ink || '#1a1a1a');
+    $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1700);
+  }
+
+  /* ---------- Turn flow ---------- */
+  function snap() { history.push(JSON.stringify(game)); if (history.length > 300) history.shift(); }
+  function clearPending() { pending.forEach(clearTimeout); pending = []; }
+  function later(fn, ms) { pending.push(setTimeout(fn, ms)); }
+
+  function toReady() { phase = 'ready'; G.ready(); setHint(G.hint); }
+  function act() {
+    if (!game || game.over || phase !== 'ready') return;
+    audio();
+    snap();
+    phase = 'busy'; setHint('');
+    $('toast').hidden = true;
+    if (G.act() === false) { history.pop(); phase = 'ready'; setHint(G.hint); }
+    renderBoard();
+  }
+  function selectTeam(i) {
+    if (phase === 'busy' || game.over || i >= cfg.n) return;
+    if (i === game.active && game.used === 0) return;
+    snap();
+    game.active = i; game.used = 0;
+    clearPending(); $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+  function skipTurn() {
+    if (phase === 'busy' || game.over) return;
+    snap(); clearPending(); $('toast').hidden = true;
+    endTurn('Wrong answer');
+  }
+  function endTurn(reason) {
+    game.turns[game.active]++;
+    const next = findNext();
+    if (next < 0) { gameOver(); return; }
+    game.active = next; game.used = 0;
+    renderBoard();
+    const t = cfg.teams[next];
+    showBanner(t.name, reason ? `${reason} · Next up` : 'Next up', t.color);
+    toReady();
+  }
+  function findNext() {
+    for (let k = 1; k <= cfg.n; k++) {
+      const j = (game.active + k) % cfg.n;
+      if (!cfg.rounds || game.turns[j] < cfg.rounds) return j;
+    }
+    return -1;
+  }
+  function undo() {
+    if (phase === 'busy') return;
+    const last = history.pop();
+    if (!last) return;
+    clearPending();
+    game = JSON.parse(last);
+    $('final').hidden = true; $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+
+  function finish(res) {
+    const i = game.active, me = cfg.teams[i];
+    let text, kicker = me.name, bg = 'var(--accent)', ink = '#1a1a1a';
+    switch (res.kind) {
+      case 'pts':
+        game.scores[i] += res.pts; text = res.text || `+${res.pts}`; ding(res.pts); break;
+      case 'double': {
+        const d = game.scores[i]; game.scores[i] += d;
+        text = d ? `Double! +${d}` : 'Double! 0 × 2 = 0'; bg = '#ffffff'; fanfare(); break;
+      }
+      case 'bankrupt': {
+        const lost = game.scores[i]; game.scores[i] = 0;
+        text = lost ? `Bankrupt! −${lost}` : 'Bankrupt!'; bg = '#14141c'; ink = '#ffffff'; buzz(); break;
+      }
+      case 'steal': {
+        let j = -1;
+        game.scores.forEach((s, k) => { if (k !== i && s > 0 && (j < 0 || s > game.scores[j])) j = k; });
+        if (j < 0) { text = 'Nothing to steal!'; buzz(); }
+        else {
+          const amt = Math.min(res.pts || 50, game.scores[j]);
+          game.scores[j] -= amt; game.scores[i] += amt;
+          text = `Stole ${amt} from ${cfg.teams[j].name}`; fanfare();
+        }
+        bg = '#b07cf0'; ink = '#ffffff'; break;
+      }
+      case 'miss':
+        text = res.text || 'Missed!'; buzz(); bg = '#14141c'; ink = '#ffffff'; break;
+      case 'adjust': {
+        Object.keys(res.deltas || {}).forEach((k) => { game.scores[k] = Math.max(0, game.scores[k] + res.deltas[k]); });
+        text = res.text;
+        if (res.mood === 'good') { bg = '#2bb673'; ink = '#04170c'; fanfare(); }
+        else if (res.mood === 'bad') { bg = '#e2384d'; ink = '#ffffff'; buzz(); }
+        else if (res.mood === 'special') { bg = '#8b5cf6'; ink = '#ffffff'; fanfare(); }
+        else { bg = '#9aa3b2'; ink = '#14141c'; ding(10); }
+        break;
+      }
+      case 'again':
+        text = res.label || 'Go again!'; ding(20); bg = '#43b96d'; ink = '#ffffff'; break;
+    }
+    game.last[i] = res.label;
+    if (res.kind !== 'again') game.used++;
+    showToast(text, kicker, bg, ink);
+    renderBoard(i);
+    phase = 'between';
+    if (game.used >= cfg.per) later(() => endTurn(), 1700);
+    else later(toReady, 1100);
+  }
+
+  function gameOver() {
+    game.over = true; phase = 'over';
+    renderBoard(); setHint('');
+    const order = cfg.teams.map((t, i) => ({ ...t, s: game.scores[i] })).sort((a, b) => b.s - a.s);
+    const top = order[0].s;
+    const winners = order.filter((o) => o.s === top);
+    $('finalKicker').textContent = winners.length > 1 ? 'Game over · It’s a tie' : 'Game over · Winner';
+    $('finalName').textContent = winners.map((w) => w.name).join(' & ');
+    let rank = 0, prev = null;
+    $('standings').innerHTML = '';
+    order.forEach((o, idx) => {
+      if (o.s !== prev) { rank = idx + 1; prev = o.s; }
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="rank">${rank}</span><span class="dot" style="background:${o.color}"></span><span class="nm"></span><span class="pts">${o.s}</span>`;
+      li.querySelector('.nm').textContent = o.name;
+      $('standings').appendChild(li);
+    });
+    $('final').hidden = false;
+    $('againBtn').focus();
+    victory();
+  }
+
+  /* ---------- Canvas ---------- */
+  const cv = $('play'), ctx = cv.getContext('2d');
+  function resize() {
+    const box = $('playBox').getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(box.width * dpr)); cv.height = Math.max(1, Math.round(box.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    core.W = box.width; core.H = box.height;
+    G.resize(box.width, box.height);
+  }
+  let lastT = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    if (!$('game').hidden && cfg && core.W) { ctx.clearRect(0, 0, core.W, core.H); G.draw(ctx, now, dt); }
+    requestAnimationFrame(loop);
+  }
+  function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+  /* ---------- Sound ---------- */
+  let ac;
+  function audio() {
+    if (!setup.sound) return null;
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; } catch (e) { return null; }
+  }
+  function noiseSrc(dur) { const a = ac, n = Math.max(1, Math.floor(a.sampleRate * dur)), b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const s = a.createBufferSource(); s.buffer = b; return s; }
+  function tone(f, s, d, type, vol) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d);
+    o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02);
+  }
+  function ding(pts) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    const steps = Math.max(1, Math.min(6, Math.round(pts / 20) + 1));
+    const scale = [523, 659, 784, 1047, 1319, 1568];
+    for (let i = 0; i < steps; i++) tone(scale[i], t + i * .08, .14, 'square', .08);
+  }
+  function buzz() { const a = audio(); if (!a) return; const t = a.currentTime; tone(150, t, .4, 'sawtooth', .08); tone(105, t + .18, .45, 'sawtooth', .08); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + i * .09, i === 3 ? .4 : .12, 'triangle', .14)); }
+  function victory() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, t + i * .14, i === 5 ? .7 : .16, 'triangle', .14)); }
+
+  /* ---------- Wiring ---------- */
+  function armed(btn, label, armedLabel, fn) {
+    let timer;
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.textContent = armedLabel;
+        timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3500);
+        return;
+      }
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; fn();
+    });
+  }
+  $('startBtn').addEventListener('click', () => { audio(); startGame(false); });
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); const [x, y] = localXY(e); G.pointer && G.pointer('move', x, y); act(); });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && G.pointer) { const [x, y] = localXY(e); G.pointer('move', x, y); } });
+  cv.addEventListener('pointerleave', () => { G.pointer && G.pointer('leave'); });
+  $('skipBtn').addEventListener('click', skipTurn);
+  $('undoBtn').addEventListener('click', undo);
+  $('finalUndo').addEventListener('click', undo);
+  $('soundBtn').addEventListener('click', () => { setup.sound = !setup.sound; saveSetup(); renderBoard(); });
+  $('fullBtn').addEventListener('click', () => {
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  });
+  armed($('endBtn'), 'End game', 'Click again to end', () => { if (phase === 'busy') return; clearPending(); gameOver(); });
+  $('againBtn').addEventListener('click', () => startGame(true));
+  $('setupBtn').addEventListener('click', () => { $('final').hidden = true; $('game').hidden = true; $('setup').hidden = false; renderSetup(); });
+  document.addEventListener('keydown', (e) => {
+    if ($('game').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    const k = e.key.toLowerCase();
+    if ((k === ' ' || k === 'enter') && tag !== 'BUTTON') { e.preventDefault(); act(); }
+    else if (k === 's') skipTurn();
+    else if (k === 'u') undo();
+    else if (/^[1-6]$/.test(k)) selectTeam(+k - 1);
+    else if (G.key && G.key(k, e)) e.preventDefault();
+  });
+  new ResizeObserver(() => { if (!$('game').hidden) resize(); }).observe($('playBox'));
+
+  function boot(data) {
+    renderSetup();
+    const s = data && data.saved;
+    if (s && s.cfg && s.game) {
+      cfg = s.cfg; game = s.game; history = s.history || [];
+      $('setup').hidden = true; $('game').hidden = false;
+      G.start(cfg); resize(); renderBoard();
+      if (game.over) gameOver(); else toReady();
+    }
+    window.claude?.hot?.snapshot?.(() => ({ saved: cfg && !$('game').hidden ? { cfg, game, history } : null }));
+    requestAnimationFrame(loop);
+  }
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>

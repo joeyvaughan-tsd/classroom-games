@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Drop Four</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Lexend:wght@400;600;700;800&display=swap">
+<style>
+  /* Layout: tabletop. Header strip, the upright blue board with a drop zone above it on the left panel, the two team score cards on the right. */
+  :root {
+    --bg: #0a1020; --glow: #1c2f5e; --surface: #101a33; --panel: #172446; --panel-hi: #1f2f58;
+    --line: rgba(225, 235, 255, .16); --text: #f2f6ff; --text-dim: rgba(242, 246, 255, .64);
+    --accent: #f6c445; --accent-deep: #b08410; --pop: #e8343a; --pop-deep: #a01c21;
+    --skip: #23202a; --skip-line: #48404f; --hint-bg: rgba(10, 16, 32, .9); --scrim: rgba(5, 8, 16, .84);
+    --display: "Lilita One", "Arial Black", Impact, system-ui, sans-serif;
+    --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 50% -20%, var(--glow) 0, transparent 60%);
+    color: var(--text);
+    font-family: var(--body);
+    overflow: hidden;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: var(--body); font-size: .75em; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .85; }
+
+  .wrap {
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+  }
+
+  /* ---------- Setup ---------- */
+  .setup { display: grid; place-items: center; overflow-y: auto; }
+  .setup-card {
+    width: 100%; max-width: 720px; margin-block: auto;
+    background: var(--surface); border: 2px solid var(--line); border-radius: 22px;
+    padding: clamp(20px, 4vw, 36px);
+    display: flex; flex-direction: column; gap: 20px; box-sizing: border-box;
+  }
+  .logo { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: .95; margin: 0; color: var(--accent); text-shadow: 0 4px 0 var(--accent-deep); text-wrap: balance; letter-spacing: .01em; }
+  .logo small { display: block; font-family: var(--body); font-weight: 700; font-size: .3em; color: var(--pop); text-shadow: none; letter-spacing: .14em; text-transform: uppercase; margin-top: 10px; }
+  .lede { margin: 0; color: var(--text-dim); max-width: 60ch; line-height: 1.5; }
+  .field-row { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+  .label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    min-width: 52px; padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 2px solid var(--line); font-weight: 700; font-size: 1rem;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .seg.multi button[aria-pressed="true"]::before { content: "✓ "; }
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .name-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 6px 10px; border: 2px solid var(--line); min-width: 0; }
+  .name-row input { background: transparent; border: 0; padding: 6px 0; width: 100%; min-width: 0; font-weight: 600; }
+  .name-row input:focus { outline: none; }
+  .name-row:focus-within { border-color: var(--accent); }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  .start {
+    align-self: flex-start;
+    font-family: var(--display); font-size: 1.5rem; letter-spacing: .02em;
+    background: var(--pop); color: #fff; border: 0; border-radius: 14px; padding: 14px 30px;
+    box-shadow: 0 6px 0 var(--pop-deep);
+  }
+  .start:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--pop-deep); }
+  .how { margin: 0; padding-left: 1.2em; color: var(--text-dim); line-height: 1.6; font-size: .92rem; }
+
+  /* ---------- Game ---------- */
+  .game { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top .brand { font-family: var(--display); color: var(--accent); font-size: 1.4rem; margin-right: auto; letter-spacing: .02em; }
+  .round { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .tool {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; font-size: .88rem; font-weight: 600; white-space: nowrap;
+  }
+  .tool:hover { background: var(--panel-hi); }
+  .tool:disabled { opacity: .4; cursor: default; }
+  .tool.skip { background: var(--skip); border-color: var(--skip-line); }
+  .tool.armed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px); gap: 14px; min-height: 0; }
+  .play-box { position: relative; min-height: 0; min-width: 0; border-radius: 18px; overflow: hidden; background: var(--surface); border: 2px solid var(--line); }
+  canvas#play { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: pointer; }
+  .status { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .status .who { font-family: var(--display); font-size: clamp(1.1rem, 2.2vw, 1.6rem); line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .tokens { display: flex; gap: 6px; }
+  .tokens i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: inset -2px -3px 0 rgba(0,0,0,.3); display: block; }
+  .tokens i.used { background: transparent; box-shadow: inset 0 0 0 2px var(--text-dim); }
+  .hint {
+    position: absolute; left: 12px; bottom: 12px; z-index: 2;
+    background: var(--hint-bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: .9rem; white-space: nowrap; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+  }
+  .banner, .toast { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; pointer-events: none; }
+  .banner div, .toast div {
+    font-family: var(--display); font-size: clamp(1.6rem, 5vw, 3.4rem); text-align: center; line-height: 1.05; letter-spacing: .02em;
+    padding: 18px 28px; border-radius: 18px; background: var(--banner, var(--pop)); color: #fff;
+    box-shadow: 0 8px 0 rgba(0,0,0,.3); max-width: 86%; text-wrap: balance; overflow-wrap: anywhere;
+    animation: pop .45s cubic-bezier(.3,1.5,.5,1);
+  }
+  .toast { place-items: start center; padding-top: 14%; }
+  .toast div { background: var(--toast, var(--accent)); color: var(--toast-ink, #1a1a1a); }
+  .banner small, .toast small { display: block; font-family: var(--body); font-size: .36em; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; opacity: .9; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .board { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-top: 8px; }
+  .team {
+    flex: 1 1 0; max-height: 132px; min-height: 0;
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    background: var(--panel); border: 3px solid transparent; border-radius: 14px;
+    padding: 8px 12px; text-align: left; position: relative;
+  }
+  .team:hover { background: var(--panel-hi); }
+  .team.active { border-color: var(--tc); background: var(--panel-hi); }
+  .team .dot { grid-row: 1 / span 2; width: 22px; height: 22px; background: var(--tc); }
+  .team .tname { font-weight: 700; font-size: clamp(.9rem, 1.3vw, 1.1rem); line-height: 1.15; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team .meta { font-size: .76rem; color: var(--text-dim); grid-column: 2; font-variant-numeric: tabular-nums; }
+  .team .score { grid-row: 1 / span 2; grid-column: 3; font-family: var(--display); font-size: clamp(1.6rem, 3vw, 2.5rem); font-variant-numeric: tabular-nums; }
+  .team .up {
+    position: absolute; top: -9px; right: 10px; background: var(--tc); color: #14153d;
+    font-size: .66rem; font-weight: 700; letter-spacing: .12em; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  }
+  .team .bump { animation: bump .6s ease; display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.3); color: var(--accent); } }
+
+  /* ---------- Final ---------- */
+  .final { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--scrim); padding: 16px; overflow-y: auto; }
+  .final-card {
+    width: 100%; max-width: 560px; box-sizing: border-box;
+    background: var(--surface); border: 3px solid var(--accent); border-radius: 22px; padding: 26px;
+    display: flex; flex-direction: column; gap: 14px; animation: pop .5s cubic-bezier(.3,1.5,.5,1);
+  }
+  .final-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(1.9rem, 5vw, 3.1rem); line-height: 1; color: var(--accent); text-wrap: balance; overflow-wrap: anywhere; }
+  .final-kicker { font-size: .8rem; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--pop); }
+  .standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .standings li { display: grid; grid-template-columns: 2.4em auto 1fr auto; gap: 10px; align-items: center; background: var(--panel); border-radius: 12px; padding: 8px 12px; }
+  .standings .rank { font-family: var(--display); color: var(--text-dim); }
+  .standings li:first-child .rank { color: var(--accent); }
+  .standings .nm { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .standings .pts { font-family: var(--display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .final-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .final-actions button { border: 0; border-radius: 12px; padding: 12px 20px; font-weight: 700; background: var(--accent); color: var(--bg); }
+  .final-actions button.ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+
+  @media (max-width: 820px) {
+    body { overflow: auto; }
+    .wrap.game { height: auto; min-height: 100%; }
+    .stage { grid-template-columns: 1fr; }
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); order: -1; }
+    .team { max-height: none; }
+    .play-box { height: 74vh; min-height: 440px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner div, .toast div, .final-card, .team .bump { animation: none; }
+  }
+</style>
+
+<section class="wrap setup" id="setup">
+  <div class="setup-card">
+    <h1 class="logo">Drop Four<small>Classroom review edition</small></h1>
+    <p class="lede">Red against Yellow on the classic upright board. When a team answers correctly, they drop a disc into a column. Wrong answer? Skip their turn. Get 4 in a row, then draw a line through them to win the game.</p>
+    <div class="field-row">
+      <span class="label" id="lblTeams">Number of teams</span>
+      <div class="seg" id="segTeams" role="group" aria-labelledby="lblTeams"></div>
+    </div>
+    <div class="field-row">
+      <span class="label">Team names</span>
+      <div class="names" id="names"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblPer">Discs per turn</span>
+      <div class="seg" id="segPer" role="group" aria-labelledby="lblPer"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblRounds">Rounds</span>
+      <div class="seg" id="segRounds" role="group" aria-labelledby="lblRounds"></div>
+    </div>
+    <div id="gameOpts" class="field-row"></div>
+    <ul class="how"><li>After a correct answer, the team picks a column (move over it, or use <kbd>←</kbd> <kbd>→</kbd>) and clicks or presses <kbd>Space</kbd> to drop the disc.</li><li>Wrong answer? Click <b>Wrong answer, skip</b> (<kbd>S</kbd>) and the other team is up.</li><li>4 in a row (across, up and down, or diagonal)? Students must draw the line: press on one end disc and drag to the other end. A correct line wins the game, and a new board starts. Press <kbd>H</kbd> to show them where if they are stuck.</li></ul>
+    <button class="start" id="startBtn" type="button">Start game</button>
+  </div>
+</section>
+
+<section class="wrap game" id="game" hidden>
+  <div class="top">
+    <div class="brand">Drop Four</div>
+    <div class="round" id="roundLbl">Round 1</div>
+    <button class="tool skip" id="skipBtn" type="button">Wrong answer, skip <kbd>S</kbd></button>
+    <button class="tool" id="undoBtn" type="button" disabled>Undo <kbd>U</kbd></button>
+    <button class="tool" id="soundBtn" type="button" aria-pressed="true">Sound: On</button>
+    <button class="tool" id="fullBtn" type="button">Full screen</button>
+    <button class="tool" id="endBtn" type="button">End game</button>
+  </div>
+  <div class="stage">
+    <div class="play-box" id="playBox">
+      <canvas id="play" aria-label="Drop Four board with 7 columns and 6 rows."></canvas>
+      <div class="status"><div class="who" id="whoLbl"></div><div class="tokens" id="tokensLbl"></div></div>
+      <div class="hint" id="hint"></div>
+      <div class="banner" id="banner" hidden><div id="bannerTxt"></div></div>
+      <div class="toast" id="toast" hidden><div id="toastTxt"></div></div>
+    </div>
+    <div class="board" id="board" aria-label="Scoreboard"></div>
+  </div>
+</section>
+
+<div class="final" id="final" hidden role="dialog" aria-modal="true" aria-labelledby="finalName">
+  <div class="final-card">
+    <div class="final-kicker" id="finalKicker">Game over · Winner</div>
+    <h2 id="finalName"></h2>
+    <ol class="standings" id="standings"></ol>
+    <div class="final-actions">
+      <button id="againBtn" type="button">Play again, same teams</button>
+      <button id="setupBtn" class="ghost" type="button">Change setup</button>
+      <button id="finalUndo" class="ghost" type="button">Undo last turn</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function makeGame(core) {
+  const COLS = 7, ROWS = 6, S = 118, PAD = 26, TOP = 150;
+  const BW = COLS * S + PAD * 2, BH = TOP + ROWS * S + PAD * 2 + 50;
+  const BX = 0, BY = TOP;
+  const R = S * .4;
+  let s = 1, ox = 0, oy = 0, o = {};
+  let hover = 3, mouseCol = null, falling = null, mode = 'idle', drag = null, show = false, winLine = null;
+  let flashT = -1e9, msg = '', sub = '', confetti = [], timers = [], shakeCol = -1, shakeT = -1e9, pendingRun = null;
+  const st = () => core.game.c4;
+  const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+  const cx = (c) => BX + PAD + c * S + S / 2;
+  const cy = (r) => BY + PAD + r * S + S / 2;   // r = 0 top row
+
+  function fresh() { return { grid: Array.from({ length: ROWS }, () => Array(COLS).fill(-1)), lines: [], done: false, game: 1 }; }
+  function landingRow(c) { const g = st().grid; for (let r = ROWS - 1; r >= 0; r--) if (g[r][c] < 0) return r; return -1; }
+  function runsFor(team) {
+    const g = st().grid, out = [];
+    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) for (const [dr, dc] of dirs) {
+      const cells = [];
+      for (let k = 0; k < 4; k++) { const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || g[rr][cc] !== team) { cells.length = 0; break; } cells.push([rr, cc]); }
+      if (cells.length === 4) out.push(cells);
+    }
+    return out;
+  }
+  const key = (cells) => cells.map(([r, c]) => r * COLS + c).sort((a, b) => a - b).join(',');
+
+  /* ---------- sounds ---------- */
+  function clack(v) { const a = core.audio(); if (!a) return; const t = a.currentTime, n = core.noiseSrc(.08), f = a.createBiquadFilter(), g = a.createGain(); f.type = 'bandpass'; f.frequency.value = 1800; g.gain.setValueAtTime(.4 * v, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); n.connect(f).connect(g).connect(a.destination); n.start(t); }
+  function fanfare() { const a = core.audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1046, 784, 1046].forEach((f, k) => core.tone(f, t + k * .13, k === 5 ? .6 : .18, 'square', .08)); }
+  function buzz() { const a = core.audio(); if (!a) return; core.tone(140, a.currentTime, .3, 'sawtooth', .07); }
+
+  /* ---------- pointer (own listeners for drawing the line) ---------- */
+  let bound = false;
+  function bind() {
+    if (bound) return; bound = true;
+    const cv = document.querySelector('#playBox canvas');
+    const local = (e) => { const r = cv.getBoundingClientRect(); return [((e.clientX - r.left) - ox) / s, ((e.clientY - r.top) - oy) / s]; };
+    cv.addEventListener('pointerdown', (e) => {
+      if (mode !== 'draw') return;
+      const [x, y] = local(e), cell = cellAt(x, y);
+      if (!cell) return;
+      drag = { a: cell, x, y };
+      try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+    });
+    cv.addEventListener('pointermove', (e) => { if (!drag) return; const [x, y] = local(e); drag.x = x; drag.y = y; });
+    const up = (e) => {
+      if (!drag) return;
+      const [x, y] = local(e), b = cellAt(x, y), a = drag.a; drag = null;
+      if (!b || (a[0] === b[0] && a[1] === b[1])) return;
+      tryLine(a, b);
+    };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', () => { drag = null; });
+  }
+  function cellAt(x, y) {
+    const c = Math.floor((x - BX - PAD) / S), r = Math.floor((y - BY - PAD) / S);
+    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return null;
+    if (Math.hypot(x - cx(c), y - cy(r)) > S * .5) return null;
+    return [r, c];
+  }
+
+  /* ---------- flow ---------- */
+  function land() {
+    const g = st(), team = core.game.active, f = falling;
+    g.grid[f.r][f.c] = team;
+    falling = null;
+    const runs = runsFor(team);
+    if (runs.length) {
+      pendingRun = runs;
+      mode = 'draw'; show = false;
+      msg = `${core.cfg.teams[team].name} has 4 in a row!`;
+      sub = 'Find the 4 and draw a line through them: press one end disc and drag to the other end.';
+      flashT = performance.now(); fanfare();
+      return;
+    }
+    if (g.grid[0].every((v) => v >= 0)) {
+      g.done = true; msg = 'The board is full!'; sub = 'No winner this game. A new board is coming.';
+      later(() => core.finish({ kind: 'adjust', deltas: {}, text: 'Board full: tie game', mood: 'neutral', label: 'Tie game' }), 900);
+      return;
+    }
+    later(() => core.finish({ kind: 'adjust', deltas: {}, text: '', quiet: true, mood: 'neutral', label: `Column ${f.c + 1}` }), 250);
+  }
+  function tryLine(a, b) {
+    const dr = b[0] - a[0], dc = b[1] - a[1], steps = Math.max(Math.abs(dr), Math.abs(dc));
+    let why = '';
+    if (!(dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc))) why = 'Lines must go straight: across, up and down, or corner to corner.';
+    else if (steps !== 3) why = `That line covers ${steps + 1} discs. Connect exactly 4.`;
+    else {
+      const cells = []; for (let k = 0; k <= 3; k++) cells.push([a[0] + Math.sign(dr) * k, a[1] + Math.sign(dc) * k]);
+      const hit = pendingRun.find((run) => key(run) === key(cells));
+      if (hit) { win(cells); return; }
+      why = 'Those 4 are not all your color. Look again!';
+    }
+    msg = 'Not quite!'; sub = why + ' Try again.'; shakeT = performance.now(); shakeCol = -2; buzz();
+  }
+  function win(cells) {
+    const g = st(), team = core.game.active, t = core.cfg.teams[team];
+    winLine = { a: cells[0], b: cells[3], team, t0: performance.now() };
+    g.lines.push({ a: cells[0], b: cells[3], team });
+    g.done = true; mode = 'won'; drag = null; show = false;
+    msg = `${t.name} wins!`; sub = `+${o.pts} point${o.pts > 1 ? 's' : ''}. A new board is coming.`;
+    fanfare(); burst(t.color);
+    later(() => core.finish({ kind: 'adjust', deltas: { [team]: o.pts }, text: `${t.name} connected 4! +${o.pts}`, mood: 'good', label: `Won game ${g.game}` }), 2600);
+  }
+  function burst(col) {
+    if (core.reduceMotion) return;
+    const pal = [col, '#ffffff', '#f6c445', '#e8343a', '#3b82f6'];
+    confetti = Array.from({ length: 160 }, () => ({ x: BW / 2 + (Math.random() - .5) * 200, y: BH * .45, vx: (Math.random() - .5) * 900, vy: -300 - Math.random() * 700, a: Math.random() * 6, va: (Math.random() - .5) * 10, c: pal[Math.floor(Math.random() * pal.length)], r: 8 + Math.random() * 10 }));
+  }
+
+  /* ---------- drawing ---------- */
+  function disc(ctx, x, y, team, glow) {
+    const col = core.cfg.teams[team].color;
+    ctx.save();
+    if (glow) { ctx.shadowColor = '#fff'; ctx.shadowBlur = 30; }
+    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(x, y, R * .72, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 5; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, R * .72, Math.PI * 1.1, Math.PI * 1.7); ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x - R * .35, y - R * .4, R * .18, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+  }
+  function board(ctx) {
+    const x0 = BX, y0 = BY, w = COLS * S + PAD * 2, h = ROWS * S + PAD * 2;
+    const gr = ctx.createLinearGradient(0, y0, 0, y0 + h);
+    gr.addColorStop(0, '#2f6fe0'); gr.addColorStop(1, '#1d4fb8');
+    ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 26);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { ctx.moveTo(cx(c) + R + 4, cy(r)); ctx.arc(cx(c), cy(r), R + 4, 0, Math.PI * 2, true); }
+    ctx.fillStyle = gr; ctx.fill('evenodd');
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      ctx.beginPath(); ctx.arc(cx(c), cy(r), R + 4, Math.PI * .15, Math.PI * .85); ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx(c), cy(r), R + 4, Math.PI * 1.15, Math.PI * 1.85); ctx.strokeStyle = 'rgba(0,0,30,.35)'; ctx.lineWidth = 4; ctx.stroke();
+    }
+    ctx.lineWidth = 4; ctx.strokeStyle = '#163f94'; ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 26); ctx.stroke();
+    // feet
+    ctx.fillStyle = '#1a47a8';
+    [[x0 - 18, 1], [x0 + w - 22, -1]].forEach(([fx]) => { ctx.beginPath(); ctx.roundRect(fx, y0 + h - 40, 40, 90, 12); ctx.fill(); });
+    ctx.beginPath(); ctx.roundRect(x0 - 50, y0 + h + 34, 100, 18, 9); ctx.roundRect(x0 + w - 50, y0 + h + 34, 100, 18, 9); ctx.fill();
+  }
+  function line(ctx, a, b, team, t) {
+    const x1 = cx(a[1]), y1 = cy(a[0]), x2 = cx(b[1]), y2 = cy(b[0]);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 34; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 24; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = core.cfg.teams[team].color; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  function text(ctx, str, x, y, size, col, font) {
+    ctx.font = `${size}px ${font || '"Lilita One", Impact, sans-serif'}`;
+    ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(str, x, y);
+  }
+
+  return {
+    perTurn: [1],
+    defaultPer: 1,
+    defaultRounds: 0,
+    teamOptions: [2],
+    simpleBoard: true,
+    teamColors: [{ c: '#e8343a', n: 'Red' }, { c: '#f6c445', n: 'Yellow' }],
+    defaultOpts: { pts: 1 },
+    get hint() { const t = core.game && core.cfg && core.cfg.teams[core.game.active]; return `${t ? t.name + ' answered correctly. ' : ''}Pick a column (move over it, or use ← →), then click or press Space to drop.`; },
+    renderOptions(el, opts) {
+      el.innerHTML = '<div class="field-row"><span class="label" id="lblDp">Points for winning a game</span><div class="seg" id="segDp" role="group" aria-labelledby="lblDp"></div></div>';
+      core.seg(el.querySelector('#segDp'), [{ value: 1, label: '1' }, { value: 10, label: '10' }, { value: 100, label: '100' }], (v) => opts.pts === v, (v) => { opts.pts = v; core.save(); core.renderSetup(); });
+    },
+    start(cfg) { o = cfg.opts; if (!core.game.c4) core.game.c4 = fresh(); bind(); },
+    ready() {
+      timers.forEach(clearTimeout); timers = [];
+      const g = st();
+      if (g.done) { const n = g.game + 1; core.game.c4 = fresh(); core.game.c4.game = n; }
+      falling = null; drag = null; show = false; winLine = null; pendingRun = null; confetti = [];
+      mode = 'pick';
+      msg = ''; sub = '';
+      if (landingRow(hover) < 0) { for (let c = 0; c < COLS; c++) if (landingRow(c) >= 0) { hover = c; break; } }
+    },
+    isOver() { return false; },
+    resize(W, H) { s = Math.min((W - 20) / (BW + 100), (H - 16) / BH); ox = (W - BW * s) / 2; oy = (H - BH * s) / 2 + 4; },
+    pointer(type, x) {
+      if (type === 'leave') { mouseCol = null; return; }
+      const c = Math.floor(((x - ox) / s - BX - PAD) / S);
+      mouseCol = c >= 0 && c < COLS ? c : null;
+      if (mouseCol != null && mode === 'pick') hover = mouseCol;
+    },
+    key(k) {
+      if (mode === 'pick' && (k === 'arrowleft' || k === 'arrowright')) { hover = Math.max(0, Math.min(COLS - 1, hover + (k === 'arrowleft' ? -1 : 1))); mouseCol = null; return true; }
+      if (mode === 'draw' && k === 'h') { show = true; msg = 'Here they are!'; sub = 'Now draw the line from one end disc to the other.'; return true; }
+      return false;
+    },
+    act() {
+      if (mode !== 'pick') return false;
+      const c = mouseCol != null ? mouseCol : hover, r = landingRow(c);
+      if (r < 0) { shakeCol = c; shakeT = performance.now(); buzz(); msg = 'That column is full!'; sub = 'Pick another column.'; return false; }
+      mode = 'drop';
+      falling = { c, r, y: TOP - S * .6, vy: 0, bounced: false, team: core.game.active };
+      return true;
+    },
+    draw(ctx, now, dt) {
+      // physics
+      if (falling) {
+        const f = falling, ty = cy(f.r);
+        f.vy += 4200 * dt; f.y += f.vy * dt;
+        if (f.y >= ty) {
+          if (!f.bounced && f.vy > 600 && !core.reduceMotion) { f.y = ty; f.vy = -f.vy * .22; f.bounced = true; clack(1); }
+          else { f.y = ty; clack(.6); land(); }
+        }
+      }
+      ctx.save(); ctx.translate(ox, oy); ctx.scale(s, s);
+      const g = st();
+      // column highlight + hover disc
+      if (mode === 'pick') {
+        const c = mouseCol != null ? mouseCol : hover;
+        ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.beginPath(); ctx.roundRect(cx(c) - S / 2 + 4, TOP - 8, S - 8, ROWS * S + PAD * 2 + 16, 18); ctx.fill();
+        const sh = now - shakeT < 400 && shakeCol === c ? Math.sin((now - shakeT) / 25) * 8 : 0;
+        const bob = core.reduceMotion ? 0 : Math.sin(now / 220) * 6;
+        disc(ctx, cx(c) + sh, TOP - S * .6 + bob, core.game.active);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(cx(c) - 14, TOP - 12); ctx.lineTo(cx(c) + 14, TOP - 12); ctx.lineTo(cx(c), TOP + 6); ctx.fill();
+      } else if (msg) {
+        text(ctx, msg, BW / 2, 44, 50, mode === 'won' ? core.cfg.teams[core.game.active].color : '#fff');
+        if (sub) text(ctx, sub, BW / 2, 98, 24, 'rgba(255,255,255,.85)', 'Lexend, sans-serif');
+      }
+      if (mode === 'pick' && now - shakeT < 1500 && shakeCol >= 0) text(ctx, 'That column is full! Pick another.', BW / 2, 20, 30, '#ff8a8a');
+      // discs behind the board
+      const wins = new Set();
+      if (show && pendingRun) pendingRun[0].forEach(([r, c]) => wins.add(r * COLS + c));
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const v = g.grid[r][c]; if (v < 0) continue;
+        const glow = wins.has(r * COLS + c) && Math.floor(now / 300) % 2 === 0;
+        disc(ctx, cx(c), cy(r), v, glow);
+      }
+      if (falling) disc(ctx, cx(falling.c), falling.y, falling.team);
+      const shx = mode === 'draw' && now - shakeT < 400 && shakeCol === -2 ? Math.sin((now - shakeT) / 25) * 10 : 0;
+      ctx.save(); ctx.translate(shx, 0); board(ctx); ctx.restore();
+      // lines
+      g.lines.forEach((L) => line(ctx, L.a, L.b, L.team));
+      if (drag) {
+        const x1 = cx(drag.a[1]), y1 = cy(drag.a[0]);
+        ctx.save(); ctx.setLineDash([30, 20]); ctx.lineCap = 'round'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 18;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(drag.x, drag.y); ctx.stroke(); ctx.restore();
+        ctx.beginPath(); ctx.arc(x1, y1, R + 8, 0, Math.PI * 2); ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.stroke();
+      }
+      if (mode === 'draw') {
+        const pulse = core.reduceMotion ? 1 : .5 + .5 * Math.sin(now / 200);
+        ctx.strokeStyle = `rgba(255,255,255,${.35 + .4 * pulse})`; ctx.lineWidth = 6; ctx.setLineDash([18, 12]);
+        ctx.beginPath(); ctx.roundRect(BX - 8, BY - 8, COLS * S + PAD * 2 + 16, ROWS * S + PAD * 2 + 16, 30); ctx.stroke(); ctx.setLineDash([]);
+        if (now - flashT < 1600) {
+          const k = Math.min(1, (now - flashT) / 250), fade = Math.max(0, 1 - Math.max(0, now - flashT - 1100) / 500);
+          ctx.globalAlpha = fade;
+          const col = core.cfg.teams[core.game.active].color;
+          ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(BW / 2 - 330 * k, BY + 230, 660 * k, 150, 30); ctx.fill();
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 8; ctx.stroke();
+          if (k > .9) text(ctx, '4 IN A ROW!', BW / 2, BY + 305, 84, core.game.active === 1 ? '#1a1405' : '#fff');
+          ctx.globalAlpha = 1;
+        }
+      }
+      // confetti
+      if (confetti.length) {
+        confetti.forEach((p) => { p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.a += p.va * dt; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); });
+        confetti = confetti.filter((p) => p.y < BH + 100);
+      }
+      ctx.restore();
+    }
+  };
+}
+
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = [
+    { c: '#ef5350', n: 'Red Team' }, { c: '#f7913d', n: 'Orange Team' }, { c: '#f6c445', n: 'Gold Team' },
+    { c: '#43b96d', n: 'Green Team' }, { c: '#4a8cf0', n: 'Blue Team' }, { c: '#b07cf0', n: 'Purple Team' }
+  ];
+  const ROUND_OPTS = [3, 5, 8, 10, 0];
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const STORE = 'classgame-' + 'dropfour';
+
+  let setup = { n: 4, names: COLORS.map((c) => c.n), per: 1, rounds: 5, sound: true, opts: {} };
+  let cfg = null, game = null, history = [], phase = 'ready', pending = [];
+
+  const core = {
+    get cfg() { return cfg; }, get game() { return game; }, get phase() { return phase; },
+    reduceMotion, colors: COLORS, W: 0, H: 0,
+    finish, audio, tone, noiseSrc, seg, save: saveSetup, renderSetup: () => renderSetup(),
+    teamColor: () => cfg.teams[game.active].color,
+    act: () => act(),
+    award: (i, pts, text) => award(i, pts, text)
+  };
+  const G = makeGame(core);
+  if (G.defaultPer) setup.per = G.defaultPer;
+  if (G.defaultRounds !== undefined) setup.rounds = G.defaultRounds;
+  const TC = (i) => (G.teamColors && G.teamColors[i]) || COLORS[i];
+  const TEAM_OPTS = G.teamOptions || [2, 3, 4, 5, 6];
+  if (G.teamColors) setup.names = setup.names.map((n, i) => TC(i).n);
+  try { const s = JSON.parse(localStorage.getItem(STORE) || '{}'); Object.assign(setup, s); if (s.per == null && G.defaultPer) setup.per = G.defaultPer; setup.opts = Object.assign({}, G.defaultOpts, s.opts || {}); } catch (e) { setup.opts = Object.assign({}, G.defaultOpts); }
+  if (!G.perTurn.includes(setup.per)) setup.per = G.perTurn[0];
+  if (!TEAM_OPTS.includes(setup.n)) setup.n = TEAM_OPTS[0];
+
+  function saveSetup() { try { localStorage.setItem(STORE, JSON.stringify(setup)); } catch (e) {} }
+
+  /* ---------- Setup ---------- */
+  function seg(el, opts, isOn, onPick, multi) {
+    el.innerHTML = '';
+    el.classList.toggle('multi', !!multi);
+    opts.forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.label; b.setAttribute('aria-pressed', String(isOn(o.value)));
+      b.addEventListener('click', () => onPick(o.value));
+      el.appendChild(b);
+    });
+  }
+  function renderSetup() {
+    const pick = (key) => (v) => { setup[key] = v; saveSetup(); renderSetup(); };
+    seg($('segTeams'), TEAM_OPTS.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.n, pick('n'));
+    seg($('segPer'), G.perTurn.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.per, pick('per'));
+    seg($('segRounds'), ROUND_OPTS.map((v) => ({ value: v, label: v ? String(v) : 'No limit' })), (v) => v === setup.rounds, pick('rounds'));
+    G.renderOptions($('gameOpts'), setup.opts);
+    const box = $('names');
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null;
+    box.innerHTML = '';
+    for (let i = 0; i < setup.n; i++) {
+      const row = document.createElement('label');
+      row.className = 'name-row';
+      row.innerHTML = `<span class="dot" style="background:${TC(i).c}"></span><input id="tn${i}" data-i="${i}" maxlength="22" spellcheck="false" aria-label="Team ${i + 1} name">`;
+      const inp = row.querySelector('input');
+      inp.value = setup.names[i] || TC(i).n;
+      inp.addEventListener('input', () => { setup.names[i] = inp.value; saveSetup(); });
+      box.appendChild(row);
+    }
+    if (focused != null && $('tn' + focused)) $('tn' + focused).focus();
+  }
+
+  function startGame(keepCfg) {
+    if (!keepCfg) {
+      cfg = {
+        n: setup.n, per: setup.per, rounds: setup.rounds, opts: Object.assign({}, setup.opts),
+        teams: Array.from({ length: setup.n }, (_, i) => ({ name: (setup.names[i] || '').trim() || TC(i).n, color: TC(i).c }))
+      };
+    }
+    game = { scores: Array(cfg.n).fill(0), turns: Array(cfg.n).fill(0), last: Array(cfg.n).fill(null), active: 0, used: 0, over: false };
+    history = [];
+    clearPending();
+    $('setup').hidden = true; $('final').hidden = true; $('game').hidden = false; $('toast').hidden = true;
+    G.start(cfg);
+    resize();
+    renderBoard();
+    showBanner(cfg.teams[0].name, 'First up', cfg.teams[0].color);
+    toReady();
+  }
+
+  /* ---------- Scoreboard ---------- */
+  function renderBoard(bumpIdx) {
+    const b = $('board');
+    b.innerHTML = '';
+    cfg.teams.forEach((t, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      const on = i === game.active && !game.over;
+      el.className = 'team' + (on ? ' active' : '');
+      el.style.setProperty('--tc', t.color);
+      const turns = cfg.rounds ? `Turns ${game.turns[i]}/${cfg.rounds}` : `Turns ${game.turns[i]}`;
+      const last = game.last[i] == null ? '' : ` · Last: ${game.last[i]}`;
+      el.innerHTML = `${on ? '<span class="up">Up now</span>' : ''}<span class="dot"></span>
+        <span class="tname"></span><span class="score"><span class="${i === bumpIdx ? 'bump' : ''}">${game.scores[i]}</span></span>
+        <span class="meta"></span>`;
+      el.querySelector('.tname').textContent = t.name;
+      el.querySelector('.meta').textContent = G.simpleBoard ? '' : `${turns}${last} · key ${i + 1}`;
+      if (G.simpleBoard) el.querySelector('.meta').remove();
+      el.setAttribute('aria-label', `${t.name}, ${game.scores[i]} points. Make this team active.`);
+      el.addEventListener('click', () => selectTeam(i));
+      b.appendChild(el);
+    });
+    const t = cfg.teams[game.active];
+    $('whoLbl').textContent = t.name;
+    $('whoLbl').style.color = t.color;
+    $('tokensLbl').innerHTML = cfg.per > 1 ? Array.from({ length: cfg.per }, (_, k) => `<i class="${k < game.used ? 'used' : ''}"></i>`).join('') : '';
+    const minTurns = Math.min(...game.turns);
+    $('roundLbl').textContent = cfg.rounds ? `Round ${Math.min(minTurns + 1, cfg.rounds)} of ${cfg.rounds}` : `Round ${minTurns + 1}`;
+    $('undoBtn').disabled = history.length === 0;
+    $('soundBtn').textContent = 'Sound: ' + (setup.sound ? 'On' : 'Off');
+    $('soundBtn').setAttribute('aria-pressed', String(setup.sound));
+  }
+
+  function setHint(txt) { $('hint').textContent = txt || ''; $('hint').hidden = !txt; }
+  let bannerTimer, toastTimer;
+  function fill(el, kicker, text) {
+    el.innerHTML = '<small></small><span></span>';
+    el.querySelector('small').textContent = kicker || '';
+    el.querySelector('small').hidden = !kicker;
+    el.querySelector('span').textContent = text;
+  }
+  function showBanner(name, kicker, color) {
+    fill($('bannerTxt'), kicker, name);
+    $('banner').style.setProperty('--banner', color);
+    $('banner').hidden = false;
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { $('banner').hidden = true; }, 1500);
+  }
+  function showToast(text, kicker, bg, ink) {
+    $('toast').hidden = true; void $('toast').offsetWidth;
+    fill($('toastTxt'), kicker, text);
+    $('toast').style.setProperty('--toast', bg);
+    $('toast').style.setProperty('--toast-ink', ink || '#1a1a1a');
+    $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1700);
+  }
+
+  /* ---------- Turn flow ---------- */
+  function snap() { history.push(JSON.stringify(game)); if (history.length > 300) history.shift(); }
+  function clearPending() { pending.forEach(clearTimeout); pending = []; }
+  function later(fn, ms) { pending.push(setTimeout(fn, ms)); }
+
+  function toReady() { phase = 'ready'; G.ready(); setHint(G.hint); }
+  function act() {
+    if (!game || game.over || phase !== 'ready') return;
+    audio();
+    snap();
+    phase = 'busy'; setHint('');
+    $('toast').hidden = true;
+    if (G.act() === false) { history.pop(); phase = 'ready'; setHint(G.hint); }
+    renderBoard();
+  }
+  function selectTeam(i) {
+    if (phase === 'busy' || game.over || i >= cfg.n) return;
+    if (i === game.active && game.used === 0) return;
+    snap();
+    game.active = i; game.used = 0;
+    clearPending(); $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+  function skipTurn() {
+    if (phase === 'busy' || game.over) return;
+    snap(); clearPending(); $('toast').hidden = true;
+    endTurn('Wrong answer');
+  }
+  function endTurn(reason) {
+    game.turns[game.active]++;
+    if (G.isOver && G.isOver()) { gameOver(); return; }
+    const next = findNext();
+    if (next < 0) { gameOver(); return; }
+    game.active = next; game.used = 0;
+    renderBoard();
+    const t = cfg.teams[next];
+    showBanner(t.name, reason ? `${reason} · Next up` : 'Next up', t.color);
+    toReady();
+  }
+  function findNext() {
+    for (let k = 1; k <= cfg.n; k++) {
+      const j = (game.active + k) % cfg.n;
+      if (!cfg.rounds || game.turns[j] < cfg.rounds) return j;
+    }
+    return -1;
+  }
+  function undo() {
+    if (phase === 'busy') return;
+    const last = history.pop();
+    if (!last) return;
+    clearPending();
+    game = JSON.parse(last);
+    $('final').hidden = true; $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+
+  function finish(res) {
+    const i = game.active, me = cfg.teams[i];
+    let text, kicker = me.name, bg = 'var(--accent)', ink = '#1a1a1a';
+    switch (res.kind) {
+      case 'pts':
+        game.scores[i] += res.pts; text = res.text || `+${res.pts}`; ding(res.pts); break;
+      case 'double': {
+        const d = game.scores[i]; game.scores[i] += d;
+        text = d ? `Double! +${d}` : 'Double! 0 × 2 = 0'; bg = '#ffffff'; fanfare(); break;
+      }
+      case 'bankrupt': {
+        const lost = game.scores[i]; game.scores[i] = 0;
+        text = lost ? `Bankrupt! −${lost}` : 'Bankrupt!'; bg = '#14141c'; ink = '#ffffff'; buzz(); break;
+      }
+      case 'steal': {
+        let j = -1;
+        game.scores.forEach((s, k) => { if (k !== i && s > 0 && (j < 0 || s > game.scores[j])) j = k; });
+        if (j < 0) { text = 'Nothing to steal!'; buzz(); }
+        else {
+          const amt = Math.min(res.pts || 50, game.scores[j]);
+          game.scores[j] -= amt; game.scores[i] += amt;
+          text = `Stole ${amt} from ${cfg.teams[j].name}`; fanfare();
+        }
+        bg = '#b07cf0'; ink = '#ffffff'; break;
+      }
+      case 'miss':
+        text = res.text || 'Missed!'; buzz(); bg = '#14141c'; ink = '#ffffff'; break;
+      case 'adjust': {
+        Object.keys(res.deltas || {}).forEach((k) => { game.scores[k] = Math.max(0, game.scores[k] + res.deltas[k]); });
+        text = res.text;
+        if (res.mood === 'good') { bg = '#2bb673'; ink = '#04170c'; fanfare(); }
+        else if (res.mood === 'bad') { bg = '#e2384d'; ink = '#ffffff'; buzz(); }
+        else if (res.mood === 'special') { bg = '#8b5cf6'; ink = '#ffffff'; fanfare(); }
+        else { bg = '#9aa3b2'; ink = '#14141c'; ding(10); }
+        break;
+      }
+      case 'again':
+        text = res.label || 'Go again!'; ding(20); bg = '#43b96d'; ink = '#ffffff'; break;
+    }
+    game.last[i] = res.label;
+    if (res.kind !== 'again') game.used++;
+    if (!res.quiet) showToast(text, kicker, bg, ink);
+    renderBoard(i);
+    phase = 'between';
+    if (G.isOver && G.isOver()) later(() => gameOver(), 1900);
+    else if (game.used >= cfg.per) later(() => endTurn(), 1700);
+    else later(toReady, 1100);
+  }
+
+  function award(i, pts, text) {
+    if (!game || game.over) return;
+    snap();
+    game.scores[i] += pts;
+    showToast(text, cfg.teams[i].name, '#8b5cf6', '#ffffff');
+    fanfare();
+    renderBoard(i);
+  }
+
+  function gameOver() {
+    game.over = true; phase = 'over';
+    renderBoard(); setHint('');
+    const order = cfg.teams.map((t, i) => ({ ...t, s: game.scores[i] })).sort((a, b) => b.s - a.s);
+    const top = order[0].s;
+    const winners = order.filter((o) => o.s === top);
+    $('finalKicker').textContent = winners.length > 1 ? 'Game over · It’s a tie' : 'Game over · Winner';
+    $('finalName').textContent = winners.map((w) => w.name).join(' & ');
+    let rank = 0, prev = null;
+    $('standings').innerHTML = '';
+    order.forEach((o, idx) => {
+      if (o.s !== prev) { rank = idx + 1; prev = o.s; }
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="rank">${rank}</span><span class="dot" style="background:${o.color}"></span><span class="nm"></span><span class="pts">${o.s}</span>`;
+      li.querySelector('.nm').textContent = o.name;
+      $('standings').appendChild(li);
+    });
+    $('final').hidden = false;
+    $('againBtn').focus();
+    victory();
+  }
+
+  /* ---------- Canvas ---------- */
+  const cv = $('play'), ctx = cv.getContext('2d');
+  function resize() {
+    const box = $('playBox').getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(box.width * dpr)); cv.height = Math.max(1, Math.round(box.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    core.W = box.width; core.H = box.height;
+    G.resize(box.width, box.height);
+  }
+  let lastT = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    if (!$('game').hidden && cfg && core.W) { ctx.clearRect(0, 0, core.W, core.H); G.draw(ctx, now, dt); }
+    requestAnimationFrame(loop);
+  }
+  function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+  /* ---------- Sound ---------- */
+  let ac;
+  function audio() {
+    if (!setup.sound) return null;
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; } catch (e) { return null; }
+  }
+  function noiseSrc(dur) { const a = ac, n = Math.max(1, Math.floor(a.sampleRate * dur)), b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const s = a.createBufferSource(); s.buffer = b; return s; }
+  function tone(f, s, d, type, vol) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d);
+    o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02);
+  }
+  function ding(pts) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    const steps = Math.max(1, Math.min(6, Math.round(pts / 20) + 1));
+    const scale = [523, 659, 784, 1047, 1319, 1568];
+    for (let i = 0; i < steps; i++) tone(scale[i], t + i * .08, .14, 'square', .08);
+  }
+  function buzz() { const a = audio(); if (!a) return; const t = a.currentTime; tone(150, t, .4, 'sawtooth', .08); tone(105, t + .18, .45, 'sawtooth', .08); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + i * .09, i === 3 ? .4 : .12, 'triangle', .14)); }
+  function victory() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, t + i * .14, i === 5 ? .7 : .16, 'triangle', .14)); }
+
+  /* ---------- Wiring ---------- */
+  function armed(btn, label, armedLabel, fn) {
+    let timer;
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.textContent = armedLabel;
+        timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3500);
+        return;
+      }
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; fn();
+    });
+  }
+  $('startBtn').addEventListener('click', () => { audio(); startGame(false); });
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); const [x, y] = localXY(e); G.pointer && G.pointer('move', x, y); act(); });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && G.pointer) { const [x, y] = localXY(e); G.pointer('move', x, y); } });
+  cv.addEventListener('pointerleave', () => { G.pointer && G.pointer('leave'); });
+  $('skipBtn').addEventListener('click', skipTurn);
+  $('undoBtn').addEventListener('click', undo);
+  $('finalUndo').addEventListener('click', undo);
+  $('soundBtn').addEventListener('click', () => { setup.sound = !setup.sound; saveSetup(); renderBoard(); });
+  $('fullBtn').addEventListener('click', () => {
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  });
+  armed($('endBtn'), 'End game', 'Click again to end', () => { if (phase === 'busy') return; clearPending(); gameOver(); });
+  $('againBtn').addEventListener('click', () => startGame(true));
+  $('setupBtn').addEventListener('click', () => { $('final').hidden = true; $('game').hidden = true; $('setup').hidden = false; renderSetup(); });
+  document.addEventListener('keydown', (e) => {
+    if ($('game').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    const k = e.key.toLowerCase();
+    if ((k === ' ' || k === 'enter') && tag !== 'BUTTON') { e.preventDefault(); act(); }
+    else if (k === 's') skipTurn();
+    else if (k === 'u') undo();
+    else if (/^[1-6]$/.test(k)) selectTeam(+k - 1);
+    else if (G.key && G.key(k, e)) e.preventDefault();
+  });
+  new ResizeObserver(() => { if (!$('game').hidden) resize(); }).observe($('playBox'));
+
+  function boot(data) {
+    renderSetup();
+    const s = data && data.saved;
+    if (s && s.cfg && s.game) {
+      cfg = s.cfg; game = s.game; history = s.history || [];
+      $('setup').hidden = true; $('game').hidden = false;
+      G.start(cfg); resize(); renderBoard();
+      if (game.over) gameOver(); else toReady();
+    }
+    window.claude?.hot?.snapshot?.(() => ({ saved: cfg && !$('game').hidden ? { cfg, game, history } : null }));
+    requestAnimationFrame(loop);
+  }
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>
