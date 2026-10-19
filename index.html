@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Classroom Game Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+  /* Layout: a teacher's launcher. Title and filters on top, a grid of game cards, each with Play and Directions; shared notes at the bottom. */
+  :root {
+    --bg: #f3f5f9; --card: #ffffff; --ink: #172033; --ink-2: #4a5568; --line: #dde2ec;
+    --accent: #1d5fd1; --accent-ink: #ffffff; --chip: #e8edf6; --shadow: 0 1px 2px rgba(23,32,51,.06), 0 6px 18px rgba(23,32,51,.06);
+    --scrim: rgba(15, 20, 32, .55);
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f131c; --card: #171d29; --ink: #edf1f8; --ink-2: #a6b0c3; --line: #283044;
+      --accent: #7aa7ff; --accent-ink: #0b1220; --chip: #222a3b; --shadow: 0 1px 2px rgba(0,0,0,.3);
+      --scrim: rgba(0, 0, 0, .65); color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f131c; --card: #171d29; --ink: #edf1f8; --ink-2: #a6b0c3; --line: #283044;
+    --accent: #7aa7ff; --accent-ink: #0b1220; --chip: #222a3b; --shadow: 0 1px 2px rgba(0,0,0,.3);
+    --scrim: rgba(0, 0, 0, .65); color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.5; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  a { color: var(--accent); }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  .page { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 56px; display: flex; flex-direction: column; gap: 28px; }
+
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow { font-size: .8rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+  h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1; letter-spacing: -.02em; text-wrap: balance; }
+  .intro { margin: 0; color: var(--ink-2); max-width: 66ch; font-size: 1.05rem; }
+
+  .search { display: flex; align-items: center; gap: 10px; background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 4px 14px; margin: 0 0 14px; max-width: 720px; }
+  .search:focus-within { border-color: var(--ink); }
+  .search svg { width: 22px; height: 22px; flex: none; color: var(--ink-2); }
+  .search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 12px 0; font: inherit; font-size: 1.05rem; color: var(--ink); outline: none; }
+  .search span { color: var(--ink-2); font-size: .85rem; white-space: nowrap; }
+  .filters .subj { border-style: dashed; }
+  .empty { color: var(--ink-2); padding: 24px 0; font-size: 1.05rem; }
+  .stats { margin: 28px 0 0; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 20px; }
+  .stats h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  .stats h2 span { font-weight: 500; color: var(--ink-2); font-size: .85rem; }
+  .statrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .statrow div { background: var(--chip); border-radius: 12px; padding: 12px 14px; }
+  .statrow b { display: block; font-size: 1.9rem; line-height: 1.1; }
+  .statrow span { color: var(--ink-2); font-size: .85rem; }
+  .stnote { color: var(--ink-2); font-size: .85rem; margin: 12px 0 0; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .filters span { color: var(--ink-2); font-size: .9rem; margin-right: 4px; }
+  .filters button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: .92rem; }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .shot { display: block; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #0d0f14; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s ease; }
+  .card:hover .shot img { transform: scale(1.03); }
+  @media (prefers-reduced-motion: reduce) { .shot img { transition: none; } }
+  .card-top { display: flex; gap: 14px; align-items: center; }
+  .card-top .icon { width: 44px; height: 44px; border-radius: 12px; }
+  .card-top .icon svg { width: 28px; height: 28px; }
+  .icon { width: 56px; height: 56px; border-radius: 14px; flex: none; display: grid; place-items: center; background: var(--gc); }
+  .icon svg { width: 36px; height: 36px; }
+  .card h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.45rem; line-height: 1.1; }
+  .card .tag { font-size: .85rem; color: var(--ink-2); font-weight: 700; }
+  .card p { margin: 0; color: var(--ink-2); }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+  .facts span { background: var(--chip); border-radius: 8px; padding: 3px 9px; font-size: .84rem; font-weight: 700; color: var(--ink); }
+  .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .play { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 12px; }
+  .play:hover { filter: brightness(1.08); }
+  .dirlink { background: none; border: 0; padding: 4px 2px; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+  .notes { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+  .notes h3 { margin: 0 0 6px; font-family: var(--display); font-size: 1.15rem; }
+  .notes p, .notes ul { margin: 0; color: var(--ink-2); }
+  .notes ul { padding-left: 1.1em; }
+  .notes-head { grid-column: 1 / -1; font-family: var(--display); font-weight: 800; font-size: 1.6rem; margin: 0; }
+
+  /* Directions panel */
+  .scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 20; display: grid; place-items: center; padding: 16px; }
+  .panel { width: 100%; max-width: 720px; max-height: calc(100% - 32px); overflow-y: auto; background: var(--card); color: var(--ink); border-radius: 20px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.3); box-sizing: border-box; }
+  .panel-head { position: sticky; top: 0; background: var(--card); display: flex; gap: 14px; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--line); z-index: 1; }
+  .panel-head h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.6rem; line-height: 1.1; flex: 1; min-width: 0; }
+  .close { border: 1px solid var(--line); background: var(--chip); border-radius: 10px; padding: 8px 12px; font-weight: 700; }
+  .panel-body { padding: 18px 22px 24px; display: flex; flex-direction: column; gap: 18px; }
+  .panel-body h3 { margin: 0 0 6px; font-family: var(--display); font-size: 1.1rem; }
+  .panel-body p { margin: 0; color: var(--ink-2); }
+  .panel-body ol, .panel-body ul { margin: 0; padding-left: 1.3em; color: var(--ink); display: flex; flex-direction: column; gap: 6px; }
+  .panel-body li::marker { color: var(--ink-2); font-weight: 700; }
+  kbd { font-family: var(--body); font-size: .85em; font-weight: 700; border: 1px solid var(--line); background: var(--chip); border-radius: 5px; padding: 0 5px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: baseline; }
+  .keys dt { font-weight: 700; white-space: nowrap; }
+  .keys dd { margin: 0; color: var(--ink-2); }
+  .callout { background: var(--chip); border-radius: 12px; padding: 12px 14px; color: var(--ink); }
+
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } .keys { grid-template-columns: 1fr; } }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">For teachers · works with any subject</div>
+    <h1>Classroom Game Hub</h1>
+    <p class="intro">Projectable review games you can use with any set of questions. You ask the questions however you like, and the game handles the turns, points and excitement. Click <b>Play</b> to open a game in a new tab, or <b>Directions</b> for step-by-step instructions.</p>
+  </header>
+
+  <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><input type="search" id="q" placeholder="Search games, like “vocabulary”, “sports” or “2 teams”" aria-label="Search games" autocomplete="off"><span id="count" aria-live="polite"></span></div>
+  <div class="filters" role="group" aria-label="Filter games">
+    <span>Show:</span>
+    <button type="button" data-f="all" aria-pressed="true">All games</button>
+    <button type="button" data-f="two">2 teams</button>
+    <button type="button" data-f="many">3 or more teams</button>
+    <button type="button" data-f="class">Whole class</button>
+    <button type="button" data-f="ela" class="subj">Language Arts</button>
+    <button type="button" data-f="math" class="subj">Math</button>
+  </div>
+  <p class="empty" id="empty" hidden>No games match that search. Try another word, or click <b>All games</b>.</p>
+
+  <main class="grid" id="grid" aria-label="Games"></main>
+
+  <section class="notes" aria-labelledby="notesHead">
+    <h2 class="notes-head" id="notesHead">Good to know</h2>
+    <div><h3>Many classes at once</h3><p>Every game runs separately on each computer, so any number of teachers can play the same game at the same time without affecting each other.</p></div>
+    <div><h3>Your settings are remembered</h3><p>Team names and options are saved in the browser on the computer you use. A teacher who shares a classroom computer will see the last names used and can type over them.</p></div>
+    <div><h3>Mistakes are easy to fix</h3><p>Every game has an <b>Undo</b> button (or <kbd>U</kbd>). Buttons that clear scores or end a game need two clicks, so nothing is lost by accident.</p></div>
+    <div><h3>Free to use and share</h3><p>Anyone can open these games: no account or sign-in is needed. Send families the link to this page so they can play at home.</p></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+    <div class="panel-head"><div class="icon" id="pIcon"></div><h2 id="pTitle"></h2><button class="close" id="pClose" type="button">Close</button></div>
+    <div class="panel-body" id="pBody"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const ICONS = {
+    pie: '<svg viewBox="0 0 40 40"><ellipse cx="20" cy="26" rx="15" ry="6" fill="#c9ced6"/><path d="M6 24 Q8 14 14 15 Q16 9 21 11 Q26 8 28 14 Q34 14 34 24 Z" fill="#fff"/><circle cx="21" cy="10" r="3" fill="#e8343a"/><path d="M10 30 q1 4 0 6 M30 30 q-1 3 0 5" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
+    plus: '<svg viewBox="0 0 40 40"><rect x="4" y="12" width="9" height="12" rx="2" fill="#fff"/><path d="M17 18 H23 M20 15 V21" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="27" y="12" width="9" height="12" rx="2" fill="#ffc93d"/><text x="31.5" y="21.5" text-anchor="middle" font-family="Arial" font-weight="900" font-size="8" fill="#7a5a00">?</text><circle cx="11" cy="31" r="2.2" fill="#ef5a5a"/><circle cx="17" cy="31" r="2.2" fill="#ef5a5a"/><circle cx="23" cy="31" r="2.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="1.5 1.2"/><circle cx="29" cy="31" r="2.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="1.5 1.2"/></svg>',
+    vball: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#fff"/><path d="M20 5 C14 14 14 26 20 35 M6 15 C16 17 26 14 33 9 M7 27 C17 22 27 24 34 30" stroke="#ffcf4a" stroke-width="3" fill="none"/><circle cx="20" cy="20" r="15" stroke="#1d3d63" stroke-width="2" fill="none"/></svg>',
+    sball: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#fff"/><path d="M20 13 L26 17.5 L24 25 L16 25 L14 17.5 Z" fill="#111"/><path d="M20 13 V6 M26 17.5 L33 15 M24 25 L28 31 M16 25 L12 31 M14 17.5 L7 15" stroke="#111" stroke-width="2"/><circle cx="20" cy="20" r="15" stroke="#111" stroke-width="2" fill="none"/></svg>',
+    ship: '<svg viewBox="0 0 40 40"><path d="M5 24 H35 L30 31 H10 Z" fill="#fff"/><rect x="13" y="17" width="12" height="7" rx="1" fill="#cfe6f5"/><rect x="17" y="11" width="4" height="6" fill="#cfe6f5"/><path d="M3 34 q4 -3 8 0 t8 0 t8 0 t8 0" stroke="#3ee0c8" stroke-width="2" fill="none"/><circle cx="31" cy="10" r="4" fill="#ff5a3c"/></svg>',
+    ttt: '<svg viewBox="0 0 40 40"><path d="M15 5 V35 M25 5 V35 M5 15 H35 M5 25 H35" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><path d="M7 7 L13 13 M13 7 L7 13" stroke="#ff6b6b" stroke-width="2.5" stroke-linecap="round"/><circle cx="20" cy="20" r="3.2" stroke="#60a5fa" stroke-width="2.5" fill="none"/><path d="M27 27 L33 33 M33 27 L27 33" stroke="#ff6b6b" stroke-width="2.5" stroke-linecap="round"/></svg>',
+    grid4: '<svg viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="4" fill="#1d1d22"/><rect x="7" y="7" width="7" height="7" rx="1.5" fill="#e23a3a"/><rect x="16.5" y="16.5" width="7" height="7" rx="1.5" fill="#e23a3a"/><rect x="26" y="26" width="7" height="7" rx="1.5" fill="#e23a3a"/><rect x="26" y="7" width="7" height="7" rx="1.5" fill="#4aa8ff"/><path d="M10.5 10.5 L29.5 29.5" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
+    disc: '<svg viewBox="0 0 40 40"><rect x="3" y="7" width="34" height="27" rx="4" fill="#2f6fe0"/><circle cx="11" cy="15" r="4" fill="#0a1020"/><circle cx="20" cy="15" r="4" fill="#0a1020"/><circle cx="29" cy="15" r="4" fill="#f6c445"/><circle cx="11" cy="26" r="4" fill="#e8343a"/><circle cx="20" cy="26" r="4" fill="#f6c445"/><circle cx="29" cy="26" r="4" fill="#e8343a"/></svg>',
+    letters: '<svg viewBox="0 0 40 40"><rect x="3" y="11" width="10" height="13" rx="2" fill="#fff"/><rect x="15" y="11" width="10" height="13" rx="2" fill="#ffd23f"/><rect x="27" y="11" width="10" height="13" rx="2" fill="#fff"/><text x="8" y="21" text-anchor="middle" font-family="Arial" font-weight="900" font-size="9" fill="#1b2330">b</text><text x="20" y="21" text-anchor="middle" font-family="Arial" font-weight="900" font-size="9" fill="#1b2330">e</text><text x="32" y="21" text-anchor="middle" font-family="Arial" font-weight="900" font-size="9" fill="#1b2330">d</text><path d="M14 31 q6 5 12 0" stroke="#ffd23f" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M24 29 l3 2 -3 2" stroke="#ffd23f" stroke-width="2" fill="none"/></svg>',
+    flag: '<svg viewBox="0 0 40 40"><rect x="8" y="5" width="3" height="31" rx="1.5" fill="#fff"/><path d="M11 6 H33 V22 H11 Z" fill="#fff"/><path d="M11 6h5.5v4H11zM22 6h5.5v4H22zM16.5 10H22v4h-5.5zM27.5 10H33v4h-5.5zM11 14h5.5v4H11zM22 14h5.5v4H22zM16.5 18H22v4h-5.5zM27.5 18H33v4h-5.5z" fill="#1d1d22"/></svg>',
+    hoop: '<svg viewBox="0 0 40 40"><circle cx="20" cy="22" r="13" fill="#ff8a2b"/><path d="M7 22 H33 M20 9 V35 M10 13 C16 18 16 26 10 31 M30 13 C24 18 24 26 30 31" stroke="#7a3a08" stroke-width="2" fill="none"/></svg>',
+    bat: '<svg viewBox="0 0 40 40"><circle cx="26" cy="26" r="10" fill="#fff"/><path d="M20 20 q4 3 3 8 M32 20 q-4 3 -3 8" stroke="#e23a3a" stroke-width="1.6" fill="none"/><path d="M6 6 L20 20" stroke="#ffd34d" stroke-width="5" stroke-linecap="round"/></svg>',
+    stick: '<svg viewBox="0 0 40 40"><path d="M10 4 L22 30 L34 30" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="14" cy="33" rx="7" ry="3" fill="#ffd34d"/></svg>',
+    lock: '<svg viewBox="0 0 40 40"><rect x="8" y="17" width="24" height="19" rx="4" fill="#fff"/><path d="M13 17 V12 a7 7 0 0 1 14 0 V17" stroke="#fff" stroke-width="4" fill="none"/><circle cx="15" cy="26" r="2.5" fill="#e23a3a"/><circle cx="20" cy="26" r="2.5" fill="#ffd34d"/><circle cx="25" cy="26" r="2.5" fill="#22d3a6"/></svg>',
+    hand: '<svg viewBox="0 0 40 40"><rect x="3" y="14" width="10" height="14" rx="2" fill="#ffd34d"/><path d="M12 15 C18 11 26 11 31 13 C35 14 36 18 35 21 C36 24 35 28 31 29 C24 30 17 29 12 27 Z" fill="#fff"/><path d="M28 14 C26 19 26 24 28 29" stroke="#c9ced6" stroke-width="1.5" fill="none"/></svg>',
+    target: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#fff"/><circle cx="20" cy="20" r="12" fill="#2f7fd6"/><circle cx="20" cy="20" r="8" fill="#e23a3a"/><circle cx="20" cy="20" r="4" fill="#ffd34d"/><path d="M20 20 L34 6" stroke="#3a2a1a" stroke-width="2.5" stroke-linecap="round"/><path d="M31 5 l5 -1 -1 5" fill="#ffd34d"/></svg>',
+    rope: '<svg viewBox="0 0 40 40"><path d="M2 22 H38" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M20 22 v8" stroke="#ffd34d" stroke-width="4" stroke-linecap="round"/><circle cx="8" cy="12" r="4" fill="#fff"/><circle cx="32" cy="12" r="4" fill="#fff"/></svg>',
+    rings: '<svg viewBox="0 0 40 40"><circle cx="20" cy="22" r="15" fill="none" stroke="#fff" stroke-width="3"/><circle cx="20" cy="24" r="9" fill="none" stroke="#fff" stroke-width="3"/><circle cx="20" cy="25" r="3.5" fill="#ffd34d"/><circle cx="6" cy="6" r="3" fill="#fff"/><circle cx="34" cy="6" r="3" fill="#fff"/></svg>',
+    pegs: '<svg viewBox="0 0 40 40"><g fill="#fff"><circle cx="8" cy="8" r="2.4"/><circle cx="20" cy="8" r="2.4"/><circle cx="32" cy="8" r="2.4"/><circle cx="14" cy="17" r="2.4"/><circle cx="26" cy="17" r="2.4"/><circle cx="8" cy="26" r="2.4"/><circle cx="20" cy="26" r="2.4"/><circle cx="32" cy="26" r="2.4"/></g><circle cx="20" cy="34" r="4" fill="#ffd34d"/></svg>',
+    wheel: '<svg viewBox="0 0 40 40"><circle cx="20" cy="21" r="15" fill="none" stroke="#fff" stroke-width="3"/><path d="M20 6 V36 M5 21 H35 M9.4 10.4 L30.6 31.6 M30.6 10.4 L9.4 31.6" stroke="#fff" stroke-width="2"/><circle cx="20" cy="21" r="4" fill="#ffd34d"/><path d="M16 2 h8 l-4 6z" fill="#ffd34d"/></svg>',
+    horse: '<svg viewBox="0 0 40 40"><path d="M10 6 C4 6 4 16 6 24 C7 30 10 34 10 34 M30 6 C36 6 36 16 34 24 C33 30 30 34 30 34" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M10 6 C14 3 26 3 30 6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><g fill="#ffd34d"><circle cx="7" cy="14" r="1.6"/><circle cx="33" cy="14" r="1.6"/><circle cx="8" cy="22" r="1.6"/><circle cx="32" cy="22" r="1.6"/></g></svg>',
+    balloon: '<svg viewBox="0 0 40 40"><ellipse cx="15" cy="15" rx="9" ry="11" fill="#fff"/><ellipse cx="27" cy="17" rx="8" ry="10" fill="#ffd34d"/><path d="M15 26 q2 6 -1 12 M27 27 q-2 5 1 11" stroke="#fff" stroke-width="1.6" fill="none"/></svg>',
+    claw: '<svg viewBox="0 0 40 40"><path d="M20 2 V14" stroke="#fff" stroke-width="3"/><rect x="13" y="13" width="14" height="6" rx="2" fill="#fff"/><path d="M15 19 L9 27 L13 33 M25 19 L31 27 L27 33" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="31" r="5" fill="#ffd34d"/></svg>',
+    case: '<svg viewBox="0 0 40 40"><rect x="4" y="12" width="32" height="22" rx="4" fill="#fff"/><path d="M14 12 V8 h12 v4" fill="none" stroke="#fff" stroke-width="3"/><rect x="15" y="19" width="10" height="7" rx="2" fill="#ffd34d"/></svg>',
+    pin: '<svg viewBox="0 0 40 40"><path d="M17 36 Q11 30 12 22 Q13 16 16 13 Q15 10 15 7 Q15 3 20 3 Q25 3 25 7 Q25 10 24 13 Q27 16 28 22 Q29 30 23 36 Z" fill="#fff"/><rect x="15.5" y="11" width="9" height="1.8" fill="#e5484d"/><circle cx="31" cy="31" r="6" fill="#ffd34d"/></svg>',
+    cards: '<svg viewBox="0 0 40 40"><rect x="5" y="9" width="17" height="24" rx="3" fill="#ffd34d" transform="rotate(-12 13 21)"/><rect x="17" y="7" width="17" height="24" rx="3" fill="#fff" transform="rotate(10 25 19)"/><text x="26" y="24" text-anchor="middle" font-family="Arial" font-weight="900" font-size="11" fill="#7c4dff" transform="rotate(10 25 19)">?</text></svg>',
+    door: '<svg viewBox="0 0 40 40"><rect x="9" y="4" width="22" height="33" rx="2" fill="#fff"/><rect x="12" y="7" width="16" height="30" fill="#ffd34d"/><circle cx="25" cy="22" r="1.8" fill="#7a5a12"/><text x="20" y="20" text-anchor="middle" font-family="Arial" font-weight="900" font-size="10" fill="#7a2a12">3</text></svg>',
+    bell: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="11" fill="#ffd34d"/><circle cx="20" cy="20" r="16" fill="none" stroke="#fff" stroke-width="2.5" opacity=".7"/><circle cx="20" cy="20" r="5" fill="#fff"/></svg>'
+  };
+
+  const TEAM_TURN = `<dl class="keys">
+      <dt><kbd>S</kbd> or Wrong answer, skip</dt><dd>Moves to the next team without a turn.</dd>
+      <dt>Click a team card, or <kbd>1</kbd>–<kbd>6</kbd></dt><dd>Makes that team active, for example when whoever answers first gets the turn.</dd>
+      <dt><kbd>U</kbd> or Undo</dt><dd>Takes back the last turn, skip or team change, even after the final standings.</dd>
+      <dt>End game (click twice)</dt><dd>Stops early and shows the final standings.</dd>
+    </dl>`;
+  const TEAM_SETUP = (per) => `<ol>
+      <li>Choose the number of teams (2 to 6) and type team names.</li>
+      <li>Choose ${per}.</li>
+      <li>Choose how many rounds to play (3, 5, 8, 10, or no limit). A round ends when every team has had a turn.</li>
+    </ol>`;
+
+  const GAMES = [
+    {
+      id: 'tug', name: 'Tug of War', tag: 'Two-team showdown', color: '#2f7d4f', icon: 'rope', url: 'tug-of-war.html',
+      blurb: 'Two teams pull a rope across a school field. Each correct answer is one pull, and the losing team lands in the mud pit.',
+      facts: ['2 teams', 'Teacher clicks', 'Fast setup'], f: ['two'], k: 'rope pull two teams mud',
+      dir: `<div><h3>Set up</h3><ol><li>Click a team name at the top of the screen to rename it.</li><li>Choose <b>Pulls to win</b> (3 to 10). More pulls make a longer round.</li></ol></div>
+        <div><h3>Play</h3><ol><li>Ask a question to both teams.</li><li>Click the button of the team that answered correctly. Their team heaves the rope one step toward their side.</li><li>When the center flag crosses a team's win line, that team wins the round and the other team is dragged into the mud pit.</li><li>Click <b>Next round</b> to play again. Rounds won are tallied under each team's name.</li></ol></div>
+        <div><h3>Controls</h3><dl class="keys"><dt><kbd>←</kbd> or <kbd>A</kbd></dt><dd>Left team got it right.</dd><dt><kbd>→</kbd> or <kbd>L</kbd></dt><dd>Right team got it right.</dd><dt><kbd>U</kbd> or Undo</dt><dd>Takes back a mis-click, even after a win.</dd><dt>Re-center rope</dt><dd>Starts the round over from the middle.</dd><dt>New game (click twice)</dt><dd>Clears the rounds won.</dd></dl></div>`
+    },
+    {
+      id: 'skee', name: 'Skee-Ball', tag: 'Aim and roll', color: '#3d3fa8', icon: 'rings', url: 'skeeball.html',
+      blurb: 'A correct answer earns a roll up the arcade lane. Students time the aim and power to land in the 10 to 100 point rings.',
+      facts: ['2–6 teams', 'Student rolls', 'Skill + luck'], f: ['two', 'many'], k: 'arcade roll ball carnival',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('balls per turn (1 to 3) and a difficulty, which sets how fast the aim and power meters move')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student comes up to roll. Click the lane (or press <kbd>Space</kbd>) once to lock the aim, then again to set the power.</li><li>The rings are worth 10 to 50, and the two corner pockets are worth 100. Too little power rolls back; too much bounces off the back wall.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'plinko', name: 'Plinko', tag: 'Drop and hope', color: '#0f6b8f', icon: 'pegs', url: 'plinko.html',
+      blurb: 'Drop a chip down the peg board and win whatever slot it lands in, from 10 to 200 points, plus optional bonus slots.',
+      facts: ['2–6 teams', 'Student drops', 'Mostly luck'], f: ['two', 'many'], k: 'chips drop pegs game show luck',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('chips per turn (1 to 3) and any bonus slots: Double score, Steal 50, Free drop, or Lose it all')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student moves the mouse across the top to place the chip and clicks to drop it. Without a mouse, the chip slides on its own; press <kbd>Space</kbd> to drop and <kbd>←</kbd> <kbd>→</kbd> to nudge it.</li><li>The team wins the slot the chip lands in.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>Steal 50 always takes from the team in the lead. Double doubles the team's whole score, so it does nothing for a team at 0.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'wheel', name: 'Prize Wheel', tag: 'Spin to win', color: '#a3263f', icon: 'wheel', url: 'wheel.html',
+      blurb: 'Spin a carnival wheel for 10 to 100 points, with optional Spin again, Double, Steal 50 and Bankrupt spaces.',
+      facts: ['2–6 teams', 'Student spins', 'Big swings'], f: ['two', 'many'], k: 'spin carnival game show',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('spins per turn (1 to 3) and which special spaces to include. Bankrupt starts off because it wipes out a whole score')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student clicks the wheel (or press <kbd>Space</kbd>) to spin it.</li><li>The team wins the space the pointer stops on. Spin again gives a free extra spin.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'horse', name: 'Horse Race', tag: 'Every team, every question', color: '#7a4a24', icon: 'horse', url: 'horserace.html',
+      blurb: 'Up to 7 horses race past a grandstand. Every team that answers correctly moves forward, and you can move horses back too.',
+      facts: ['2–7 teams', 'Teacher clicks', 'Whole class answers'], f: ['two', 'many', 'class'], k: 'race derby animals',
+      dir: `<div><h3>Set up</h3><ol><li>Choose the number of horses (2 to 7) and type a name for each horse or team.</li><li>Choose the spaces to the finish (5 to 20).</li><li>Choose how far a correct answer moves a horse: 1 space, or a random roll of 1 to 3.</li><li>Choose how far the back button moves a horse.</li></ol></div>
+        <div><h3>Play</h3><ol><li>Ask a question to all teams. Whiteboards work well here.</li><li>Click the horse button of every team that answered correctly. Each one gallops forward.</li><li>Use a horse's <b>Back</b> button if you want a penalty for a wrong answer.</li><li>The first horse past the finish wins the race. Click <b>Next race</b>; race wins are tallied.</li></ol></div>
+        <div><h3>Controls</h3><dl class="keys"><dt><kbd>1</kbd>–<kbd>7</kbd></dt><dd>Moves that horse forward.</dd><dt><kbd>Shift</kbd> + number</dt><dd>Moves that horse back.</dd><dt><kbd>U</kbd> or Undo</dt><dd>Takes back the last move.</dd><dt>Restart race (click twice)</dt><dd>Sends every horse back to the start.</dd></dl></div>`
+    },
+    {
+      id: 'bowling', name: 'Bowling', tag: 'Roll for a strike', color: '#c45a12', icon: 'pin', url: 'bowling.html',
+      blurb: 'A correct answer earns a turn at the lane. Every pin knocked down is a point, and strikes and spares earn bonus points.',
+      facts: ['2–6 teams', 'Student bowls', 'Bumpers option'], f: ['two', 'many'], k: 'pins strike spare sports',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('rolls per turn (1, or 2 for a full frame), a difficulty, bumpers on or off, and the strike and spare bonus')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student steps up to bowl. Click the lane (or press <kbd>Space</kbd>) once to choose where to stand; with a mouse, move it to pick the spot. Click again to release the ball as the aim arrow swings.</li><li>Each pin knocked down is worth 1 point. With the bonus on, a strike scores 20 and a spare earns 5 extra.</li><li>With 2 rolls per turn, the second roll aims at the pins left standing. A strike resets all ten pins for the second roll.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>Turn on bumpers for younger students so the ball can't fall into the gutter.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'balloon', name: 'Balloon Pop', tag: 'Carnival dart booth', color: '#7c2d8f', icon: 'balloon', url: 'balloon.html',
+      blurb: 'Throw darts at a wall of balloons. Score by balloon color, by a prize hidden behind each balloon, or 1 point per pop.',
+      facts: ['2–6 teams', 'Student throws', 'Choose scoring'], f: ['two', 'many'], k: 'darts carnival pop',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('darts per turn (1 to 5), how pops score, and the aim difficulty')}<p style="margin-top:8px">Scoring options: points by color (red 10 up to purple 100), a prize hidden behind each balloon (5 to 100, with optional Double and Steal surprises), or 1 point per pop.</p></div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student aims at the wall. The target wobbles like a real throwing hand. Move the mouse to aim and click to throw, or let the target wander and press <kbd>Space</kbd>.</li><li>A hit pops the balloon and shows the prize; a miss sticks in the cork. The wall refills when most balloons are gone.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'vocab', name: 'Word Pop', tag: 'Vocabulary balloon pop', color: '#1b4ea3', icon: 'balloon', url: 'vocab.html',
+      blurb: 'Type in your vocabulary list. Students pop a balloon to reveal a word, read it, and earn a point when you confirm they read it correctly.',
+      facts: ['2–6 teams', 'Your word list', 'Reading practice'], f: ['two', 'many', 'ela'], k: 'vocabulary reading words sight words spelling phonics',
+      dir: `<div><h3>Set up</h3><ol><li>Choose the number of teams (2 to 6) and type team names.</li><li>Type or paste your vocabulary words, one per line or separated by commas. A sample list is filled in so you can try the game; replace it with your own.</li><li>Choose the points for each word read correctly (1, 2, 5 or 10) and the words per turn.</li><li>Choose how students pop a balloon: tap or click one directly, or throw a dart with a wobbling aim (Easy, Normal or Hard).</li><li>Choose what happens to a word read incorrectly: it comes back later for another try, or goes to the bottom of the list.</li></ol></div>
+        <div><h3>Play</h3><ol><li>The team that is up sends a student to pop a balloon.</li><li>A word appears in large, easy-to-read letters. The student reads it aloud or signs it.</li><li>Click <b>Read it correctly</b> (or <kbd>C</kbd>) to award the points, or <b>Not yet</b> (or <kbd>X</kbd>).</li><li>The popped spot shows the word with a green (correct) or red (not yet) border. The counter at the top shows how many words have been read.</li><li>When every word has been read correctly, the list starts over.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'claw', name: 'Prize Claw', tag: 'Grab a prize', color: '#c2266f', icon: 'claw', url: 'claw.html',
+      blurb: 'Steer an arcade claw over a pile of plush animals and prizes. Each one reveals a hidden point value when it lands in the chute.',
+      facts: ['2–6 teams', 'Student steers', 'Hidden values'], f: ['two', 'many'], k: 'arcade animals prizes crane',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('tries per turn (1 to 3) and the claw grip: Strong for younger students, Normal, or Tricky like a real arcade')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student moves the mouse to steer the claw and clicks to drop it. Without a mouse, the claw glides on its own; press <kbd>Space</kbd> to drop and <kbd>←</kbd> <kbd>→</kbd> to nudge it.</li><li>A prize that reaches the chute pops up on a card with its point value. A prize can slip out on the way up.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>Common plush animals are worth 10 to 25, special ones 25 to 50, and rare prizes (unicorn, lucky star, giant gem, golden trophy) 50 to 100.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'luck', name: 'Push Your Luck', tag: 'Play it safe or take a risk', color: '#5b2aa8', icon: 'cards', url: 'luck.html',
+      blurb: 'After a correct answer, a team takes the safe points or draws a card that could win big, steal, swap, or lose some or all of their points.',
+      facts: ['2–6 teams', 'Team decides', 'Big swings'], f: ['two', 'many', 'math'], k: 'double triple half cards risk probability',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('the points for the safe choice (1, 2, 5 or 10) and which cards go in the deck')}<p style="margin-top:8px">Good cards: Bonus +1, +3 or +5, Jackpot +10, Double, Triple. Team-versus-team cards: Steal 5 (team picks), Collect 1 point from every team, Rob the leader of 5, Topple the top (first place loses half), Swap scores (off unless you turn it on). Neutral: Party time (every team +2), Draw again, No change. Bad: Give away 5, Generous (give 1 point to every team), Lose 3, Lose 10, Lose half, Lose it all.</p></div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, the team decides: <b>Take the points</b> (or <kbd>B</kbd>) for a sure thing, or <b>Draw a card</b> (or <kbd>D</kbd>).</li><li>The card flips over and is applied right away. For Steal, Give away and Swap, the team picks which other team it affects. Draw again lets the team choose once more.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>The deck is dealt without replacement, so the "cards left" count lets teams think about what is still in the deck. It reshuffles when empty. Scores never drop below 0.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'doors', name: 'Pick a Door', tag: 'Door number 1, 2 or 3?', color: '#a3263f', icon: 'door', url: 'doors.html',
+      blurb: 'A correct answer earns a pick of one of three doors. Behind each is a surprise: bonus points, a dance party, jumping jacks, a donkey, or losing points.',
+      facts: ['2–6 teams', 'Team picks', 'Get moving'], f: ['two', 'many'], k: 'game show prize door challenges movement',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('doors per turn and what can be behind the doors: bonus points, points for every team that answered correctly, fun challenges, joke prizes, losing some points, or losing all points (off unless you turn it on)')}<p style="margin-top:8px">You can also type your own prizes, one per line. Start a line with + or − and a number to make it a points prize (like "+25 Super bonus"); any other line becomes a challenge worth 5 points.</p></div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>Only a team that answers correctly picks a door. Click it, or press <kbd>←</kbd> for door 1, <kbd>↑</kbd> for door 2, <kbd>→</kbd> for door 3.</li><li>Only the chosen door swings open. The other two stay closed, and all three prizes are reshuffled for the next turn.</li><li>If the door says every team that answered correctly gets points, click each team that answered the question correctly (the team that picked is already marked), then click <b>Award points</b> (or <kbd>C</kbd>). This works best when every team answers each question, for example on whiteboards.</li><li>For a challenge, click <b>Done</b> (or <kbd>C</kbd>) when the team completes it, or <b>Not done</b> (<kbd>X</kbd>). The dance party and statue challenges have a big on-screen timer.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'rps', name: 'Rock Paper Scissors', tag: 'Challenge for points', color: '#138a7f', icon: 'hand', url: 'rps.html',
+      blurb: 'A correct answer earns a Rock Paper Scissors match against the computer or another team in the room. Win the throw, win the points.',
+      facts: ['2–6 teams', 'Vs computer or a team', 'Quick'], f: ['two', 'many'], k: 'rock paper scissors hands quick',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('matches per turn, points for a win (1, 2, 5 or 10), match length (one throw or best of 3), and whether the other team earns the points when it beats the team that is up')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, choose who they will play: <b>The computer</b> or another team.</li><li>Against the computer, the team picks Rock, Paper or Scissors (click, or press <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd>). The big on-screen countdown runs, and both hands are revealed.</li><li>Against another team, one player from each team stands up. Click <b>Start the countdown</b> (or <kbd>G</kbd>), and both players throw on SHOOT. Click who won: <kbd>←</kbd> left team, <kbd>→</kbd> right team, or <kbd>↓</kbd> for a tie.</li><li>Ties are thrown again. A win adds the points.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'archery', name: 'Archery', tag: 'Aim for the bullseye', color: '#2f6b3a', icon: 'target', url: 'archery.html',
+      blurb: 'A correct answer earns a shot at the target. The sight drifts, the wind blows, and the closer to the bullseye, the more points.',
+      facts: ['2–6 teams', 'Student shoots', 'Wind option'], f: ['two', 'many'], k: 'bow arrow target sports bullseye',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('arrows per turn, the target (10 rings worth 1–10 points, or 5 rings worth 1–5), wind (off, light or strong), and aim wobble (easy, medium or hard)')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student steps up to shoot. The sight drifts around the target; click the range (or press <kbd>Space</kbd>) to release the arrow.</li><li>Check the wind flag and the wind badge first. Wind pushes the arrow left or right, so aim a little into it.</li><li>The ring the arrow lands in flashes and its points are added. Missing the target scores 0.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>For younger students, set Aim wobble to Easy and Wind to Off.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'basketball', name: 'Basketball', tag: 'Shoot for 1, 2 or 3', color: '#c4570f', icon: 'hoop', url: 'basketball.html',
+      blurb: 'A correct answer earns a shot. The team picks a layup, jump shot or three-pointer, then times the shot meter to sink it.',
+      facts: ['2–6 teams', 'Student shoots', 'Team picks'], f: ['two', 'many'], k: 'hoop shoot sports free throw',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('shots per turn, a difficulty (easy, medium or hard), and the point values for a layup, jump shot and three-pointer: 1 / 2 / 3 or 2 / 3 / 5')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, the team picks a shot: <b>Layup</b> (<kbd>←</kbd>), <b>Jump shot</b> (<kbd>↑</kbd>) or <b>Three-pointer</b> (<kbd>→</kbd>). Longer shots are worth more, and their green zone is smaller.</li><li>The shot meter slides up and down. Click the court (or press <kbd>Space</kbd>) when it is in the green zone.</li><li>A big word shows the result: SWISH!, BUCKET! or BANK SHOT! for a make; OFF THE RIM, AIR BALL and the like for a miss.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'baseball', name: 'Baseball', tag: 'You call the hit', color: '#1b3f6b', icon: 'bat', url: 'baseball.html',
+      blurb: 'You decide each at-bat: strike, single, double, triple or home run. Each team keeps its runners on base, and every runner who crosses home scores a run.',
+      facts: ['2–6 teams', 'Teacher clicks', 'Real runs'], f: ['two', 'many'], k: 'bat hit runs sports diamond',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('at-bats per turn')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team at bat a question.</li><li>Click the result: <b>Strike</b> (<kbd>Q</kbd>), <b>Single</b> (<kbd>W</kbd>), <b>Double</b> (<kbd>E</kbd>), <b>Triple</b> (<kbd>R</kbd>) or <b>Home run</b> (<kbd>T</kbd>). For example, a wrong answer can be a strike, and a harder question can earn a bigger hit.</li><li>The pitch and hit play out, then the runners move around the large diamond. Every hit moves all of that team's runners forward by the same number of bases, and the batter goes on base. A home run clears the bases.</li><li>Each runner who crosses home is a run, and runs are the team's points. Runners stay on base until that team's next turn.</li></ol></div>
+        <div><h3>Good to know</h3><p>Each team has its own runners: the diamond always shows the team that is up. Undo puts the runners back too.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'hockey', name: 'Hockey', tag: 'Penalty shot', color: '#1d4e7a', icon: 'stick', url: 'hockey.html',
+      blurb: 'A correct answer earns a penalty shot. Aim past the sliding goalie, and a goal lights the red lamp.',
+      facts: ['2–6 teams', 'Student shoots', 'Goal lamp'], f: ['two', 'many'], k: 'puck goal goalie sports ice',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('shots per turn, how good the goalie is (easy, medium or hard), points per goal (1, 2 or 5), and whether top-corner goals count double')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student takes the shot. The aim marker sweeps across the net while the goalie slides side to side. Click the rink (or press <kbd>Space</kbd>) to shoot.</li><li>A goal makes the net bulge, the red lamp spin and a big GOAL! banner appear. Otherwise you'll see SAVE!, POST! or WIDE!, worth 0.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'codebreak', name: 'Code Breaker', tag: 'Crack the color code', color: '#5b3fc4', icon: 'lock', url: 'codebreak.html',
+      blurb: 'Teams race to crack one secret color code. Each correct answer earns a guess and clues, and the team that cracks the code wins the big points.',
+      facts: ['2–6 teams', 'Logic', 'Team decides'], f: ['two', 'many', 'math'], k: 'logic deduction reasoning colors code puzzle',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('guesses per turn, code length (3, 4 or 5), how many colors (4, 6 or 8), whether colors can repeat, points for cracking the code (5, 10 or 20), points per exact peg (none or 1), and the guess board: each team sees only its own guesses (the default), or everyone sees all guesses')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, the team builds a guess: click colors to fill the slots from left to right (or type the letter under each color). Click a filled slot to clear it, or press <b>Clear</b> (<kbd>Backspace</kbd>).</li><li>Click <b>Check</b> (or press <kbd>Enter</kbd>). The clues: a solid peg means a right color in the right spot (exact); a ring means a right color in the wrong spot (close). The clue is also written out, like "1 exact · 2 close".</li><li>On each team's turn, the board shows only that team's own guesses and clues.</li><li>The team that cracks the code earns the points, the code is revealed, and a new code starts for everyone.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>Every color peg also has its own symbol, so color is never the only cue. <b>Reveal code</b> (click twice) shows the code with no points and starts a new one.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'advance', name: 'Advance', tag: 'Race to the finish square', color: '#b8860b', icon: 'flag', url: 'advance.html',
+      blurb: 'Every team starts on the same gold square. Each team that answers correctly moves forward one square, and the first team across sets off a big celebration.',
+      facts: ['2–8 teams', 'Teacher clicks', 'Whole class answers'], f: ['two', 'many', 'class'], k: 'board race squares finish whole class',
+      dir: `<div><h3>Set up</h3><ol><li>Choose the number of teams (2 to 8) and type team names if you like.</li><li>Choose how many squares to cross: 4, 6, 8 or 10 (6 is the default).</li></ol></div>
+        <div><h3>Play</h3><ol><li>Ask a question. Every team can answer; whiteboards work well.</li><li>Click each team that answered correctly, or press its number key (<kbd>1</kbd>–<kbd>8</kbd>). Their next square starts to glow. Click a team again to unmark it.</li><li>Click <b>Advance!</b> (or press <kbd>Enter</kbd>). Every marked team hops forward one square.</li><li>The first team to reach the last square sets off the celebration: confetti, a flashing screen and the winner's name in giant letters. If two teams finish on the same question, they share first place.</li><li>Click <b>Keep playing</b> to race for 2nd and 3rd place (each finisher gets a place badge), or <b>Play again</b>.</li></ol></div>
+        <div><h3>Controls</h3><dl class="keys"><dt>Click a team, or <kbd>1</kbd>–<kbd>8</kbd></dt><dd>Marks or unmarks a team that answered correctly.</dd><dt><kbd>Enter</kbd> or Advance!</dt><dd>Moves every marked team forward one square.</dd><dt><kbd>U</kbd> or Undo</dt><dd>Takes back the last mark or move, even after the celebration.</dd></dl></div>`
+    },
+    {
+      id: 'changeone', name: 'Change Just One', tag: 'Word chain: ball → bell → cell', color: '#1d5f8a', icon: 'letters', url: 'changeone.html',
+      blurb: 'The computer gives the class a word. Change just one letter to make a new word, and keep the chain going as long as you can.',
+      facts: ['Whole class', 'Spelling + vocabulary', 'Class record'], f: ['class', 'ela'], k: 'word ladder spelling phonics vocabulary letters rhyme',
+      dir: `<div><h3>Set up</h3><ol><li>Choose the word length: 3, 4 or 5 letters.</li><li>Choose how words are checked: <b>Computer checks the word list</b>, or <b>Teacher decides</b> (you accept or reject every word).</li><li>Choose a timer for each new word (none, 30, 60 or 90 seconds).</li><li>Choose the starting word: the computer picks one, or type your own. The setup screen tells you how many words can come next from your word.</li></ol></div>
+        <div><h3>Play</h3><ol><li>The starting word appears as giant letter tiles.</li><li>The class suggests a new word that changes just one letter. Type it and press <b>Check</b> (or <kbd>Enter</kbd>). As you type, the boxes above the input show which letters changed.</li><li>If it works, the changed letter flips and turns yellow, and the word joins the chain on the right.</li><li>If it changes more than one letter, is already in the chain, or is the same word, the screen shakes and says why.</li><li>If a real word isn't in the word list (names and slang aren't), you'll see <b>Accept the word</b> or <b>Try again</b>. You make the call.</li><li>Stuck? Click <b>Hint</b> to see how many words are possible, again to highlight which letter to change, and again to show a word.</li><li>Click <b>We're stuck: end this chain</b> to see the whole chain and the count. Then start a new word, or keep going.</li></ol></div>
+        <div><h3>Good to know</h3><p>Every 5 words gets a celebration, and beating the class record (saved for each word length on that computer) sets off a "New class record!" banner. <b>Undo last word</b> takes a word back out of the chain.</p></div>`
+    },
+    {
+      id: 'fourrow', name: 'Four in a Row', tag: '100 squares, hidden points', color: '#2a2d3e', icon: 'grid4', url: 'fourrow.html',
+      blurb: 'A board of 100 black squares. A correct answer claims a square and reveals its hidden points. Spot 4 in a row of your color and draw the line for a big bonus.',
+      facts: ['2–6 teams', 'Team picks', 'Spot the pattern'], f: ['two', 'many', 'math'], k: 'connect line bonus strategy board grid squares pattern',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('squares per turn, the points hidden in squares (1–10, 5–50 or 10–100), the bonus for connecting 4 in a row (+50, +100 or +200), and whether diagonal lines count. Rounds are set to No limit')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, the team clicks any black square. It flips to their color and shows the points inside, which are added to their score.</li><li>The game never points out a 4 in a row: students have to notice it. When they spot 4 squares of one color in a line, a student draws the line: press on one end square and drag to the other end.</li><li>A correct line earns that team the bonus right away, even if it isn't their turn, and the line stays on the board. A wrong line shakes the board and says why.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li><li>Click <b>End game</b> whenever you're done. The board can fill up completely.</li></ol></div>
+        <div><h3>Good to know</h3><p>Squares already used in a line can't be reused for another line in the same direction. Undo takes back a square or a bonus.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'dropfour', name: 'Drop Four', tag: 'Red vs Yellow classic', color: '#1d4fb8', icon: 'disc', url: 'dropfour.html',
+      blurb: 'The classic upright board for two teams. A correct answer drops a disc. Get 4 in a row, then draw the line through them to win the game.',
+      facts: ['2 teams', 'Team picks', 'Classic strategy'], f: ['two', 'math'], k: 'connect four 4 discs checkers red yellow strategy board',
+      dir: `<div><h3>Set up</h3><ol><li>Type names for the Red and Yellow teams if you like.</li><li>Choose the points for winning a game: 1, 10 or 100. Rounds are set to No limit, so you can play several games in a row.</li></ol></div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, they pick a column: move over it (or use <kbd>←</kbd> <kbd>→</kbd>), then click or press <kbd>Space</kbd> to drop the disc.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b> (<kbd>S</kbd>). The other team is up.</li><li>When a team gets 4 in a row (across, up and down, or diagonal), the game pauses: students must find the 4 and draw the line by pressing on one end disc and dragging to the other end. Press <kbd>H</kbd> to show them where if they get stuck.</li><li>A correct line wins the game, with confetti and the points. A new board starts. If the board fills up with no winner, it's a tie and a new board starts.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'tictactoe', name: 'Tic-Tac-Toe', tag: 'Pick your pieces', color: '#c0392b', icon: 'ttt', url: 'tictactoe.html',
+      blurb: 'Two teams, one board. A correct answer places your piece, and three in a row wins. Play as X and O, milk and cookies, sun and moon, cats and dogs, the TSD seal vs. the Rangers, or your own pictures.',
+      facts: ['2 teams', 'Team picks', 'Quick games'], f: ['two'], k: 'tic tac toe noughts crosses x o three in a row tsd rangers milk cookies pictures logo',
+      dir: `<div><h3>Set up</h3><ol><li>Type names for the two teams if you like.</li><li>Choose the game pieces: <b>X and O</b>, <b>Milk and Cookies</b>, <b>Sun and Moon</b>, <b>Cats and Dogs</b>, <b>TSD and Rangers</b> (the TSD seal and the Rangers logo), or <b>Your own pictures</b>. With your own pictures, click <b>Upload picture</b> for each team (a school logo or mascot works well). Pictures are saved only on that computer.</li><li>Choose the points for winning a game: 1, 10 or 100. Rounds are set to No limit, so you can play many games in a row.</li></ol></div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, they click an empty square to place their piece.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b> (<kbd>S</kbd>). The other team is up.</li><li>Three in a row (across, down or diagonal) wins: the squares glow, a line is drawn through them, and the winner gets the points. A tie or a win starts a new board automatically.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'volleyball', name: 'Volleyball', tag: 'Serve for an ace', color: '#1d6fa5', icon: 'vball', url: 'volleyball.html',
+      blurb: 'A correct answer earns a serve. Toss, time the hit and aim for the deep corners, but watch out for the defenders, the net and the back line.',
+      facts: ['2–6 teams', 'Student serves', 'Timing + aim'], f: ['two', 'many'], k: 'volleyball beach serve ace net sports',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('serves per turn, a difficulty (easy, medium or hard), zone points for short / middle / deep serves (1 / 2 / 3 or 1 / 3 / 5), and whether a dug serve scores 0 or 1')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student serves. Click the court (or press <kbd>Space</kbd>) to toss the ball, then click again near the top of the toss, when the HIT bar is in the green band. An arrow sweeps across the far court and sets where the ball lands.</li><li>The result appears in big letters: <b>ACE!</b> scores the zone's points (the numbers are painted on the sand). <b>DUG!</b> means a defender reached it. <b>NET!</b> (hit too early) and <b>OUT!</b> (hit too late, or aimed past the line) score 0.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'soccer', name: 'Soccer', tag: 'Bend it past the wall', color: '#1f7a3f', icon: 'sball', url: 'soccer.html',
+      blurb: 'A correct answer earns a free kick. Pick your spot, bend the ball around the wall and past the goalkeeper to score.',
+      facts: ['2–6 teams', 'Student kicks', 'Aim + curve'], f: ['two', 'many'], k: 'soccer football free kick goal goalkeeper sports',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('kicks per turn, the goalkeeper (easy, medium or hard), the wall (none, 3 players or 5 players), points per goal (1, 2 or 5), and whether top-corner goals count double')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student takes the free kick. Click the field (or press <kbd>Space</kbd>) to lock the aim as the marker sweeps across the goal.</li><li>Click again to lock the curve as the meter swings from bend left to bend right. A dashed line previews the path.</li><li>A goal ripples the net with confetti and a big GOAL! (or TOP CORNER!) banner. Otherwise you'll see SAVE!, BLOCKED!, POST!, CROSSBAR!, WIDE! or OVER!, worth 0.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'fleet', name: 'Sink the Fleet', tag: 'Find the hidden ships', color: '#0f5a73', icon: 'ship', url: 'fleet.html',
+      blurb: 'Hidden ships lurk on the grid. A correct answer fires a shot: hits burst into flames, and sinking a whole ship earns a bonus.',
+      facts: ['2–6 teams', 'Team picks', 'Strategy'], f: ['two', 'many', 'math'], k: 'battle ship ships navy grid coordinates hidden strategy',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('the mode: <b>Two teams, two fleets</b> (each team hunts the other team\'s ships; needs exactly 2 teams) or <b>All teams vs. one hidden fleet</b>; the grid size (8 × 8 or 10 × 10); points per hit (1, 5 or 10); and the bonus for sinking a ship (none, +20 or +50). Rounds are set to No limit')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, they click a square on their target grid to fire. In two-fleet mode, only the active team's target grid lights up.</li><li>A white splash is a miss. A flame is a hit, worth points. When every square of a ship is hit, the ship appears with a big SUNK! banner and is crossed off the fleet list.</li><li>In two-fleet mode, the first team to sink the other team's whole fleet wins a +50 bonus. In shared mode, the game ends when the last ship sinks.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>Row letters and column numbers make it easy for students to call out a square, like "C-7", which is good coordinate practice.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'addend', name: 'Missing Number', tag: 'Missing addend practice', color: '#2c7be5', icon: 'plus', url: 'addend.html',
+      blurb: 'Simple 1st grade practice: 3 + ? = 7. Tap the missing number for an instant celebration, or a gentle "Try again!" with a hint of which numbers are left.',
+      facts: ['Single player or whole class', 'Instant feedback', 'Grade 1'], f: ['class', 'math'], k: 'addition missing addend first grade 1st grade number sentence ten frame facts unknown',
+      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b> to choose numbers up to 5, 10 or 20, where the missing number goes (3 + ? = 7, ? + 4 = 7, or a mix), the dot helper on or off, and sound on or off.</li></ol></div>
+        <div><h3>Play</h3><ol><li>A number sentence appears with a wiggling <b>?</b>. The dot helper shows the number you know as red dots and the missing part as empty circles to count.</li><li>Tap the missing number (or press a number key).</li><li>Right: the ? turns green and fills in, the dots fill up, confetti pops, the star buddy jumps, and a star is added at the top. The next problem comes automatically.</li><li>Not right: the box shakes and says <b>Try again!</b>, and that number is crossed out so students can try another.</li><li>Every 10 stars earns a big trophy celebration.</li></ol></div>
+        <div><h3>Good to know</h3><p>Works on a projector for the whole class, or on a single student's computer or tablet. Settings are remembered on each device.</p></div>`
+    },
+    {
+      id: 'pie', name: 'Pie Splat', tag: 'Cream pie carnival booth', color: '#c2357a', icon: 'pie', url: 'pie.html',
+      blurb: 'A correct answer earns a cream pie to throw at the faces in a carnival booth. Use cartoon faces or upload photos of good sports, like teachers or the principal.',
+      facts: ['2–6 teams', 'Student throws', 'Upload faces'], f: ['two', 'many'], k: 'pie face cream throw carnival photos faces teacher principal splat',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('pies per turn, the number of faces (3, 4 or 5), cartoon faces or uploaded photos, a difficulty (easy: faces bob; medium: faces duck; hard: fast ducking), and points (different per face, 10–50, or 10 for every face)')}<p style="margin-top:8px">With <b>Upload photos</b>, type a name and click <b>Upload photo</b> for each face. Photos stay on that computer only. Please ask permission before using someone's photo.</p></div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student clicks a face to throw the pie (or presses <kbd>Space</kbd> to throw at the sweeping target).</li><li>A hit squashes the face, covers it in cream with a big SPLAT! banner, and scores that face's points. The cream builds up for the rest of the game.</li><li>A miss splats on the board (or the face ducks!) and scores 0.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Good to know</h3><p>Press <kbd>C</kbd> to clean all the faces.</p></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'deal', name: 'Take the Deal', tag: 'Briefcase game show', color: '#1f2a5c', icon: 'case', url: 'briefcase.html',
+      blurb: 'The whole class plays one contestant. Earn briefcases with correct answers, then decide whether to take the Banker’s offer.',
+      facts: ['Whole class', 'Class votes', 'Suspense'], f: ['class'], k: 'briefcase banker game show deal',
+      dir: `<div><h3>Set up</h3><ol><li>Type a contestant name, like your room number.</li><li>Choose the number of briefcases: 12, 16, 20 or 26. Fewer cases make a shorter game; 16 fits a typical review session.</li><li>Choose whether each case must be earned with a correct answer, or opened freely.</li></ol></div>
+        <div><h3>Play</h3><ol><li>The class picks one briefcase to keep. It moves to the podium.</li><li>Ask a question. When the class answers correctly, press <b>Correct answer</b> (or <kbd>C</kbd>) to earn one case, and the class chooses which case to open.</li><li>After each round of cases, the Banker makes an offer. The class votes, and you click <b>Deal</b> or <b>No deal</b>.</li><li>Take a deal and the class sees what their own case held. Say no deal to the end, and the class keeps their case or swaps it for the last one.</li></ol></div>
+        <div><h3>Controls</h3><dl class="keys"><dt><kbd>C</kbd></dt><dd>Correct answer: earns one case.</dd><dt><kbd>D</kbd> / <kbd>N</kbd></dt><dd>Deal or No deal when the Banker calls.</dd><dt><kbd>U</kbd> or Undo</dt><dd>Takes back a mis-click.</dd></dl></div>`
+    }
+  ];
+
+  // cards
+  const grid = $('grid');
+  GAMES.forEach((g) => {
+    const c = document.createElement('article');
+    c.className = 'card'; c.dataset.f = g.f.join(' '); c.id = 'game-' + g.id;
+    c.innerHTML = `<a class="shot" href="${g.url}" target="_blank" rel="noopener" aria-label="Play ${g.name}"><img src="${g.id}.jpg" alt="Screenshot of ${g.name}" loading="lazy"></a><div class="card-top"><div class="icon" style="--gc:${g.color}" aria-hidden="true">${ICONS[g.icon]}</div>
+      <div><h2>${g.name}</h2><div class="tag">${g.tag}</div></div></div>
+      <p>${g.blurb}</p>
+      <div class="facts">${g.facts.map((x) => `<span>${x}</span>`).join('')}</div>
+      <div class="actions"><a class="play" href="${g.url}" target="_blank" rel="noopener">Play <span aria-hidden="true">↗</span></a>
+      <button class="dirlink" type="button" data-id="${g.id}">Directions</button></div>`;
+    grid.appendChild(c);
+  });
+  grid.addEventListener('click', (e) => { const b = e.target.closest('.dirlink'); if (b) openDir(b.dataset.id, b); });
+
+  // search + filters
+  let curF = 'all';
+  const norm = (x) => String(x).toLowerCase().replace(/<[^>]+>/g, ' ').replace(/[–-]/g, ' ');
+  const hay = {}; GAMES.forEach((g) => { hay[g.id] = norm([g.name, g.tag, g.blurb, g.facts.join(' '), g.k || '', g.f.includes('ela') ? 'language arts ela reading english' : '', g.f.includes('math') ? 'math mathematics numbers' : ''].join(' ')); });
+  function apply() {
+    const words = norm($('q').value).split(/\s+/).filter(Boolean);
+    let n = 0;
+    GAMES.forEach((g) => {
+      const c = $('game-' + g.id);
+      const okF = curF === 'all' || g.f.includes(curF);
+      const okQ = words.every((w) => hay[g.id].includes(w));
+      c.hidden = !(okF && okQ); if (!c.hidden) n++;
+    });
+    $('empty').hidden = n > 0;
+    $('count').textContent = (words.length || curF !== 'all') ? `${n} game${n === 1 ? '' : 's'}` : '';
+  }
+  document.querySelectorAll('.filters button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.filters button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    curF = b.dataset.f; apply();
+    try { localStorage.setItem('hub-filter', curF); } catch (e) {}
+  }));
+  $('q').addEventListener('input', apply);
+  try { const f = localStorage.getItem('hub-filter'); const b = f && document.querySelector(`.filters button[data-f="${f}"]`); if (b) b.click(); } catch (e) {}
+
+  // directions panel
+  let lastFocus = null;
+  function openDir(id, from) {
+    const g = GAMES.find((x) => x.id === id); if (!g) return;
+    lastFocus = from || document.activeElement;
+    $('pTitle').textContent = `How to play ${g.name}`;
+    $('pIcon').style.setProperty('--gc', g.color); $('pIcon').innerHTML = ICONS[g.icon];
+    $('pBody').innerHTML = `<a class="shot" href="${g.url}" target="_blank" rel="noopener" aria-label="Play ${g.name}"><img src="${g.id}.jpg" alt="Screenshot of ${g.name}"></a>` + g.dir + `<div class="actions"><a class="play" href="${g.url}" target="_blank" rel="noopener">Play ${g.name} <span aria-hidden="true">↗</span></a></div>`;
+    $('scrim').hidden = false;
+    $('pBody').scrollTop = 0; document.querySelector('.panel').scrollTop = 0;
+    $('pClose').focus();
+  }
+  function closeDir() { $('scrim').hidden = true; if (lastFocus) lastFocus.focus(); }
+  $('pClose').addEventListener('click', closeDir);
+  $('scrim').addEventListener('click', (e) => { if (e.target === $('scrim')) closeDir(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('scrim').hidden) closeDir(); });
+
+  // deep link: #plinko opens that game's directions
+  const h = (location.hash || '').slice(1);
+  if (h && GAMES.some((g) => g.id === h)) openDir(h);
+})();
+</script>
+
+</body>
+</html>
