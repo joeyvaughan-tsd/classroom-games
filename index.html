@@ -76,6 +76,10 @@
   .icon svg { width: 36px; height: 36px; }
   .card h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.45rem; line-height: 1.1; }
   .card .tag { font-size: .85rem; color: var(--ink-2); font-weight: 700; }
+  .kind { display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; margin-right: 8px; vertical-align: 1px; }
+  .kind.game { background: #dbeafe; color: #1e40af; }
+  .kind.activity { background: #dcfce7; color: #166534; }
+  .filters .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
   .card p { margin: 0; color: var(--ink-2); }
   .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
   .facts span { background: var(--chip); border-radius: 8px; padding: 3px 9px; font-size: .84rem; font-weight: 700; color: var(--ink); }
@@ -119,17 +123,20 @@
     <p class="intro">Projectable review games you can use with any set of questions. You ask the questions however you like, and the game handles the turns, points and excitement. Click <b>Play</b> to open a game in a new tab, or <b>Directions</b> for step-by-step instructions.</p>
   </header>
 
-  <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><input type="search" id="q" placeholder="Search games, like “vocabulary”, “sports” or “2 teams”" aria-label="Search games" autocomplete="off"><span id="count" aria-live="polite"></span></div>
-  <div class="filters" role="group" aria-label="Filter games">
+  <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><input type="search" id="q" placeholder="Search games and activities, like “vocabulary”, “sports” or “2 teams”" aria-label="Search games and activities" autocomplete="off"><span id="count" aria-live="polite"></span></div>
+  <div class="filters" role="group" aria-label="Filter games and activities">
     <span>Show:</span>
-    <button type="button" data-f="all" aria-pressed="true">All games</button>
+    <button type="button" data-f="all" aria-pressed="true">All resources</button>
+    <button type="button" data-f="game">All games</button>
+    <button type="button" data-f="activity">All activities</button>
+    <i class="sep" aria-hidden="true"></i>
     <button type="button" data-f="two">2 teams</button>
     <button type="button" data-f="many">3 or more teams</button>
     <button type="button" data-f="class">Whole class</button>
     <button type="button" data-f="ela" class="subj">Language Arts</button>
     <button type="button" data-f="math" class="subj">Math</button>
   </div>
-  <p class="empty" id="empty" hidden>No games match that search. Try another word, or click <b>All games</b>.</p>
+  <p class="empty" id="empty" hidden>Nothing matches that search. Try another word, or click <b>All resources</b>.</p>
 
   <main class="grid" id="grid" aria-label="Games"></main>
 
@@ -470,13 +477,17 @@
     }
   ];
 
+  // Which resources are activities (everything else is a game).
+  const ACTIVITIES = new Set(['addend', 'changeone', 'vocab', 'buzzer']);
+  GAMES.forEach((g) => { g.kind = ACTIVITIES.has(g.id) ? 'activity' : 'game'; g.f.push(g.kind); });
+
   // cards
   const grid = $('grid');
   GAMES.forEach((g) => {
     const c = document.createElement('article');
     c.className = 'card'; c.dataset.f = g.f.join(' '); c.id = 'game-' + g.id;
     c.innerHTML = `<a class="shot" href="${g.url}" target="_blank" rel="noopener" aria-label="Play ${g.name}"><img src="${g.id}.jpg" alt="Screenshot of ${g.name}" loading="lazy"></a><div class="card-top"><div class="icon" style="--gc:${g.color}" aria-hidden="true">${ICONS[g.icon]}</div>
-      <div><h2>${g.name}</h2><div class="tag">${g.tag}</div></div></div>
+      <div><h2>${g.name}</h2><div class="tag"><span class="kind ${g.kind}">${g.kind === 'activity' ? 'Activity' : 'Game'}</span>${g.tag}</div></div></div>
       <p>${g.blurb}</p>
       <div class="facts">${g.facts.map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="actions"><a class="play" href="${g.url}" target="_blank" rel="noopener">Play <span aria-hidden="true">↗</span></a>
@@ -489,7 +500,7 @@
   // search + filters
   let curF = 'all';
   const norm = (x) => String(x).toLowerCase().replace(/<[^>]+>/g, ' ').replace(/[–-]/g, ' ');
-  const hay = {}; GAMES.forEach((g) => { hay[g.id] = norm([g.name, g.tag, g.blurb, g.facts.join(' '), g.k || '', g.f.includes('ela') ? 'language arts ela reading english' : '', g.f.includes('math') ? 'math mathematics numbers' : ''].join(' ')); });
+  const hay = {}; GAMES.forEach((g) => { hay[g.id] = norm([g.name, g.tag, g.blurb, g.facts.join(' '), g.k || '', g.f.includes('ela') ? 'language arts ela reading english' : '', g.f.includes('math') ? 'math mathematics numbers' : '', g.kind === 'activity' ? 'activity activities' : 'game games'].join(' ')); });
   function apply() {
     const words = norm($('q').value).split(/\s+/).filter(Boolean);
     let n = 0;
@@ -500,7 +511,7 @@
       c.hidden = !(okF && okQ); if (!c.hidden) n++;
     });
     $('empty').hidden = n > 0;
-    $('count').textContent = (words.length || curF !== 'all') ? `${n} game${n === 1 ? '' : 's'}` : '';
+    $('count').textContent = (words.length || curF !== 'all') ? `${n} ${curF === 'activity' ? 'activit' + (n === 1 ? 'y' : 'ies') : curF === 'game' ? 'game' + (n === 1 ? '' : 's') : 'resource' + (n === 1 ? '' : 's')}` : '';
   }
   document.querySelectorAll('.filters button').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.filters button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
