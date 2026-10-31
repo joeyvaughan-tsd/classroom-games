@@ -259,57 +259,85 @@ const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", 
   const STORE = 'guess-the-word-v1';
   const ALLCATS = Object.keys(BANK);
   const LOOKUP = {}; ALLCATS.forEach((c) => Object.keys(BANK[c]).forEach((w) => { LOOKUP[w.toLowerCase()] = BANK[c][w]; }));
-  let set = { players: 'Team 1\nTeam 2\nTeam 3\nTeam 4', src: 'bank', level: 'mild', pics: true, builtin: true, own_pics: {}, hidden_ph: {}, cats: ['Animals', 'Food', 'School', 'Home'], own: '', time: 60, gpts: 1, cpts: 1, sound: true };
+  let set = { players: 'Team 1\nTeam 2\nTeam 3\nTeam 4', src: 'bank', level: 'mild', pics: true, builtin: true, own_pics: {}, hidden_ph: {}, photo_pick: {}, cats: ['Animals', 'Food', 'School', 'Home'], own: '', time: 60, gpts: 1, cpts: 1, sound: true };
   try { Object.assign(set, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
   if (!set.hidden_ph || typeof set.hidden_ph !== 'object') set.hidden_ph = {};
+  if (!set.photo_pick || typeof set.photo_pick !== 'object') set.photo_pick = {};
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(set)); } catch (e) {} };
 
   let players = [], scores = [], guesser = 0, deck = [], word = null, phase = 'cover', left = 0, iv = 0, history = [], bumpIdx = -1;
 
   /* ---------- pictures ---------- */
-  /* Real photos: each built-in word is matched to a hand-picked Wikipedia article (PHOTO in the word list) and shows
-     that article's free-licensed lead photo (JPG only, so no diagrams or cartoons), with the photographer and license.
+  /* Real photos. For each built-in word the page searches Wikimedia Commons for a JPG photo of just that thing on a plain
+     or white background, and the file name must contain the word, so the picture shows the object close up and alone.
+     If none is found it falls back to the lead photo of a hand-picked Wikipedia article. A word list blocks unsuitable
+     files. Teachers can preview every photo, choose a different one, or hide one.
      Words about people, jobs, feelings and actions have no entry, so they never get an automatic photo. */
-  const PH = {}, PEND = {};
-  let photoState = 'unknown';
+  const PH = {}, PEND = {}, QUEUE = [];
+  let photoState = 'unknown', workers = 0;
   const WAPI = 'https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*';
+  const CAPI = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*';
+  const BLOCK = /nud(e|ity|ist)|naked|sex|erot|porn|lingerie|bikini|topless|breast|nipple|genital|penis|vagin|corpse|dead|blood|gore|wound|kill|slaughter|butcher|weapon|\bgun|rifle|pistol|knife|drug|cigar|smok|beer|wine\b|alcohol|vodka|whisk|nazi|swastika|injur|surgery|disease|vomit|fece|poop|urine|dung|carcass|roadkill|hunt|meme|logo|diagram|drawing|illustration|cartoon|clipart|icon|map of|chart/i;
+  const SEARCH = { orange: 'orange fruit', mouse: 'house mouse', bear: 'brown bear', whale: 'humpback whale', bee: 'honey bee', baseball: 'baseball ball', basketball: 'basketball ball', football: 'american football ball', tennis: 'tennis ball', golf: 'golf ball', bowling: 'bowling pin', skate: 'ice skate', ski: 'skis', fishing: 'fishing rod', puzzle: 'jigsaw puzzle', drum: 'drum instrument', key: 'door key', plate: 'dinner plate', bus: 'school bus', computer: 'laptop computer', phone: 'smartphone', star: 'star sky', rock: 'rock stone', shell: 'seashell', cart: 'shopping cart', scooter: 'kick scooter', earth: 'earth from space', hurricane: 'hurricane satellite', paint: 'paint can', battery: 'AA battery', gift: 'gift box', balloon: 'balloon', egg: 'chicken egg', cookie: 'cookie', fish: 'goldfish', bird: 'bird', globe: 'globe' };
+  const SYN = { corn: ['maize'], donut: ['doughnut'], bike: ['bicycle'], phone: ['smartphone', 'mobile phone', 'cell phone'], television: ['tv'], couch: ['sofa'], cup: ['mug'], computer: ['laptop'], taxi: ['taxicab', 'cab'], 'soccer ball': ['football', 'soccerball'], football: ['american football'], 'fire truck': ['fire engine', 'firetruck'], airplane: ['aircraft', 'plane'], bunny: ['rabbit'], pancakes: ['pancake'], grapes: ['grape'], dice: ['die'], hurricane: ['cyclone', 'typhoon'], earth: ['planet'], fish: ['goldfish'], bird: ['robin', 'sparrow', 'bluebird', 'cardinal'], bee: ['honeybee'], pig: ['piglet', 'swine'], cow: ['cattle', 'calf'], duck: ['mallard', 'duckling'], dinosaur: ['dinosaur'], cart: ['trolley'], scooter: ['kick scooter'] };
+  const MEAT = /fried|roast|grill|cooked|nugget|wings?\b|soup|meat|dish|recipe|plate of|market|butcher|stew|curry/i;
+  const NOT = { mouse: /computer|optical|wireless|usb|keyboard|mickey|cartoon/i, key: /keyboard|piano|map key|key ?chain|lime|florida/i, apple: /computer|macbook|iphone|ipad|mac\b|store/i, plate: /tectonic|licen[cs]e|number plate|armou?r|steel/i, shell: /oil|company|gas|petrol|script|artillery/i, rock: /music|band|concert|guitar/i, cloud: /comput/i, tree: /family|diagram|phylo/i, ruler: /king|queen|emperor/i, window: /microsoft|software|screen/i, bear: /teddy/i, star: /starfish|fruit|anise|film|movie|actor/i, bus: /electric(al)? bus|computer|data/i, chicken: MEAT, duck: MEAT, pig: MEAT, cow: MEAT, fish: MEAT, lobster: MEAT, turkey: MEAT, egg: /easter|painted|fried|benedict/i, corn: /pop ?corn|field|maze/i, bat: /baseball|cricket/i, mug: /shot|police/i, cup: /world cup|trophy|bra/i, globe: /award|theatre|theater|golden/i, bell: /pepper|taco/i, ball: /dance|gown/i, paint: /painting/i, fire: /arm\b|firearm|house fire|building/i, ship: /relationship|space ?ship/i, train: /training/i, boat: /gravy/i };
   const keyOf = (w) => String(w).toLowerCase().trim();
   const photoTitle = (k) => (Object.prototype.hasOwnProperty.call(PHOTO, k) ? PHOTO[k] : null);
-  const strip = (h) => { if (!h) return ''; try { return new DOMParser().parseFromString(String(h), 'text/html').body.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); } catch (e) { return ''; } };
+  const strip = (h, n) => { if (!h) return ''; try { return new DOMParser().parseFromString(String(h), 'text/html').body.textContent.replace(/\s+/g, ' ').trim().slice(0, n || 80); } catch (e) { return ''; } };
   function follow(q, t) { let x = t; (q.normalized || []).forEach((n) => { if (n.from === x) x = n.to; }); (q.redirects || []).forEach((n) => { if (n.from === x) x = n.to; }); return x; }
-  async function loadPhotos(words) {
-    const keys = [...new Set(words.map(keyOf))].filter((k) => photoTitle(k) && PH[k] === undefined && !PEND[k]);
-    for (let i = 0; i < keys.length; i += 40) {
-      const chunk = keys.slice(i, i + 40); chunk.forEach((k) => { PEND[k] = 1; });
-      try {
-        const r = await fetch(WAPI + '&redirects=1&prop=pageimages&piprop=thumbnail%7Cname&pithumbsize=640&pilicense=free&pilimit=50&titles=' + encodeURIComponent(chunk.map(photoTitle).join('|')));
-        const q = (await r.json()).query || {}; photoState = 'ok';
-        const pages = {}; (q.pages || []).forEach((p) => { pages[p.title] = p; });
-        const files = [];
-        chunk.forEach((k) => {
-          const p = pages[follow(q, photoTitle(k))];
-          if (p && p.thumbnail && p.pageimage && /\.jpe?g$/i.test(p.pageimage)) { PH[k] = { src: p.thumbnail.source, file: p.pageimage, credit: '', page: '' }; files.push('File:' + p.pageimage); } else PH[k] = null;
-        });
-        if (files.length) {
-          try {
-            const r2 = await fetch(WAPI + '&prop=imageinfo&iiprop=extmetadata%7Curl&iiextmetadatafilter=Artist%7CLicenseShortName&titles=' + encodeURIComponent(files.join('|')));
-            const q2 = (await r2.json()).query || {}, info = {};
-            (q2.pages || []).forEach((p) => { if (p.imageinfo && p.imageinfo[0]) info[p.title] = p.imageinfo[0]; });
-            chunk.forEach((k) => {
-              const ph = PH[k]; if (!ph) return;
-              const ii = info[follow(q2, 'File:' + ph.file)]; if (!ii) return;
-              const m = ii.extmetadata || {};
-              ph.page = /^https:\/\//.test(ii.descriptionurl || '') ? ii.descriptionurl : '';
-              ph.credit = [strip(m.Artist && m.Artist.value), m.LicenseShortName && strip(m.LicenseShortName.value)].filter(Boolean).join(' · ');
-            });
-          } catch (e) {}
-        }
-      } catch (e) { if (photoState !== 'ok') photoState = 'blocked'; }
-      chunk.forEach((k) => { delete PEND[k]; });
-      photoChanged();
-    }
+  function termsOf(k) { const t = [k].concat(SYN[k] || []); const pt = photoTitle(k); if (pt) t.push(pt.replace(/\s*\(.*\)$/, '').toLowerCase()); return [...new Set(t)]; }
+  function hasTerm(title, terms) {
+    const t = ' ' + title.toLowerCase().replace(/^file:/, '').replace(/\.[a-z]+$/, '').replace(/[^a-z]+/g, ' ') + ' ';
+    return terms.some((w) => new RegExp(' ' + w.replace(/[^a-z ]/g, '').replace(/ /g, ' ?') + '(s|es)? ').test(t));
   }
-  function photoFor(w) { const k = keyOf(w); return set.builtin && !set.hidden_ph[k] && !(set.own_pics && set.own_pics[k]) && PH[k] ? PH[k] : null; }
+  async function commons(search, n) {
+    const r = await fetch(CAPI + '&generator=search&gsrnamespace=6&gsrlimit=' + n + '&gsrsearch=' + encodeURIComponent(search + ' filemime:image/jpeg') + '&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=640&iiextmetadatafilter=Artist%7CLicenseShortName%7CImageDescription');
+    const q = (await r.json()).query || {};
+    return (q.pages || []).slice().sort((a, b) => (a.index || 0) - (b.index || 0)).map((p) => {
+      const ii = p.imageinfo && p.imageinfo[0]; if (!ii || !ii.thumburl) return null;
+      const m = ii.extmetadata || {};
+      return { title: p.title, src: ii.thumburl, page: /^https:\/\//.test(ii.descriptionurl || '') ? ii.descriptionurl : '', credit: [strip(m.Artist && m.Artist.value), m.LicenseShortName && strip(m.LicenseShortName.value)].filter(Boolean).join(' · '), text: p.title + ' ' + strip(m.ImageDescription && m.ImageDescription.value, 400) };
+    }).filter((x) => x && !BLOCK.test(x.text));
+  }
+  async function leadPhoto(k) {
+    const r = await fetch(WAPI + '&redirects=1&prop=pageimages&piprop=thumbnail%7Cname&pithumbsize=640&pilicense=free&titles=' + encodeURIComponent(photoTitle(k)));
+    const q = (await r.json()).query || {}, p = (q.pages || [])[0];
+    if (!p || !p.thumbnail || !p.pageimage || !/\.jpe?g$/i.test(p.pageimage) || BLOCK.test(p.pageimage)) return null;
+    const ph = { src: p.thumbnail.source, credit: '', page: '' };
+    try {
+      const r2 = await fetch(WAPI + '&prop=imageinfo&iiprop=extmetadata%7Curl&iiextmetadatafilter=Artist%7CLicenseShortName&titles=' + encodeURIComponent('File:' + p.pageimage));
+      const p2 = (((await r2.json()).query || {}).pages || [])[0], ii = p2 && p2.imageinfo && p2.imageinfo[0];
+      if (ii) { const m = ii.extmetadata || {}; ph.page = /^https:\/\//.test(ii.descriptionurl || '') ? ii.descriptionurl : ''; ph.credit = [strip(m.Artist && m.Artist.value), m.LicenseShortName && strip(m.LicenseShortName.value)].filter(Boolean).join(' · '); }
+    } catch (e) {}
+    return ph;
+  }
+  async function findPhoto(k) {
+    const q = SEARCH[k] || k, terms = termsOf(k);
+    for (const sq of [`${q} "white background"`, `${q} isolated`, `${q} "close-up"`]) {
+      const hit = (await commons(sq, 12)).find((x) => hasTerm(x.title, terms) && !(NOT[k] && NOT[k].test(x.text)));
+      if (hit) return hit;
+    }
+    return leadPhoto(k);
+  }
+  function loadPhotos(words, urgent) {
+    words.map(keyOf).forEach((k) => {
+      if (!photoTitle(k) || PH[k] !== undefined || set.photo_pick[k]) return;
+      if (PEND[k]) { if (urgent) { const i = QUEUE.indexOf(k); if (i > 0) { QUEUE.splice(i, 1); QUEUE.unshift(k); } } return; }
+      PEND[k] = 1; if (urgent) QUEUE.unshift(k); else QUEUE.push(k);
+    });
+    while (workers < 4 && QUEUE.length) work();
+  }
+  async function work() {
+    workers++;
+    while (QUEUE.length) {
+      const k = QUEUE.shift();
+      try { PH[k] = await findPhoto(k); photoState = 'ok'; } catch (e) { if (photoState !== 'ok') photoState = 'blocked'; }
+      delete PEND[k]; photoChanged();
+    }
+    workers--;
+  }
+  function photoFor(w) { const k = keyOf(w); if (!set.builtin || set.hidden_ph[k] || (set.own_pics && set.own_pics[k])) return null; return set.photo_pick[k] || PH[k] || null; }
   function picFor(w, force) {
     const k = keyOf(w);
     if (!set.pics && !force) return '';
@@ -347,21 +375,52 @@ const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", 
     $('prevBtn').hidden = !set.builtin;
     n.textContent = !set.builtin ? 'Words without your own picture show the word only.'
       : photoState === 'blocked' ? 'Real photos can\'t load right now. They need the internet, and they are blocked inside Claude. Use the website version of the hub, or add your own pictures. Until then, words show without a picture.'
-      : 'Real photographs from Wikipedia, free to use, with the photographer credited. Words about people, jobs, feelings and actions never get an automatic photo. Check them with Preview, and hide any you don\'t want.';
+      : 'Real photographs of just that object, close up, from Wikimedia Commons (free to use, with the photographer credited). Words about people, jobs, feelings and actions never get an automatic photo. Use Preview to check them, choose a different photo, or hide one.';
   }
   function previewWords() { return (set.src === 'own' ? parseOwn() : set.cats.flatMap((c) => catWords(c))).filter((w) => photoTitle(keyOf(w))); }
+  let pickWord = null;
   function renderPh() {
+    if (pickWord) return renderPick();
     const ws = previewWords(), g = $('phGrid');
+    $('phH').textContent = 'Preview the photos';
     $('phIntro').textContent = photoState === 'blocked' ? 'Real photos can\'t load right now. They need the internet, and they are blocked inside Claude. Use the website version of the hub to preview and use them.'
-      : ws.length ? `${ws.length} words can get a photo. Hide any photo you don't want; hidden photos stay hidden on this computer. Words about people, jobs, feelings and actions never get an automatic photo.` : 'None of these words has an automatic photo. Add your own pictures instead.';
+      : ws.length ? `${ws.length} words can get a photo. Click Choose another to pick a better photo, or hide one. Your choices are remembered on this computer. Words about people, jobs, feelings and actions never get an automatic photo.` : 'None of these words has an automatic photo. Add your own pictures instead.';
     g.innerHTML = ws.map((w) => {
-      const k = keyOf(w), ph = PH[k], off = !!set.hidden_ph[k], mine = set.own_pics && set.own_pics[k];
+      const k = keyOf(w), ph = set.photo_pick[k] || PH[k], off = !!set.hidden_ph[k], mine = set.own_pics && set.own_pics[k];
       const im = mine ? '<span>Uses your own picture</span>' : ph ? `<img src="${esc(ph.src)}" alt="Photo for ${esc(w)}" loading="lazy" referrerpolicy="no-referrer">` : ph === null ? '<span>No photo found</span>' : photoState === 'blocked' ? '<span>Can\'t load here</span>' : '<span>Loading…</span>';
-      return `<div class="ph${off ? ' off' : ''}"><div class="im">${im}</div><div class="wd">${esc(w)}</div>${ph && !mine ? `<div class="c">${esc(ph.credit || 'Wikimedia Commons')}</div><button type="button" data-k="${esc(k)}" aria-pressed="${off}">${off ? 'Hidden. Show it' : 'Hide this photo'}</button>` : ''}</div>`;
+      return `<div class="ph${off ? ' off' : ''}"><div class="im">${im}</div><div class="wd">${esc(w)}${set.photo_pick[k] ? ' <small style="font-weight:600;opacity:.7">(your choice)</small>' : ''}</div>${ph && !mine ? `<div class="c">${esc(ph.credit || 'Wikimedia Commons')}</div>` : ''}${!mine && photoState !== 'blocked' ? `<button type="button" data-pick="${esc(k)}">Choose another</button>` : ''}${ph && !mine ? `<button type="button" data-k="${esc(k)}" aria-pressed="${off}">${off ? 'Hidden. Show it' : 'Hide this photo'}</button>` : ''}</div>`;
     }).join('');
   }
-  $('phGrid').addEventListener('click', (e) => { const b = e.target.closest('button[data-k]'); if (!b) return; const k = b.dataset.k; if (set.hidden_ph[k]) delete set.hidden_ph[k]; else set.hidden_ph[k] = true; save(); renderPh(); });
-  $('prevBtn').onclick = () => { renderPh(); $('phEd').hidden = false; $('phDone').focus(); loadPhotos(previewWords()); };
+  const CAND = {};
+  async function loadCands(k) {
+    if (CAND[k]) return;
+    CAND[k] = 'loading'; renderPh();
+    const q = SEARCH[k] || k, seen = new Set(), out = [];
+    try {
+      for (const sq of [`${q} "white background"`, `${q} isolated`, q]) (await commons(sq, 16)).forEach((x) => { if (!seen.has(x.title) && !(NOT[k] && NOT[k].test(x.text))) { seen.add(x.title); out.push(x); } });
+      CAND[k] = out;
+    } catch (e) { CAND[k] = []; }
+    if (pickWord === k) renderPh();
+  }
+  function renderPick() {
+    const k = pickWord, c = CAND[k];
+    $('phH').textContent = `Choose a photo for “${k}”`;
+    $('phIntro').textContent = 'Click the photo that shows just this thing. Photos come from Wikimedia Commons and are free to use.';
+    $('phGrid').innerHTML = `<div class="ph" style="grid-column:1/-1;background:none;padding:0"><button type="button" data-back="1">← Back to all photos</button></div>`
+      + (set.photo_pick[k] ? '<div class="ph"><div class="im"><span>Go back to the automatic photo</span></div><button type="button" data-auto="1">Use automatic</button></div>' : '')
+      + (c === 'loading' || !c ? '<div class="ph"><div class="im"><span>Loading…</span></div></div>'
+        : !c.length ? '<div class="ph"><div class="im"><span>No photos found. Add your own picture instead.</span></div></div>'
+        : c.map((x, i) => `<div class="ph"><button type="button" class="im" data-use="${i}" style="border:0;cursor:pointer" aria-label="Use this photo"><img src="${esc(x.src)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button><div class="c">${esc(x.credit || 'Wikimedia Commons')}</div><button type="button" data-use="${i}">Use this photo</button></div>`).join(''));
+  }
+  $('phGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.pick) { pickWord = b.dataset.pick; renderPh(); loadCands(pickWord); return; }
+    if (b.dataset.back) { pickWord = null; renderPh(); return; }
+    if (b.dataset.auto) { delete set.photo_pick[pickWord]; save(); pickWord = null; renderPh(); return; }
+    if (b.dataset.use !== undefined) { const x = CAND[pickWord][+b.dataset.use]; set.photo_pick[pickWord] = { src: x.src, credit: x.credit, page: x.page }; delete set.hidden_ph[pickWord]; save(); pickWord = null; renderPh(); return; }
+    if (b.dataset.k) { const k = b.dataset.k; if (set.hidden_ph[k]) delete set.hidden_ph[k]; else set.hidden_ph[k] = true; save(); renderPh(); }
+  });
+  $('prevBtn').onclick = () => { pickWord = null; renderPh(); $('phEd').hidden = false; $('phDone').focus(); loadPhotos(previewWords()); };
   $('phDone').onclick = () => { $('phEd').hidden = true; };
 
   /* ---------- setup ---------- */
@@ -488,7 +547,8 @@ const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", 
     renderWho();
     const lv = set.src === 'bank' ? levelOf(word) : '';
     $('center').innerHTML = cardHTML(word, ' pop', lv);
-    if (set.pics && set.builtin && PH[keyOf(word)] === undefined) loadPhotos([word]);
+    if (set.pics && set.builtin) loadPhotos([word], true);
+    if (set.pics && set.builtin) loadPhotos(deck.slice(-3), true);
     preload(deck[deck.length - 1]);
     controls(`<button class="btn good" type="button" id="gotBtn">Got it!<kbd>G</kbd></button><button class="btn ghost" type="button" id="passBtn">New word<kbd>N</kbd></button>${set.time ? '' : '<button class="btn bad" type="button" id="stopBtn">Stop<kbd>X</kbd></button>'}`);
     $('gotBtn').onclick = gotIt; $('passBtn').onclick = () => show(true);

@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Count It!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: top bar (activity, stars or team scores, buttons), the question, the big picture area, a feedback line,
+     and the answer area (keypad or answer buttons). Settings open in a sheet. */
+  :root {
+    --bg: #fff8ec; --sky: #e6f4ff; --ink: #24314a; --ink-2: #5b6780; --line: #d9cdb6;
+    --blank: #fff1c2; --blank-edge: #f0c64a; --good: #22b35e; --good-deep: #148043; --try: #ff8a3d; --try-deep: #c95a14;
+    --btn: #4f8df5; --btn-deep: #2c5fc0; --violet: #8b5cf6; --star: #ffc93d;
+    --display: "Fredoka", "Andika", system-ui, sans-serif; --num: "Andika", "Fredoka", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: linear-gradient(var(--sky), var(--bg) 55%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--btn); outline-offset: 3px; }
+  kbd { font-family: var(--num); font-size: .72em; border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; opacity: .7; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; gap: 6px; padding: 10px 16px 14px; max-width: 1280px; margin: 0 auto; }
+  .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .top .title { font-weight: 700; font-size: 1.35rem; color: var(--btn-deep); margin-right: 4px; white-space: nowrap; }
+  .top .title span { color: var(--try); }
+  .mid { flex: 1; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
+  .stars { display: flex; gap: 3px; }
+  .stars svg { width: clamp(22px, 4vh, 34px); height: clamp(22px, 4vh, 34px); }
+  .stars svg.on path { fill: var(--star); stroke: #d89c00; }
+  .stars svg.new { animation: starpop .7s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes starpop { 0% { transform: scale(0) rotate(-90deg); } 100% { transform: scale(1) rotate(0); } }
+  .team { display: inline-flex; align-items: center; gap: 4px; background: #fff; border-radius: 12px; padding: 3px 4px 3px 10px; box-shadow: 0 3px 0 #e2d8c4; border: 3px solid transparent; font-weight: 700; }
+  .team.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, #fff); }
+  .team .nm { color: var(--c); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team .sc { font-family: var(--num); min-width: 1.6em; text-align: center; font-size: 1.15rem; }
+  .team .sc.bump { animation: bump .6s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes bump { 40% { transform: scale(1.6); } }
+  .team button { border: 0; background: #eef1f6; border-radius: 8px; width: 24px; height: 24px; line-height: 1; font-weight: 700; padding: 0; }
+  .tb { border: 0; background: #fff; border-radius: 12px; padding: 8px 14px; font-weight: 600; color: var(--ink-2); box-shadow: 0 3px 0 #e2d8c4; font-size: .95rem; white-space: nowrap; }
+  .tb.next { background: var(--btn); color: #fff; box-shadow: 0 4px 0 var(--btn-deep); }
+  .tb.next.pulse { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.08); } }
+
+  .ask { text-align: center; font-weight: 700; font-size: clamp(1.3rem, 4.4vh, 2.5rem); line-height: 1.3; min-height: 1.3em; }
+  .ask svg { width: 1.3em; height: 1.3em; vertical-align: -.3em; }
+  .ask .turn { display: inline-block; font-size: .62em; color: #fff; background: var(--c, var(--btn)); border-radius: 999px; padding: 2px 12px; margin-right: 8px; vertical-align: .2em; }
+  .stage { position: relative; min-height: 0; border-radius: 22px; }
+  .stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .ob { cursor: default; }
+  .tap .ob { cursor: pointer; }
+  .ob > g { transform-box: fill-box; transform-origin: center; }
+  .ob.pop > g { animation: obpop .45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--d, 0s); }
+  @keyframes obpop { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .ob.lit > g { animation: lit .35s ease-out; }
+  @keyframes lit { 50% { transform: scale(1.25); } }
+  .badge circle { fill: var(--violet); stroke: #fff; stroke-width: 2.5; }
+  .badge.c circle { fill: var(--good); }
+  .badge text { fill: #fff; font-family: Andika, sans-serif; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  .cover { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 14px; background: linear-gradient(135deg, #dbeafe, #fef3c7); border-radius: 22px; text-align: center; }
+  .cover b { font-size: clamp(1.5rem, 5vh, 2.6rem); }
+  .cover .eye { font-size: clamp(3rem, 12vh, 6rem); line-height: 1; }
+  .timer { position: absolute; top: 8px; right: 12px; background: #fff; border-radius: 999px; padding: 2px 12px; font-weight: 700; color: var(--ink-2); box-shadow: 0 3px 10px rgba(0,0,0,.12); font-family: var(--num); font-size: 1.2rem; }
+
+  .msg { font-size: clamp(1.3rem, 4.4vh, 2.5rem); font-weight: 700; min-height: 1.3em; text-align: center; line-height: 1.15; }
+  .msg.good { color: var(--good); animation: mpop .5s cubic-bezier(.3,1.7,.5,1); }
+  .msg.try { color: var(--try); animation: mpop .4s ease-out; }
+  .msg.info { color: var(--ink-2); }
+  @keyframes mpop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+
+  .ans { display: flex; justify-content: center; align-items: stretch; gap: 10px; flex-wrap: wrap; min-height: 56px; }
+  .entry { min-width: 140px; background: #fff; border-radius: 18px; border: 4px solid var(--blank-edge); display: grid; place-items: center; font-family: var(--num); font-weight: 700; font-size: clamp(1.8rem, 6vh, 3rem); padding: 4px 16px; line-height: 1; }
+  .entry .ph { color: #c9bfa8; }
+  .shake { animation: shake .45s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-12px); } 40%, 80% { transform: translateX(12px); } }
+  .keys { display: grid; grid-template-columns: repeat(13, minmax(44px, 1fr)); gap: 7px; flex: 1 1 520px; max-width: 760px; }
+  .keys button, .big { border: 0; border-radius: 16px; background: var(--btn); color: #fff; font-family: var(--num); font-weight: 700; font-size: clamp(1.3rem, 4.6vh, 2.2rem); padding: clamp(4px, 1.1vh, 10px) 6px; box-shadow: 0 6px 0 var(--btn-deep); transition: transform .08s; line-height: 1.1; }
+  .keys button:active, .big:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--btn-deep); }
+  .keys .alt { background: #fff; color: var(--ink); box-shadow: 0 6px 0 var(--line); }
+  .keys .ok { grid-column: span 2; }
+  .keys .ok, .big.ok { background: var(--good); box-shadow: 0 6px 0 var(--good-deep); }
+  .big { min-width: 120px; padding-left: 26px; padding-right: 26px; font-size: clamp(1.8rem, 6vh, 3rem); }
+  .big:disabled { background: #d6dbe5; color: #8c95a8; box-shadow: 0 6px 0 #b8bfcc; cursor: default; text-decoration: line-through; }
+  .big.right { background: var(--good); box-shadow: 0 6px 0 var(--good-deep); }
+  .big.sm { font-size: clamp(1rem, 3vh, 1.4rem); background: #fff; color: var(--ink); box-shadow: 0 6px 0 var(--line); }
+
+  canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; }
+  .party { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; background: rgba(36,49,74,.45); }
+  .party > div { background: #fff; border-radius: 28px; padding: 26px 40px; text-align: center; animation: mpop .6s cubic-bezier(.3,1.7,.5,1); }
+  .party .t { font-size: 5rem; line-height: 1; }
+  .party h2 { margin: 6px 0; font-size: 2.2rem; }
+
+  /* settings */
+  .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(36,49,74,.45); display: grid; place-items: center; padding: 12px; }
+  .panel { background: #fffdf8; border-radius: 22px; width: min(980px, 100%); max-height: 100%; overflow: auto; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .panel h2 { margin: 0 0 4px; font-size: 1.6rem; }
+  .panel h3 { margin: 18px 0 6px; font-size: 1.15rem; color: var(--btn-deep); border-top: 2px solid #efe6d5; padding-top: 12px; }
+  .panel .lbl { display: block; font-weight: 600; margin: 10px 0 5px; color: var(--ink-2); font-size: .95rem; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { border: 2px solid #e2d8c4; background: #fff; border-radius: 12px; padding: 6px 12px; font-weight: 600; font-size: .95rem; display: inline-flex; align-items: center; gap: 6px; }
+  .seg button svg { width: 26px; height: 26px; }
+  .seg button[aria-pressed="true"] { background: var(--btn); border-color: var(--btn); color: #fff; }
+  .row2 { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .row2 label { display: grid; gap: 4px; font-weight: 600; color: var(--ink-2); font-size: .95rem; }
+  .row2 input { width: 110px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 8px 10px; font-family: var(--num); font-weight: 700; font-size: 1.2rem; background: #fff; }
+  textarea { width: 100%; min-height: 64px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 8px 10px; font-family: var(--num); font-size: 1.05rem; background: #fff; resize: vertical; }
+  .note { margin: 6px 0 0; color: var(--ink-2); font-size: .9rem; line-height: 1.35; }
+  .note.warn { color: #b3261e; font-weight: 600; }
+  .go { display: block; margin: 18px auto 0; border: 0; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 12px 40px; border-radius: 16px; box-shadow: 0 6px 0 var(--good-deep); }
+  .go:disabled { background: #c8ced9; box-shadow: 0 6px 0 #a9b0bd; cursor: default; }
+  .opt[hidden] { display: none; }
+
+  @media (max-width: 640px) {
+    .app { padding: 8px 10px 10px; }
+    .top .title { display: none; }
+    .tb { padding: 7px 10px; font-size: .85rem; }
+    .keys { grid-template-columns: repeat(6, 1fr); }
+    .entry { min-width: 100%; }
+    .big { min-width: 76px; padding-left: 14px; padding-right: 14px; }
+    .team { font-size: .85rem; padding: 2px 3px 2px 7px; }
+    .team .nm { max-width: 5em; }
+    .team button { width: 20px; height: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .ob.pop > g, .ob.lit > g, .msg.good, .msg.try, .tb.next.pulse, .stars svg.new, .team .sc.bump { animation: none !important; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="o-counter" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="#ef4444" stroke="#b91c1c" stroke-width="6"/><circle cx="50" cy="50" r="28" fill="none" stroke="#fca5a5" stroke-width="5"/><ellipse cx="36" cy="32" rx="10" ry="6" fill="#fff" opacity=".5" transform="rotate(-30 36 32)"/></symbol>
+    <symbol id="o-ycounter" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="#facc15" stroke="#ca8a04" stroke-width="6"/><circle cx="50" cy="50" r="28" fill="none" stroke="#fef08a" stroke-width="5"/><ellipse cx="36" cy="32" rx="10" ry="6" fill="#fff" opacity=".6" transform="rotate(-30 36 32)"/></symbol>
+    <symbol id="o-flower" viewBox="0 0 100 100"><g fill="#f472b6" stroke="#db2777" stroke-width="3"><circle cx="50" cy="22" r="18"/><circle cx="77" cy="42" r="18"/><circle cx="67" cy="74" r="18"/><circle cx="33" cy="74" r="18"/><circle cx="23" cy="42" r="18"/></g><circle cx="50" cy="51" r="16" fill="#fde047" stroke="#ca8a04" stroke-width="3"/></symbol>
+    <symbol id="o-duck" viewBox="0 0 100 100"><ellipse cx="46" cy="64" rx="38" ry="25" fill="#fde047" stroke="#ca8a04" stroke-width="4"/><path d="M30 60 q12 14 30 2" fill="none" stroke="#eab308" stroke-width="4" stroke-linecap="round"/><circle cx="68" cy="34" r="20" fill="#fde047" stroke="#ca8a04" stroke-width="4"/><path d="M84 34 l14 4 l-14 6 z" fill="#fb923c" stroke="#c2410c" stroke-width="3" stroke-linejoin="round"/><circle cx="72" cy="30" r="4" fill="#24314a"/></symbol>
+    <symbol id="o-apple" viewBox="0 0 100 100"><path d="M50 30 C34 18 10 26 12 52 C14 78 32 94 50 88 C68 94 86 78 88 52 C90 26 66 18 50 30Z" fill="#ef4444" stroke="#b91c1c" stroke-width="4"/><path d="M50 30 Q50 18 56 8" fill="none" stroke="#78350f" stroke-width="5" stroke-linecap="round"/><path d="M56 18 Q74 6 82 18 Q66 28 56 18Z" fill="#22c55e" stroke="#15803d" stroke-width="3"/><ellipse cx="30" cy="46" rx="6" ry="11" fill="#fff" opacity=".35"/></symbol>
+    <symbol id="o-star" viewBox="0 0 100 100"><path d="M50 6 L62 37 L95 38 L69 59 L78 92 L50 73 L22 92 L31 59 L5 38 L38 37Z" fill="#facc15" stroke="#ca8a04" stroke-width="5" stroke-linejoin="round"/></symbol>
+    <symbol id="o-fish" viewBox="0 0 100 100"><path d="M74 50 L98 28 L98 72Z" fill="#fb923c" stroke="#c2410c" stroke-width="4" stroke-linejoin="round"/><ellipse cx="44" cy="50" rx="38" ry="26" fill="#fb923c" stroke="#c2410c" stroke-width="4"/><path d="M48 30 q8 20 0 40" fill="none" stroke="#fdba74" stroke-width="4"/><circle cx="24" cy="44" r="5" fill="#24314a"/></symbol>
+    <symbol id="o-car" viewBox="0 0 100 100"><path d="M26 42 L36 22 H64 L76 42Z" fill="#93c5fd" stroke="#1d4ed8" stroke-width="4" stroke-linejoin="round"/><rect x="6" y="40" width="88" height="30" rx="10" fill="#3b82f6" stroke="#1d4ed8" stroke-width="4"/><circle cx="28" cy="72" r="12" fill="#24314a" stroke="#fff" stroke-width="3"/><circle cx="72" cy="72" r="12" fill="#24314a" stroke="#fff" stroke-width="3"/><rect x="84" y="48" width="8" height="6" rx="2" fill="#fde047"/></symbol>
+    <symbol id="o-balloon" viewBox="0 0 100 100"><path d="M50 76 Q46 88 54 98" fill="none" stroke="#64748b" stroke-width="3"/><ellipse cx="50" cy="40" rx="30" ry="36" fill="#a855f7" stroke="#7e22ce" stroke-width="4"/><path d="M44 76 L56 76 L50 70Z" fill="#7e22ce"/><ellipse cx="38" cy="26" rx="7" ry="11" fill="#fff" opacity=".4"/></symbol>
+    <symbol id="o-ladybug" viewBox="0 0 100 100"><circle cx="50" cy="22" r="14" fill="#24314a"/><ellipse cx="50" cy="58" rx="38" ry="36" fill="#ef4444" stroke="#24314a" stroke-width="4"/><path d="M50 22 V94" stroke="#24314a" stroke-width="4"/><g fill="#24314a"><circle cx="32" cy="48" r="7"/><circle cx="68" cy="48" r="7"/><circle cx="30" cy="72" r="6"/><circle cx="70" cy="72" r="6"/></g><circle cx="44" cy="18" r="3" fill="#fff"/><circle cx="56" cy="18" r="3" fill="#fff"/></symbol>
+    <symbol id="o-heart" viewBox="0 0 100 100"><path d="M50 90 C20 68 4 50 8 30 C12 10 38 6 50 26 C62 6 88 10 92 30 C96 50 80 68 50 90Z" fill="#fb7185" stroke="#e11d48" stroke-width="5" stroke-linejoin="round"/><ellipse cx="28" cy="32" rx="6" ry="9" fill="#fff" opacity=".45" transform="rotate(-30 28 32)"/></symbol>
+    <symbol id="o-cupcake" viewBox="0 0 100 100"><path d="M20 54 L80 54 L72 94 L28 94Z" fill="#38bdf8" stroke="#0369a1" stroke-width="4" stroke-linejoin="round"/><path d="M36 56 L40 92 M50 56 V92 M64 56 L60 92" stroke="#0369a1" stroke-width="3"/><path d="M14 56 C10 40 26 30 34 34 C36 18 64 18 66 34 C74 30 90 40 86 56Z" fill="#fbcfe8" stroke="#db2777" stroke-width="4" stroke-linejoin="round"/><circle cx="50" cy="16" r="9" fill="#ef4444" stroke="#b91c1c" stroke-width="3"/></symbol>
+    <symbol id="o-turtle" viewBox="0 0 100 100"><circle cx="86" cy="56" r="11" fill="#86efac" stroke="#15803d" stroke-width="4"/><circle cx="89" cy="53" r="2.5" fill="#24314a"/><g fill="#86efac" stroke="#15803d" stroke-width="4"><ellipse cx="26" cy="78" rx="9" ry="7"/><ellipse cx="66" cy="78" rx="9" ry="7"/></g><path d="M10 72 C10 34 32 22 46 22 C60 22 82 34 82 72Z" fill="#22c55e" stroke="#15803d" stroke-width="4" stroke-linejoin="round"/><path d="M30 70 L36 46 L56 46 L62 70 M36 46 L46 30 L56 46" fill="none" stroke="#15803d" stroke-width="3"/></symbol>
+    <symbol id="o-frog" viewBox="0 0 100 100"><ellipse cx="50" cy="62" rx="40" ry="30" fill="#4ade80" stroke="#15803d" stroke-width="4"/><circle cx="30" cy="30" r="14" fill="#4ade80" stroke="#15803d" stroke-width="4"/><circle cx="70" cy="30" r="14" fill="#4ade80" stroke="#15803d" stroke-width="4"/><circle cx="30" cy="30" r="7" fill="#fff"/><circle cx="70" cy="30" r="7" fill="#fff"/><circle cx="31" cy="31" r="4" fill="#24314a"/><circle cx="69" cy="31" r="4" fill="#24314a"/><path d="M32 66 Q50 80 68 66" fill="none" stroke="#15803d" stroke-width="4" stroke-linecap="round"/><circle cx="22" cy="60" r="5" fill="#fda4af" opacity=".8"/><circle cx="78" cy="60" r="5" fill="#fda4af" opacity=".8"/></symbol>
+    <symbol id="o-butterfly" viewBox="0 0 100 100"><g stroke="#7c3aed" stroke-width="4" stroke-linejoin="round"><path d="M50 50 C30 10 4 14 8 36 C10 50 30 54 50 50Z" fill="#c084fc"/><path d="M50 50 C70 10 96 14 92 36 C90 50 70 54 50 50Z" fill="#c084fc"/><path d="M50 52 C34 58 16 70 24 84 C32 94 46 74 50 52Z" fill="#f0abfc"/><path d="M50 52 C66 58 84 70 76 84 C68 94 54 74 50 52Z" fill="#f0abfc"/></g><ellipse cx="50" cy="56" rx="5" ry="22" fill="#24314a"/><path d="M48 36 Q42 22 36 18 M52 36 Q58 22 64 18" stroke="#24314a" stroke-width="3" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="o-cookie" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="#d6a15a" stroke="#92400e" stroke-width="5"/><g fill="#5b3a1a"><circle cx="34" cy="36" r="6"/><circle cx="62" cy="30" r="5"/><circle cx="66" cy="58" r="6"/><circle cx="40" cy="64" r="5"/><circle cx="52" cy="48" r="4"/><circle cx="28" cy="54" r="3.5"/></g></symbol>
+    <symbol id="o-cube" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="10" fill="#60a5fa" stroke="#1d4ed8" stroke-width="6"/><rect x="16" y="14" width="30" height="12" rx="6" fill="#fff" opacity=".45"/></symbol>
+    <symbol id="i-star" viewBox="0 0 120 120"><path d="M60 6 L74 42 L113 44 L82 68 L93 106 L60 84 L27 106 L38 68 L7 44 L46 42 Z" fill="#e8e1d2" stroke="#d3c8b2" stroke-width="5" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <div class="top">
+    <div class="title">Count <span>It!</span></div>
+    <div class="mid" id="mid"></div>
+    <button class="tb" id="peekBtn" type="button" hidden>Peek again <kbd>P</kbd></button>
+    <button class="tb" id="clearBtn" type="button" hidden>Clear marks</button>
+    <button class="tb" id="undoBtn" type="button" hidden>Undo <kbd>U</kbd></button>
+    <button class="tb" id="showBtn" type="button">Show answer</button>
+    <button class="tb next" id="nextBtn" type="button">Next <kbd>N</kbd></button>
+    <button class="tb" id="gearBtn" type="button">Settings</button>
+  </div>
+  <div class="ask" id="ask" aria-live="polite"></div>
+  <div class="stage" id="stage"></div>
+  <div class="msg" id="msg" role="status" aria-live="assertive"></div>
+  <div class="ans" id="ans"></div>
+</div>
+<canvas id="fx" aria-hidden="true"></canvas>
+<div class="party" id="party" hidden><div role="dialog" aria-modal="true" aria-labelledby="partyH"><div class="t" aria-hidden="true">🏆</div><h2 id="partyH">10 stars!</h2><p>Super counting. Keep going!</p><button class="go" id="partyBtn" type="button">Keep going</button></div></div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Count It! settings</h2>
+    <p class="note">Choose the activities, the numbers, how the objects are shown, and how students answer.</p>
+
+    <h3>Activities (choose any)</h3>
+    <div class="seg" id="sMode" role="group" aria-label="Activities"></div>
+    <div class="row2" style="margin-top:10px">
+      <label>Numbers from <input id="from" inputmode="numeric" autocomplete="off"></label>
+      <label>to <input id="to" inputmode="numeric" autocomplete="off"></label>
+    </div>
+    <p class="note">Any range from 0 to 100. The 100 chart uses 1 to 100.</p>
+
+    <div class="opt" data-mode="count">
+      <h3>Counting objects</h3>
+      <span class="lbl" id="lArr">How the objects are shown (choose any; each question picks one)</span><div class="seg" id="sArr" role="group" aria-labelledby="lArr"></div>
+      <div class="opt" id="skipOpt"><span class="lbl" id="lSkip">Skip-count groups of</span><div class="seg" id="sSkip" role="group" aria-labelledby="lSkip"></div></div>
+      <span class="lbl" id="lObj">Objects (choose any)</span><div class="seg" id="sObj" role="group" aria-labelledby="lObj"></div>
+      <span class="lbl" id="lMix">Challenge: mix in a second kind and count only one kind</span><div class="seg" id="sMix" role="group" aria-labelledby="lMix"></div>
+      <span class="lbl" id="lFlash">How long the objects stay on screen</span><div class="seg" id="sFlash" role="group" aria-labelledby="lFlash"></div>
+      <span class="lbl" id="lTap">Students can tap objects to mark them as counted</span><div class="seg" id="sTap" role="group" aria-labelledby="lTap"></div>
+      <span class="lbl" id="lAlong">After answering, count along (objects light up 1, 2, 3...)</span><div class="seg" id="sAlong" role="group" aria-labelledby="lAlong"></div>
+    </div>
+    <div class="opt" data-mode="chart line">
+      <h3>Which number is this?</h3>
+      <span class="lbl" id="lFill">Numbers filled in on the 100 chart and number line</span><div class="seg" id="sFill" role="group" aria-labelledby="lFill"></div>
+    </div>
+
+    <h3>Answers</h3>
+    <span class="lbl" id="lIn">How students answer</span><div class="seg" id="sIn" role="group" aria-labelledby="lIn"></div>
+    <div class="opt" id="nChOpt"><span class="lbl" id="lNch">Number of answer buttons</span><div class="seg" id="sNch" role="group" aria-labelledby="lNch"></div></div>
+
+    <h3>Playing</h3>
+    <span class="lbl" id="lPlay">Play as</span><div class="seg" id="sPlay" role="group" aria-labelledby="lPlay"></div>
+    <div class="opt" id="teamOpt">
+      <span class="lbl" id="lTeams">Teams (one per line, up to 6)</span>
+      <textarea id="teams" aria-labelledby="lTeams" spellcheck="false"></textarea>
+      <span class="lbl" id="lPts">Points for a correct answer</span><div class="seg" id="sPts" role="group" aria-labelledby="lPts"></div>
+    </div>
+
+    <p class="note" id="err"></p>
+    <button class="go" id="goBtn" type="button">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const STORE = 'count-it-v1';
+
+  const OBJ = { counter: ['counter', 'counters'], flower: ['flower', 'flowers'], duck: ['duck', 'ducks'], apple: ['apple', 'apples'], star: ['star', 'stars'], fish: ['fish', 'fish'], car: ['car', 'cars'], balloon: ['balloon', 'balloons'], ladybug: ['ladybug', 'ladybugs'], heart: ['heart', 'hearts'], cupcake: ['cupcake', 'cupcakes'], turtle: ['turtle', 'turtles'], frog: ['frog', 'frogs'], butterfly: ['butterfly', 'butterflies'], cookie: ['cookie', 'cookies'] };
+  const ARR = { tenframe: 'Ten-frames', groups: 'Small groups', array: 'Arrays', random: 'Scattered', skip: 'Skip-count groups', blocks: 'Tens and ones blocks' };
+  const MODES = { count: 'Count the objects', chart: 'Which number? 100 chart', line: 'Which number? Number line' };
+  const TEAMC = ['#2c7be5', '#e8590c', '#2f9e44', '#9c36b5', '#c2255c', '#0c8599'];
+  const DEF = { modes: ['count'], from: '0', to: '20', arr: ['tenframe', 'groups', 'array', 'random'], skip: [2, 5, 10], objs: Object.keys(OBJ), mix: false, flash: 0, tap: true, along: true, fill: 'some', input: 'keypad', nch: 3, play: 'stars', teams: 'Team 1\nTeam 2', pts: 1 };
+  let S = JSON.parse(JSON.stringify(DEF)), stored = false;
+  try { const raw = localStorage.getItem(STORE); if (raw) { Object.assign(S, JSON.parse(raw)); stored = true; } } catch (e) {}
+  const fixArr = (v, ok, d) => { const a = (Array.isArray(v) ? v : []).filter(ok); return a.length ? a : d.slice(); };
+  S.modes = fixArr(S.modes, (m) => MODES[m], DEF.modes); S.arr = fixArr(S.arr, (m) => ARR[m], DEF.arr); S.objs = fixArr(S.objs, (m) => OBJ[m], DEF.objs); S.skip = fixArr(S.skip, (m) => [2, 5, 10].includes(m), DEF.skip);
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+
+  let lo = 0, hi = 20, Q = null, lastN = -1, stars = 0, teams = [], scores = [], turn = 0, hist = [], timers = [];
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  /* ---------- questions ---------- */
+  function newQ() {
+    clearTimers();
+    const mode = pick(S.modes);
+    let n, tries = 0;
+    const a = mode === 'chart' ? Math.max(1, lo) : lo, b = mode === 'chart' ? Math.max(1, hi) : hi;
+    do { n = rnd(a, b); } while (n === lastN && b > a && ++tries < 20);
+    lastN = n;
+    Q = { mode, n, tries: 0, solved: false, marks: [], along: -1, drawn: false };
+    if (mode === 'count') makeCount(Q);
+    if (mode === 'chart') makeChart(Q);
+    if (mode === 'line') makeLine(Q);
+    return Q;
+  }
+  function makeCount(q) {
+    const arrs = S.arr.filter((x) => x !== 'skip' || q.n > 0);
+    q.arr = pick(arrs.length ? arrs : ['tenframe']);
+    let k = pick(S.objs); if (k === 'counter' && Math.random() < 0.5) k = 'ycounter';
+    q.kind = k;
+    q.mixed = S.mix && ['groups', 'array', 'random'].includes(q.arr);
+    let kinds = Array(q.n).fill(k);
+    if (q.mixed) {
+      const others = Object.keys(OBJ).filter((o) => o !== k && !(k === 'ycounter' && o === 'counter'));
+      q.kind2 = pick(others); q.n2 = rnd(1, clamp(Math.round(q.n / 2) + 2, 2, 10)); if (q.n + q.n2 > 110) q.n2 = 110 - q.n;
+      kinds = shuffle(kinds.concat(Array(q.n2).fill(q.kind2)));
+    }
+    q.kinds = kinds;
+    if (q.arr === 'groups') { q.sizes = []; let r = kinds.length; while (r > 0) { const s = r === 1 ? 1 : rnd(2, Math.min(5, r)); q.sizes.push(s); r -= s; } }
+    if (q.arr === 'skip') { const ok = S.skip.filter((g) => g <= Math.max(2, q.n)); q.g = pick(ok.length ? ok : [2]); }
+  }
+  function makeChart(q) {
+    const p = { few: 0.15, some: 0.35, many: 0.6 }[S.fill];
+    const filled = new Set();
+    for (let i = 1; i <= 100; i++) if (i !== q.n && Math.random() < p) filled.add(i);
+    const r = Math.floor((q.n - 1) / 10), c = (q.n - 1) % 10;
+    const row = [], col = []; for (let i = 0; i < 10; i++) { row.push(r * 10 + i + 1); col.push(i * 10 + c + 1); }
+    [row, col].forEach((list) => { const opts = list.filter((x) => x !== q.n); if (!opts.some((x) => filled.has(x))) filled.add(pick(opts)); });
+    q.filled = filled;
+  }
+  function makeLine(q) {
+    let a, b;
+    if (hi - lo <= 20) { a = lo; b = Math.max(hi, lo + 2); if (b > 100) { b = 100; a = Math.min(a, 98); } }
+    else { a = clamp(Math.floor(q.n / 10) * 10 - (Math.random() < 0.5 ? 10 : 0), 0, 80); b = a + 20; if (q.n === a && a > 0) { a -= 10; b -= 10; } if (q.n === b && b < 100) { a += 10; b += 10; } }
+    if ((q.n <= a || q.n >= b) && b - a >= 2) q.n = rnd(a + 1, b - 1);
+    lastN = q.n;
+    const p = { few: 0.15, some: 0.35, many: 0.6 }[S.fill];
+    const lab = new Set();
+    for (let i = a; i <= b; i++) if (i !== q.n && Math.random() < p) lab.add(i);
+    const others = []; for (let i = a; i <= b; i++) if (i !== q.n) others.push(i);
+    shuffle(others); for (const x of others) { if (lab.size >= 2) break; lab.add(x); }
+    q.a = a; q.b = b; q.lab = lab;
+  }
+
+  /* ---------- layouts (unit grid, scaled to fit the stage) ---------- */
+  const DICE = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]], 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]] };
+  function gridOf(count, bw, bh, gap, W, H) {
+    let best = null;
+    for (let c = 1; c <= count; c++) {
+      const r = Math.ceil(count / c), w = c * bw + (c - 1) * gap, h = r * bh + (r - 1) * gap, sc = Math.min(W / w, H / h);
+      if (!best || sc > best.sc + 1e-9) best = { c, r, w, h, sc };
+    }
+    return best || { c: 1, r: 1, w: bw, h: bh, sc: Math.min(W / bw, H / bh) };
+  }
+  function layout(q, W, H) {
+    const items = [], decos = []; let bw = 1, bh = 1;
+    const ks = q.kinds;
+    if (q.arr === 'tenframe') {
+      const f = Math.max(1, Math.ceil(q.n / 10)), gp = 0.7, g = gridOf(f, 5, 2, gp, W, H);
+      for (let k = 0; k < f; k++) {
+        const x0 = (k % g.c) * (5 + gp), y0 = Math.floor(k / g.c) * (2 + gp);
+        decos.push({ t: 'frame', x: x0, y: y0 });
+        for (let j = 0; j < Math.min(10, q.n - k * 10); j++) items.push({ x: x0 + (j % 5) + 0.5, y: y0 + Math.floor(j / 5) + 0.5, k: ks[k * 10 + j] });
+      }
+      bw = g.w; bh = g.h;
+    } else if (q.arr === 'groups') {
+      const gp = 0.9, g = gridOf(q.sizes.length, 3, 3, gp, W, H); let idx = 0;
+      q.sizes.forEach((s, k) => {
+        const x0 = (k % g.c) * (3 + gp), y0 = Math.floor(k / g.c) * (3 + gp);
+        decos.push({ t: 'box', x: x0 - 0.1, y: y0 - 0.1, w: 3.2, h: 3.2 });
+        DICE[s].forEach(([cx, cy]) => { items.push({ x: x0 + 0.1 + cx * 0.9 + 0.5, y: y0 + 0.1 + cy * 0.9 + 0.5, k: ks[idx++], f: 1.12 }); });
+      });
+      bw = g.w; bh = g.h;
+    } else if (q.arr === 'array') {
+      const N = ks.length; let best = null;
+      const pairs = []; for (let r = 1; r <= N; r++) if (N % r === 0) pairs.push([r, N / r]);
+      let cand = pairs.filter(([r, c]) => c <= 12 && r <= 12 && (r > 1 || N <= 12));
+      if (!cand.length) { const c = N <= 20 ? 5 : 10; cand = [[Math.ceil(N / c), c]]; }
+      cand.forEach(([r, c]) => [[r, c], [c, r]].forEach(([rr, cc]) => { const w = cc * 1.2 - 0.2, h = rr * 1.2 - 0.2, sc = Math.min(W / w, H / h) - Math.abs(rr - cc) * 0.01; if (!best || sc > best.sc) best = { r: rr, c: cc, w, h, sc }; }));
+      if (N) { for (let i = 0; i < N; i++) items.push({ x: (i % best.c) * 1.2 + 0.5, y: Math.floor(i / best.c) * 1.2 + 0.5, k: ks[i] }); bw = best.w; bh = best.h; decos.push({ t: 'mat', x: -0.35, y: -0.35, w: bw + 0.7, h: bh + 0.7 }); }
+    } else if (q.arr === 'skip') {
+      const g0 = q.g, shape = g0 === 2 ? [2, 1] : g0 === 5 ? [5, 1] : [5, 2], groups = Math.ceil(q.n / g0), gp = 0.8;
+      const g = gridOf(groups, shape[0] + 0.4, shape[1] + 0.4, gp, W, H); q.boxes = [];
+      for (let k = 0; k < groups; k++) {
+        const x0 = (k % g.c) * (shape[0] + 0.4 + gp), y0 = Math.floor(k / g.c) * (shape[1] + 0.4 + gp);
+        decos.push({ t: 'box', x: x0, y: y0, w: shape[0] + 0.4, h: shape[1] + 0.4, k });
+        const first = items.length;
+        for (let j = 0; j < Math.min(g0, q.n - k * g0); j++) items.push({ x: x0 + 0.2 + (j % shape[0]) + 0.5, y: y0 + 0.2 + Math.floor(j / shape[0]) + 0.5, k: ks[k * g0 + j] });
+        q.boxes.push({ x: x0 + shape[0] + 0.4, y: y0, from: first, to: items.length });
+      }
+      bw = g.w; bh = g.h;
+    } else if (q.arr === 'blocks') {
+      const tens = Math.floor(q.n / 10), ones = q.n % 10;
+      for (let k = 0; k < tens; k++) items.push({ x: k * 1.6 + 0.5, y: 5, rod: true });
+      const ox = tens ? tens * 1.6 + 1 : 0;
+      for (let j = 0; j < ones; j++) items.push({ x: ox + (j % 2) * 1.15 + 0.5, y: 10 - Math.floor(j / 2) * 1.15 - 0.5, k: 'cube' });
+      bw = Math.max(1, ones ? ox + (ones > 1 ? 2.15 : 1) : tens * 1.6 - 0.6); bh = 10;
+    } else if (q.arr === 'random') {
+      if (!q.rand) q.rand = scatter(ks.length, W, H);
+      return { items: q.rand.pts.map((p, i) => ({ x: p[0] * W, y: p[1] * H, k: ks[i], s: q.rand.s * Math.sqrt(W * H) })), decos: [], px: true };
+    }
+    return { items, decos, bw, bh };
+  }
+  function scatter(N, W, H) {
+    let s = clamp(Math.sqrt(W * H / Math.max(1, N * 2.7)), 22, 120), pts = [];
+    for (let round = 0; round < 12; round++) {
+      pts = []; const minD = s * 1.1, m = s / 2 + 6;
+      for (let t = 0; t < 6000 && pts.length < N; t++) {
+        const x = m + Math.random() * (W - 2 * m), y = m + Math.random() * (H - 2 * m);
+        if (pts.every(([a, b]) => (a - x) ** 2 + (b - y) ** 2 >= minD * minD)) pts.push([x, y]);
+      }
+      if (pts.length >= N) break;
+      s *= 0.9;
+    }
+    return { pts: pts.map(([x, y]) => [x / W, y / H]), s: s / Math.sqrt(W * H) };
+  }
+
+  /* ---------- drawing ---------- */
+  let geo = null;
+  function draw() {
+    const st = $('stage'), W = st.clientWidth || 900, H = st.clientHeight || 400;
+    st.classList.toggle('tap', Q.mode === 'count' && S.tap && !Q.solved);
+    if (Q.mode === 'chart') return drawChart(st, W, H);
+    if (Q.mode === 'line') return drawLine(st, W, H);
+    const L = layout(Q, W, H), pad = 14;
+    let sc = 1, ox = 0, oy = 0;
+    if (!L.px) { sc = Math.min((W - 2 * pad) / L.bw, (H - 2 * pad) / L.bh, Q.arr === 'blocks' ? 60 : 130); ox = (W - L.bw * sc) / 2; oy = (H - L.bh * sc) / 2; }
+    const P = (x, y) => [ox + x * sc, oy + y * sc];
+    let h = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Objects to count">`;
+    L.decos.forEach((d) => {
+      const [x, y] = P(d.x, d.y);
+      if (d.t === 'frame') { h += `<rect x="${x}" y="${y}" width="${5 * sc}" height="${2 * sc}" rx="${sc * 0.12}" fill="#fff" stroke="#24314a" stroke-width="${Math.max(2, sc * 0.06)}"/>`; for (let i = 1; i < 5; i++) h += `<line x1="${x + i * sc}" y1="${y}" x2="${x + i * sc}" y2="${y + 2 * sc}" stroke="#24314a" stroke-width="${Math.max(1.5, sc * 0.04)}"/>`; h += `<line x1="${x}" y1="${y + sc}" x2="${x + 5 * sc}" y2="${y + sc}" stroke="#24314a" stroke-width="${Math.max(1.5, sc * 0.04)}"/>`; }
+      if (d.t === 'box') h += `<rect x="${x}" y="${y}" width="${d.w * sc}" height="${d.h * sc}" rx="${sc * 0.4}" fill="#fff" fill-opacity=".75" stroke="#c9bfa8" stroke-width="${Math.max(2, sc * 0.05)}" stroke-dasharray="${sc * 0.18} ${sc * 0.12}"/>`;
+      if (d.t === 'mat') h += `<rect x="${x}" y="${y}" width="${d.w * sc}" height="${d.h * sc}" rx="${sc * 0.3}" fill="#fff" fill-opacity=".6"/>`;
+    });
+    geo = [];
+    const n = L.items.length, stagger = Math.min(0.025, 0.9 / Math.max(1, n));
+    L.items.forEach((it, i) => {
+      let x, y, s;
+      if (L.px) { x = it.x; y = it.y; s = it.s; } else { [x, y] = P(it.x, it.y); s = sc * 0.86 * (it.f || 1); }
+      const pop = !Q.drawn && !reduce ? ' pop' : '';
+      if (it.rod) {
+        const cw = sc * 0.92, top = y - 5 * sc;
+        let r = `<rect x="${x - cw / 2}" y="${top}" width="${cw}" height="${10 * sc}" rx="${sc * 0.12}" fill="#3b82f6" stroke="#1d4ed8" stroke-width="${Math.max(2, sc * 0.07)}"/>`;
+        for (let j = 1; j < 10; j++) r += `<line x1="${x - cw / 2}" y1="${top + j * sc}" x2="${x + cw / 2}" y2="${top + j * sc}" stroke="#1d4ed8" stroke-width="${Math.max(1.2, sc * 0.05)}"/>`;
+        h += `<g class="ob${pop}" data-i="${i}" style="--d:${(i * stagger).toFixed(3)}s"><g>${r}</g></g>`;
+        geo.push({ x, y: top, s: cw * 1.4, rod: true });
+      } else {
+        h += `<g class="ob${pop}" data-i="${i}" style="--d:${(i * stagger).toFixed(3)}s"><g><use href="#o-${it.k}" x="${x - s / 2}" y="${y - s / 2}" width="${s}" height="${s}"/></g></g>`;
+        geo.push({ x, y: y - s / 2 + s * 0.1, s, k: it.k });
+      }
+    });
+    if (Q.boxes) Q.boxGeo = Q.boxes.map((b) => { const [x, y] = P(b.x, b.y); return { x, y, sc }; });
+    h += '<g id="badges"></g></svg>';
+    st.innerHTML = h + (Q.covered ? coverHTML() : '') + (Q.count != null ? `<div class="timer">${Q.count}</div>` : '');
+    Q.drawn = true;
+    badges();
+  }
+  function badges() {
+    const g = document.getElementById('badges'); if (!g || !geo) return;
+    let h = '';
+    const one = (x, y, r, txt, cls) => `<g class="badge ${cls || ''}"><circle cx="${x}" cy="${y}" r="${r}"/><text x="${x}" y="${y + 1}" font-size="${r * (String(txt).length > 2 ? 0.95 : 1.15)}">${txt}</text></g>`;
+    if (Q.along >= 0) {
+      Q.alongBadges.forEach((b) => { h += one(b.x, b.y, b.r, b.t, 'c'); });
+    } else {
+      Q.marks.forEach((i, k) => { const p = geo[i]; if (!p) return; const r = clamp(p.s * 0.26, 11, 26); h += one(p.x + p.s * 0.32, p.y + (p.rod ? 0 : p.s * 0.05), r, k + 1); });
+    }
+    g.innerHTML = h;
+  }
+  function drawChart(st, W, H) {
+    const cs = Math.min((W - 10) / 10, (H - 10) / 10), ox = (W - cs * 10) / 2, oy = (H - cs * 10) / 2;
+    let h = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="100 chart">`;
+    for (let i = 1; i <= 100; i++) {
+      const r = Math.floor((i - 1) / 10), c = (i - 1) % 10, x = ox + c * cs, y = oy + r * cs, tgt = i === Q.n;
+      const fill = tgt ? (Q.solved ? (Q.revealed ? '#ffe9d6' : '#d9f7e5') : '#fff1c2') : '#fff';
+      h += `<rect x="${x + 1.5}" y="${y + 1.5}" width="${cs - 3}" height="${cs - 3}" rx="${cs * 0.12}" fill="${fill}" stroke="${tgt ? (Q.solved ? (Q.revealed ? '#ff8a3d' : '#22b35e') : '#f0c64a') : '#d9cdb6'}" stroke-width="${tgt ? 4 : 2}"/>`;
+      const txt = tgt ? (Q.solved ? i : '?') : Q.filled.has(i) ? i : '';
+      if (txt !== '') h += `<text x="${x + cs / 2}" y="${y + cs / 2 + 1}" text-anchor="middle" dominant-baseline="central" font-family="Andika, sans-serif" font-weight="700" font-size="${cs * 0.42}" fill="${tgt ? (Q.solved ? (Q.revealed ? '#c95a14' : '#148043') : '#b58200') : '#24314a'}">${txt}</text>`;
+    }
+    st.innerHTML = h + '</svg>';
+  }
+  function drawLine(st, W, H) {
+    const pad = Math.max(30, W * 0.05), Y = H * 0.5, span = Q.b - Q.a, X = (v) => pad + (W - 2 * pad) * (v - Q.a) / span;
+    const fs = clamp((W - 2 * pad) / span * 0.55, 13, 30);
+    let h = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Number line">`;
+    h += `<line x1="${pad - 22}" y1="${Y}" x2="${W - pad + 22}" y2="${Y}" stroke="#24314a" stroke-width="5" stroke-linecap="round"/><path d="M${pad - 30} ${Y} l14 -10 v20 z M${W - pad + 30} ${Y} l-14 -10 v20 z" fill="#24314a"/>`;
+    for (let v = Q.a; v <= Q.b; v++) {
+      const big = v % 10 === 0, x = X(v);
+      h += `<line x1="${x}" y1="${Y - (big ? 18 : 12)}" x2="${x}" y2="${Y + (big ? 18 : 12)}" stroke="#24314a" stroke-width="${big ? 4 : 3}" stroke-linecap="round"/>`;
+      if (Q.lab.has(v)) h += `<text x="${x}" y="${Y + 28 + fs * 0.5}" text-anchor="middle" font-family="Andika, sans-serif" font-weight="700" font-size="${fs}" fill="#24314a">${v}</text>`;
+    }
+    const x = X(Q.n), c = Q.solved ? (Q.revealed ? '#ff8a3d' : '#22b35e') : '#ef5a5a';
+    h += `<path d="M${x - 6} ${Y - 70} h12 v34 h11 l-17 26 l-17 -26 h11 z" fill="${c}" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>`;
+    h += `<rect x="${x - fs * 0.9}" y="${Y + 22}" width="${fs * 1.8}" height="${fs * 1.35}" rx="8" fill="${Q.solved ? (Q.revealed ? '#ffe9d6' : '#d9f7e5') : '#fff1c2'}" stroke="${Q.solved ? c : '#f0c64a'}" stroke-width="3"/>`;
+    h += `<text x="${x}" y="${Y + 22 + fs * 0.7}" text-anchor="middle" dominant-baseline="central" font-family="Andika, sans-serif" font-weight="700" font-size="${fs * 0.95}" fill="${Q.solved ? (Q.revealed ? '#c95a14' : '#148043') : '#b58200'}">${Q.solved ? Q.n : '?'}</text>`;
+    st.innerHTML = h + '</svg>';
+  }
+  const coverHTML = () => '<div class="cover"><div class="eye" aria-hidden="true">👀</div><b>How many did you see?</b><span>Press <b>Peek again</b> to look one more time.</span></div>';
+
+  /* ---------- flash ---------- */
+  function startFlash() {
+    if (Q.mode !== 'count' || !S.flash || Q.solved) return;
+    Q.covered = false; Q.count = S.flash; draw();
+    const tick = () => { if (Q.solved) return; Q.count--; if (Q.count <= 0) { Q.count = null; Q.covered = true; $('peekBtn').hidden = false; } draw(); if (Q.count) later(tick, 1000); };
+    later(tick, 1000 + (Q.peeks ? 0 : 700));
+  }
+  function peek() { if (!Q || !Q.covered || Q.solved) return; Q.peeks = (Q.peeks || 0) + 1; startFlash(); }
+
+  /* ---------- top bar ---------- */
+  const STAR = '<svg viewBox="0 0 120 120"><path d="M60 6 L74 42 L113 44 L82 68 L93 106 L60 84 L27 106 L38 68 L7 44 L46 42 Z" fill="#e8e1d2" stroke="#d3c8b2" stroke-width="5" stroke-linejoin="round"/></svg>';
+  function renderTop(bumpI, newStar) {
+    const m = $('mid');
+    if (S.play === 'stars') m.innerHTML = `<div class="stars" aria-label="${stars} stars">${Array.from({ length: 10 }, (_, i) => STAR.replace('<svg', `<svg class="${i < stars ? 'on' : ''}${i === stars - 1 && newStar ? ' new' : ''}"`)).join('')}</div>`;
+    else if (S.play === 'teams') m.innerHTML = teams.map((t, i) => `<span class="team${i === turn ? ' on' : ''}" style="--c:${TEAMC[i]}"><span class="nm">${esc(t)}</span><button type="button" data-d="-1" data-t="${i}" aria-label="Take a point from ${esc(t)}">−</button><span class="sc${i === bumpI ? ' bump' : ''}">${scores[i]}</span><button type="button" data-d="1" data-t="${i}" aria-label="Give a point to ${esc(t)}">+</button></span>`).join('');
+    else m.innerHTML = '';
+    $('undoBtn').hidden = S.play !== 'teams' || !hist.length;
+  }
+  $('mid').addEventListener('click', (e) => { const b = e.target.closest('button[data-t]'); if (!b) return; hist.push(scores.slice()); const i = +b.dataset.t; scores[i] = Math.max(0, scores[i] + +b.dataset.d); renderTop(i); });
+  function undo() { if (!hist.length) return; scores = hist.pop(); renderTop(); }
+  $('undoBtn').onclick = undo;
+
+  /* ---------- question text ---------- */
+  function askHTML() {
+    const tm = S.play === 'teams' ? `<span class="turn" style="--c:${TEAMC[turn]}">${esc(teams[turn])}</span>` : '';
+    if (Q.mode === 'chart') return tm + 'Which number goes in the yellow box?';
+    if (Q.mode === 'line') return tm + 'Which number is the arrow pointing to?';
+    if (Q.arr === 'blocks') return tm + 'How many cubes? <span style="font-weight:600;color:var(--ink-2);font-size:.7em">(tens and ones)</span>';
+    const k = Q.kind === 'ycounter' ? 'counter' : Q.kind;
+    return `${tm}How many <svg aria-hidden="true"><use href="#o-${Q.kind}"/></svg> ${OBJ[k][1]}?${Q.mixed ? ' <span style="font-weight:600;color:var(--ink-2);font-size:.7em">Count only the ' + OBJ[k][1] + '!</span>' : ''}`;
+  }
+
+  /* ---------- answering ---------- */
+  let entry = '', choicesOn = false;
+  function answerUI() {
+    entry = ''; choicesOn = S.input === 'choice';
+    if (choicesOn) {
+      const n = Q.n, maxV = Q.mode === 'chart' ? 100 : 100, minV = Q.mode === 'chart' ? 1 : 0;
+      const near = n >= 20 || Q.mode === 'chart' ? [1, -1, 10, -10, 2, -2, 11, -9] : [1, -1, 2, -2, 3, -3];
+      const out = [n];
+      shuffle(near.slice(0, 4)).concat(near.slice(4)).forEach((d) => { const v = n + d; if (out.length < S.nch && v >= minV && v <= maxV && !out.includes(v)) out.push(v); });
+      for (let v = minV; out.length < S.nch && v <= maxV; v++) if (!out.includes(v)) out.push(v);
+      $('ans').innerHTML = shuffle(out).map((v) => `<button class="big" type="button" data-v="${v}">${v}</button>`).join('');
+    } else {
+      $('ans').innerHTML = `<div class="entry" id="entry" aria-live="polite"><span class="ph">?</span></div><div class="keys">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((k) => `<button type="button" data-k="${k}">${k}</button>`).join('')}<button type="button" class="alt" data-k="Backspace" aria-label="Erase">⌫</button><button type="button" class="ok" data-k="Enter">Check</button></div>`;
+    }
+  }
+  $('ans').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b || !Q) return;
+    if (b.id === 'bigNext') { next(); return; }
+    if (Q.solved) return;
+    if (b.dataset.v !== undefined) { const v = +b.dataset.v; if (v === Q.n) { b.classList.add('right'); right(); } else { b.disabled = true; b.classList.add('shake'); wrong(v); } return; }
+    if (b.dataset.k) key(b.dataset.k);
+  });
+  function showEntry() { const e = $('entry'); if (e) e.innerHTML = entry ? esc(entry) : '<span class="ph">?</span>'; }
+  function key(k) {
+    if (!Q || Q.solved || choicesOn) return;
+    if (/^\d$/.test(k)) { if (entry.length < 3) entry = entry === '0' ? k : entry + k; }
+    else if (k === 'Backspace') entry = entry.slice(0, -1);
+    else if (k === 'Enter') {
+      const e = $('entry');
+      if (!entry) { say('Type your answer first.', 'try'); e.classList.remove('shake'); void e.offsetWidth; e.classList.add('shake'); return; }
+      const v = +entry; entry = '';
+      if (v === Q.n) { right(); return; }
+      e.classList.remove('shake'); void e.offsetWidth; e.classList.add('shake'); wrong(v);
+    }
+    showEntry();
+  }
+  const PRAISE = ['Yes!', 'Great counting!', 'You got it!', 'Super!', 'Awesome!', 'Way to go!', 'Nice work!'];
+  function right() {
+    let bump = -1, newStar = false;
+    if (S.play === 'teams') { hist.push(scores.slice()); scores[turn] += S.pts; bump = turn; }
+    if (S.play === 'stars') { stars++; newStar = true; }
+    finish(`${pick(PRAISE)} ${Q.mode === 'count' ? (Q.n === 1 ? 'There is 1.' : `There are ${Q.n}.`) : `It's ${Q.n}.`}${S.play === 'teams' ? ` +${S.pts} for ${teams[turn]}` : ''}`, 'good');
+    renderTop(bump, newStar); confetti();
+    if (S.play === 'stars' && stars >= 10) later(() => { $('party').hidden = false; $('partyBtn').focus(); confetti(240); }, 900);
+  }
+  function wrong(v) {
+    Q.tries++;
+    if (Q.tries >= 3) { Q.revealed = true; finish(Q.mode === 'count' ? `Let's count together. There ${Q.n === 1 ? 'is 1' : `are ${Q.n}`}.` : `It's ${Q.n}.`, 'info'); return; }
+    if (Q.mode === 'count') say(Math.abs(v - Q.n) <= 2 ? 'So close! Count again.' : 'Not quite. Count again!', 'try');
+    else say(v > Q.n ? 'Not quite. Try a smaller number.' : 'Not quite. Try a bigger number.', 'try');
+  }
+  function finish(t, cls) {
+    Q.solved = true; Q.covered = false; Q.count = null; clearTimers();
+    $('peekBtn').hidden = true; $('clearBtn').hidden = true;
+    say(t, cls);
+    $('nextBtn').classList.add('pulse');
+    $('ans').innerHTML = `<button class="big ok" type="button" id="bigNext">Next ➜</button>`; $('bigNext').focus({ preventScroll: true });
+    if (Q.mode === 'count' && S.along && Q.n > 0) { Q.marks = []; draw(); countAlong(); } else draw();
+  }
+  function countAlong() {
+    const steps = [];
+    const sz = (p) => clamp(p.s * 0.26, 11, 26);
+    if (Q.arr === 'skip' && Q.boxGeo) {
+      let total = 0;
+      Q.boxes.forEach((b, k) => { total += b.to - b.from; const gb = Q.boxGeo[k]; steps.push({ idx: range(b.from, b.to), badge: { x: gb.x - gb.sc * 0.1, y: gb.y + gb.sc * 0.1, r: clamp(gb.sc * 0.42, 13, 30), t: total } }); });
+    } else if (Q.arr === 'blocks') {
+      let total = 0; geo.forEach((p, i) => { total += p.rod ? 10 : 1; steps.push({ idx: [i], badge: { x: p.x + p.s * 0.32, y: p.y, r: clamp(p.s * 0.3, 12, 26), t: total } }); });
+    } else {
+      let c = 0; const ord = geo.map((p, i) => i); if (Q.arr === 'random') ord.sort((i, j) => { const a = geo[i], b = geo[j], ra = Math.round(a.y / (a.s * 1.3)), rb = Math.round(b.y / (b.s * 1.3)); return ra - rb || a.x - b.x; });
+      ord.forEach((i) => { const p = geo[i]; if (p.k !== Q.kind) return; c++; steps.push({ idx: [i], badge: { x: p.x + p.s * 0.32, y: p.y + p.s * 0.05, r: sz(p), t: c } }); });
+    }
+    Q.along = 0; Q.alongBadges = [];
+    const dl = clamp(4200 / Math.max(1, steps.length), 90, 650);
+    const run = (k) => {
+      if (k >= steps.length) return;
+      const st = steps[k]; Q.alongBadges.push(st.badge); badges();
+      st.idx.forEach((i) => { const g = document.querySelector(`.ob[data-i="${i}"]`); if (g) { g.classList.remove('pop', 'lit'); void g.getBBox; g.classList.add('lit'); } });
+      later(() => run(k + 1), dl);
+    };
+    if (reduce) { steps.forEach((s) => Q.alongBadges.push(s.badge)); badges(); } else run(0);
+  }
+  const range = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
+  function say(t, cls) { const m = $('msg'); m.className = 'msg'; void m.offsetWidth; m.className = 'msg ' + (cls || ''); m.textContent = t; }
+
+  /* ---------- flow ---------- */
+  function start() {
+    newQ();
+    $('nextBtn').classList.remove('pulse'); say('');
+    $('ask').innerHTML = askHTML();
+    $('peekBtn').hidden = true;
+    $('clearBtn').hidden = !(Q.mode === 'count' && S.tap);
+    answerUI(); draw(); renderTop();
+    if (S.flash && Q.mode === 'count') startFlash();
+  }
+  function next() {
+    if (S.play === 'teams' && Q && Q.solved) turn = (turn + 1) % teams.length;
+    $('party').hidden = true; if (stars >= 10) stars = 0;
+    start();
+  }
+  $('nextBtn').onclick = () => { if (S.play === 'teams' && Q && !Q.solved) turn = (turn + 1) % teams.length; $('party').hidden = true; if (stars >= 10) stars = 0; start(); };
+  $('showBtn').onclick = () => { if (Q && !Q.solved) { Q.revealed = true; finish(Q.mode === 'count' ? `There ${Q.n === 1 ? 'is 1' : `are ${Q.n}`}.` : `It's ${Q.n}.`, 'info'); } };
+  $('peekBtn').onclick = peek;
+  $('clearBtn').onclick = () => { if (Q && !Q.solved) { Q.marks = []; badges(); } };
+  $('partyBtn').onclick = () => { $('party').hidden = true; stars = 0; renderTop(); };
+  $('stage').addEventListener('click', (e) => {
+    if (!Q || Q.mode !== 'count' || !S.tap || Q.solved || Q.covered) return;
+    const g = e.target.closest('.ob'); if (!g) return;
+    const i = +g.dataset.i, at = Q.marks.indexOf(i);
+    if (at >= 0) Q.marks.splice(at, 1); else Q.marks.push(i);
+    badges();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden) { if (e.key === 'Escape') closeSheet(); return; }
+    if (!$('party').hidden) { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') { e.preventDefault(); $('partyBtn').click(); } return; }
+    const tg = e.target && e.target.tagName;
+    if (tg === 'INPUT' || tg === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey || !Q) return;
+    const k = e.key;
+    if (Q.solved) { if (k === 'Enter' || k === ' ' || k === 'n' || k === 'N') { e.preventDefault(); next(); } return; }
+    if (k === 'n' || k === 'N') { e.preventDefault(); $('nextBtn').click(); return; }
+    if (k === 'p' || k === 'P') { e.preventDefault(); peek(); return; }
+    if ((k === 'u' || k === 'U') && S.play === 'teams') { e.preventDefault(); undo(); return; }
+    if (!choicesOn && (/^\d$/.test(k) || k === 'Backspace' || k === 'Enter')) {
+      if (tg === 'BUTTON' && k === 'Enter' && !e.target.closest('.keys')) return;
+      e.preventDefault(); key(k);
+    }
+  });
+
+  /* ---------- confetti ---------- */
+  const fx = $('fx'), cx = fx.getContext('2d'); let bits = [], raf = 0;
+  function confetti(n) {
+    if (reduce) return;
+    fx.width = innerWidth; fx.height = innerHeight;
+    const cols = ['#ef5a5a', '#ffc93d', '#22b35e', '#4f8df5', '#8b5cf6', '#ff8a3d'];
+    for (let i = 0; i < (n || 90); i++) bits.push({ x: innerWidth / 2 + (Math.random() - .5) * 240, y: innerHeight * .45, vx: (Math.random() - .5) * 16, vy: -Math.random() * 15 - 4, r: Math.random() * 6.28, s: 6 + Math.random() * 7, c: pick(cols), t: 0 });
+    if (!raf) raf = requestAnimationFrame(tickFx);
+  }
+  function tickFx() {
+    cx.clearRect(0, 0, fx.width, fx.height);
+    bits.forEach((p) => { p.t++; p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += .2; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.c; cx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); cx.restore(); });
+    bits = bits.filter((p) => p.y < fx.height + 20 && p.t < 170);
+    raf = bits.length ? requestAnimationFrame(tickFx) : (cx.clearRect(0, 0, fx.width, fx.height), 0);
+  }
+
+  /* ---------- settings ---------- */
+  const toggle = (a, v) => (a.includes(v) ? a.filter((x) => x !== v) : a.concat(v));
+  function seg(el, opts, isOn, fn) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { fn(v); save(); renderSheet(); }; el.appendChild(b); });
+  }
+  const icon = (k) => `<svg aria-hidden="true"><use href="#o-${k}"/></svg>`;
+  function renderSheet() {
+    seg($('sMode'), Object.entries(MODES), (v) => S.modes.includes(v), (v) => { S.modes = toggle(S.modes, v); });
+    $('from').value = S.from; $('to').value = S.to; $('teams').value = S.teams;
+    seg($('sArr'), Object.entries(ARR), (v) => S.arr.includes(v), (v) => { S.arr = toggle(S.arr, v); });
+    $('skipOpt').hidden = !S.arr.includes('skip');
+    seg($('sSkip'), [[2, '2s'], [5, '5s'], [10, '10s']], (v) => S.skip.includes(v), (v) => { S.skip = toggle(S.skip, v); });
+    seg($('sObj'), Object.keys(OBJ).map((k) => [k, icon(k) + OBJ[k][1][0].toUpperCase() + OBJ[k][1].slice(1)]), (v) => S.objs.includes(v), (v) => { S.objs = toggle(S.objs, v); });
+    seg($('sMix'), [[false, 'Off'], [true, 'On (groups, arrays and scattered only)']], (v) => S.mix === v, (v) => { S.mix = v; });
+    seg($('sFlash'), [[0, 'Stay on screen'], [1, 'Flash 1 second'], [2, '2 seconds'], [3, '3 seconds'], [5, '5 seconds']], (v) => S.flash === v, (v) => { S.flash = v; });
+    seg($('sTap'), [[true, 'Yes'], [false, 'No']], (v) => S.tap === v, (v) => { S.tap = v; });
+    seg($('sAlong'), [[true, 'Yes'], [false, 'No']], (v) => S.along === v, (v) => { S.along = v; });
+    seg($('sFill'), [['few', 'A few (harder)'], ['some', 'Some'], ['many', 'Many (easier)']], (v) => S.fill === v, (v) => { S.fill = v; });
+    seg($('sIn'), [['keypad', 'Type the number'], ['choice', 'Multiple choice buttons']], (v) => S.input === v, (v) => { S.input = v; });
+    $('nChOpt').hidden = S.input !== 'choice';
+    seg($('sNch'), [[2, '2'], [3, '3'], [4, '4']], (v) => S.nch === v, (v) => { S.nch = v; });
+    seg($('sPlay'), [['class', 'Whole class, no score'], ['stars', 'Whole class with a star tally'], ['teams', 'Teams with points']], (v) => S.play === v, (v) => { S.play = v; });
+    $('teamOpt').hidden = S.play !== 'teams';
+    seg($('sPts'), [[1, '1'], [2, '2'], [5, '5'], [10, '10']], (v) => S.pts === v, (v) => { S.pts = v; });
+    document.querySelectorAll('.opt[data-mode]').forEach((o) => { o.hidden = !o.dataset.mode.split(' ').some((m) => S.modes.includes(m)); });
+    check();
+  }
+  function check() {
+    const errs = [];
+    const a = /^\d{1,3}$/.test(S.from.trim()) ? +S.from : NaN, b = /^\d{1,3}$/.test(S.to.trim()) ? +S.to : NaN;
+    if (!S.modes.length) errs.push('Choose at least one activity.');
+    if (isNaN(a) || isNaN(b)) errs.push('Type whole numbers from 0 to 100.');
+    else if (a > 100 || b > 100) errs.push('Use numbers up to 100.');
+    else if (b < a) errs.push('The second number must be bigger than the first.');
+    else if (S.modes.includes('chart') && b < 1) errs.push('The 100 chart needs numbers from 1 to 100.');
+    if (S.modes.includes('count') && !S.arr.length) errs.push('Choose at least one way to show the objects.');
+    if (S.modes.includes('count') && !S.objs.length) errs.push('Choose at least one object.');
+    if (S.modes.includes('count') && S.arr.includes('skip') && !S.skip.length) errs.push('Choose 2s, 5s or 10s for skip-count groups.');
+    const tl = S.teams.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (S.play === 'teams' && tl.length < 2) errs.push('Type at least 2 team names, one per line.');
+    $('err').className = 'note' + (errs.length ? ' warn' : '');
+    $('err').textContent = errs.join(' ') || (S.play === 'teams' && tl.length > 6 ? 'Only the first 6 teams are used.' : '');
+    $('goBtn').disabled = errs.length > 0;
+    return !errs.length;
+  }
+  ['from', 'to', 'teams'].forEach((id) => $(id).addEventListener('input', () => { S[id] = $(id).value; save(); check(); }));
+  function openSheet() { clearTimers(); $('sheet').hidden = false; renderSheet(); $('goBtn').focus({ preventScroll: true }); }
+  function closeSheet() {
+    if (!check()) return;
+    save();
+    lo = +S.from; hi = +S.to;
+    const tl = S.teams.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    if (S.play === 'teams' && (tl.join('\n') !== teams.join('\n'))) { teams = tl; scores = tl.map(() => 0); turn = 0; hist = []; }
+    $('sheet').hidden = true; start();
+  }
+  $('goBtn').onclick = closeSheet;
+  $('gearBtn').onclick = openSheet;
+  if ('ResizeObserver' in window) { let t = 0; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { if (Q && $('sheet').hidden) { draw(); } }, 80); }).observe($('stage')); }
+  window.__ct = { q: () => Q, S: () => S };
+
+  if (stored) { $('sheet').hidden = true; renderSheet(); if (check()) closeSheet(); else openSheet(); } else openSheet();
+})();
+</script>
+
+</body>
+</html>
