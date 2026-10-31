@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
 </head>
 <body>
 <title>Classroom Game Hub</title>
@@ -81,6 +82,8 @@
   .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .play { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 12px; }
   .play:hover { filter: brightness(1.08); }
+  .dl { margin-left: auto; color: var(--ink-2); font-weight: 700; font-size: .92rem; text-decoration: underline; text-underline-offset: 3px; padding: 4px 2px; }
+  .dl:hover { color: var(--accent); }
   .dirlink { background: none; border: 0; padding: 4px 2px; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
   .notes { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
@@ -136,6 +139,7 @@
     <div><h3>Your settings are remembered</h3><p>Team names and options are saved in the browser on the computer you use. A teacher who shares a classroom computer will see the last names used and can type over them.</p></div>
     <div><h3>Mistakes are easy to fix</h3><p>Every game has an <b>Undo</b> button (or <kbd>U</kbd>). Buttons that clear scores or end a game need two clicks, so nothing is lost by accident.</p></div>
     <div><h3>Free to use and share</h3><p>Anyone can open these games: no account or sign-in is needed. Send families the link to this page so they can play at home.</p></div>
+    <div><h3>Use a game offline</h3><p>Click <b>Download</b> on any game to save it as a single file. Double-click the file to open it in a web browser, even without the internet.</p></div>
   </section>
 </div>
 
@@ -150,6 +154,9 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const ICONS = {
+    dice2: '<svg viewBox="0 0 40 40"><rect x="4" y="9" width="16" height="16" rx="4" fill="#fff"/><circle cx="8.5" cy="13.5" r="1.8" fill="#1f2433"/><circle cx="15.5" cy="20.5" r="1.8" fill="#1f2433"/><circle cx="12" cy="17" r="1.8" fill="#1f2433"/><rect x="21" y="15" width="15" height="15" rx="4" fill="#ffd23f"/><circle cx="25" cy="19" r="1.7" fill="#1f2433"/><circle cx="32" cy="26" r="1.7" fill="#1f2433"/><circle cx="25" cy="26" r="1.7" fill="#1f2433"/><circle cx="32" cy="19" r="1.7" fill="#1f2433"/></svg>',
+    boom: '<svg viewBox="0 0 40 40"><path d="M20 3 L24 13 L35 9 L28 18 L37 24 L26 25 L28 36 L20 28 L12 36 L14 25 L3 24 L12 18 L5 9 L16 13 Z" fill="#ffcf3d"/><path d="M20 10 L22.5 16 L29 14 L25 19 L30 23 L24 23.5 L25 30 L20 25 L15 30 L16 23.5 L10 23 L15 19 L11 14 L17.5 16 Z" fill="#ff4d3d"/></svg>',
+    blocks: '<svg viewBox="0 0 40 40"><rect x="10" y="30" width="20" height="6" rx="1.5" fill="#e8c98f"/><rect x="10" y="23" width="6" height="6" rx="1.5" fill="#d4a86a"/><rect x="24" y="23" width="6" height="6" rx="1.5" fill="#d4a86a"/><rect x="10" y="16" width="20" height="6" rx="1.5" fill="#e8c98f"/><rect x="10" y="9" width="6" height="6" rx="1.5" fill="#d4a86a"/><rect x="17" y="9" width="6" height="6" rx="1.5" fill="#d4a86a"/><rect x="24" y="9" width="6" height="6" rx="1.5" fill="#d4a86a"/><rect x="17" y="2" width="12" height="6" rx="1.5" fill="#e8c98f" transform="rotate(12 23 5)"/></svg>',
     pairs: '<svg viewBox="0 0 40 40"><rect x="4" y="8" width="15" height="22" rx="3" fill="#fff"/><rect x="21" y="10" width="15" height="22" rx="3" fill="#ffd23f"/><text x="28.5" y="24" text-anchor="middle" font-family="Arial" font-weight="900" font-size="7" fill="#1b2330">cat</text><path d="M7 16 L8 11 L11 14 Z M16 16 L15 11 L12 14 Z" fill="#f59e0b"/><circle cx="11.5" cy="19" r="5" fill="#f59e0b"/><circle cx="10" cy="18.5" r=".9" fill="#222"/><circle cx="13" cy="18.5" r=".9" fill="#222"/></svg>',
     pie: '<svg viewBox="0 0 40 40"><ellipse cx="20" cy="26" rx="15" ry="6" fill="#c9ced6"/><path d="M6 24 Q8 14 14 15 Q16 9 21 11 Q26 8 28 14 Q34 14 34 24 Z" fill="#fff"/><circle cx="21" cy="10" r="3" fill="#e8343a"/><path d="M10 30 q1 4 0 6 M30 30 q-1 3 0 5" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>',
     plus: '<svg viewBox="0 0 40 40"><rect x="4" y="12" width="9" height="12" rx="2" fill="#fff"/><path d="M17 18 H23 M20 15 V21" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><rect x="27" y="12" width="9" height="12" rx="2" fill="#ffc93d"/><text x="31.5" y="21.5" text-anchor="middle" font-family="Arial" font-weight="900" font-size="8" fill="#7a5a00">?</text><circle cx="11" cy="31" r="2.2" fill="#ef5a5a"/><circle cx="17" cy="31" r="2.2" fill="#ef5a5a"/><circle cx="23" cy="31" r="2.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="1.5 1.2"/><circle cx="29" cy="31" r="2.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="1.5 1.2"/></svg>',
@@ -430,6 +437,30 @@
         <div><h3>Good to know</h3><p>Ask students to read the word aloud, or sign it, before flipping its partner. Click <b>New game</b> to reshuffle.</p></div>`
     },
     {
+      id: 'shutbox', name: 'Shut the Box', tag: 'Roll, add, shut', color: '#7a4a1f', icon: 'dice2', url: 'shutbox.html',
+      blurb: 'A correct answer earns a roll of the dice. Shut tiles that add up to the roll to score, and shut every tile for a bonus. Great addition practice.',
+      facts: ['2–6 teams', 'Team adds', 'Dice'], f: ['two', 'many', 'math'], k: 'shut the box dice addition sums tiles math facts',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('rolls per turn, tiles 1 to 9 or 1 to 12, the bonus for shutting the box (none, +20 or +50), and whether a team rolls one die once every tile above 6 is shut')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, click <b>Roll the dice</b> (or press <kbd>Space</kbd>). Each team has its own box.</li><li>The team picks open tiles that add up to the roll, like 6 + 2 for a roll of 8. The screen shows the running total. Click <b>Shut them</b> (or press <kbd>Enter</kbd>). The tiles flip down, and the roll is added to the score.</li><li>If no open tiles can make the roll, the turn scores 0.</li><li>Shut every tile to earn the bonus; the box then opens up again.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'kaboom', name: 'Kaboom!', tag: 'Pull a stick, risk it all', color: '#c2352a', icon: 'boom', url: 'kaboom.html',
+      blurb: 'A correct answer earns a stick from the jar. Most sticks are worth points, but pull a KABOOM stick and your team loses everything!',
+      facts: ['2–6 teams', 'Big suspense', 'Quick'], f: ['two', 'many'], k: 'kaboom sticks jar popsicle luck explosion lose all',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('sticks per turn, how many KABOOM sticks are in the jar of 30 (few: 2, some: 4, lots: 6), point values (1–3 or 1–5), special sticks (Double and Go again) on or off, and whether the jar shows how many KABOOM sticks are left')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, click the jar (or press <kbd>Space</kbd>). A stick rises out and flips into a big card.</li><li>Point sticks add to the score. A <b>KABOOM!</b> stick explodes, and the team's score drops to 0. With special sticks on, <b>DOUBLE!</b> doubles the score and <b>GO AGAIN!</b> lets the team pull again.</li><li>Sticks aren't put back. When the jar is empty, it refills.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
+      id: 'tower', name: 'Tumble Tower', tag: 'Pull a block, don\'t let it fall', color: '#8a5a2b', icon: 'blocks', url: 'tower.html',
+      blurb: 'A correct answer earns a pull from the wooden block tower. Each block hides points, but every pull makes the tower wobble. Topple it and lose points!',
+      facts: ['2–6 teams', 'Team picks', 'Suspense'], f: ['two', 'many'], k: 'block tower stack pull wobble topple tumble wood blocks',
+      dir: `<div><h3>Set up</h3>${TEAM_SETUP('pulls per turn, tower height (12 or 18 layers), the penalty when it falls (none, lose 10 or lose all), and the wobble (gentle, normal or wild)')}</div>
+        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, they click a block to pull it out (or use the arrow keys and press <kbd>Space</kbd>). The block slides out, shows its hidden points (+1 to +5, with two +10 bonus blocks), and is stacked on top.</li><li>Watch the <b>Wobble</b> gauge. Gaps and height make the tower shakier, and pulling the last block of a layer always knocks it down.</li><li>If the tower topples, the team gets the penalty, and a new tower is built.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
+        <div><h3>Controls</h3>${TEAM_TURN}</div>`
+    },
+    {
       id: 'deal', name: 'Take the Deal', tag: 'Briefcase game show', color: '#1f2a5c', icon: 'case', url: 'briefcase.html',
       blurb: 'The whole class plays one contestant. Earn briefcases with correct answers, then decide whether to take the Banker’s offer.',
       facts: ['Whole class', 'Class votes', 'Suspense'], f: ['class'], k: 'briefcase banker game show deal',
@@ -449,7 +480,8 @@
       <p>${g.blurb}</p>
       <div class="facts">${g.facts.map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="actions"><a class="play" href="${g.url}" target="_blank" rel="noopener">Play <span aria-hidden="true">↗</span></a>
-      <button class="dirlink" type="button" data-id="${g.id}">Directions</button></div>`;
+      <button class="dirlink" type="button" data-id="${g.id}">Directions</button>
+      <a class="dl" href="${g.url}" download="${g.url}" data-id="${g.id}" aria-label="Download ${g.name}">Download</a></div>`;
     grid.appendChild(c);
   });
   grid.addEventListener('click', (e) => { const b = e.target.closest('.dirlink'); if (b) openDir(b.dataset.id, b); });
@@ -485,7 +517,7 @@
     lastFocus = from || document.activeElement;
     $('pTitle').textContent = `How to play ${g.name}`;
     $('pIcon').style.setProperty('--gc', g.color); $('pIcon').innerHTML = ICONS[g.icon];
-    $('pBody').innerHTML = `<a class="shot" href="${g.url}" target="_blank" rel="noopener" aria-label="Play ${g.name}"><img src="${g.id}.jpg" alt="Screenshot of ${g.name}"></a>` + g.dir + `<div class="actions"><a class="play" href="${g.url}" target="_blank" rel="noopener">Play ${g.name} <span aria-hidden="true">↗</span></a></div>`;
+    $('pBody').innerHTML = `<a class="shot" href="${g.url}" target="_blank" rel="noopener" aria-label="Play ${g.name}"><img src="${g.id}.jpg" alt="Screenshot of ${g.name}"></a>` + g.dir + `<div class="actions"><a class="play" href="${g.url}" target="_blank" rel="noopener">Play ${g.name} <span aria-hidden="true">↗</span></a><a class="dl" href="${g.url}" download="${g.url}" data-id="${g.id}">Download</a></div>`;
     $('scrim').hidden = false;
     $('pBody').scrollTop = 0; document.querySelector('.panel').scrollTop = 0;
     $('pClose').focus();
@@ -499,6 +531,21 @@
   const h = (location.hash || '').slice(1);
   if (h && GAMES.some((g) => g.id === h)) openDir(h);
 })();
+</script>
+
+<script>
+  // Count plays and downloads (see analytics.js).
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a.play, a.shot, a.dl');
+    if (!a || !window.hubTrack) return;
+    const file = (a.getAttribute('href') || '').replace(/\.html$/, '');
+    if (!file || /[\/:]/.test(file)) return;
+    const box = a.closest('.card') || a.closest('.panel') || document;
+    const h = box.querySelector('h2');
+    const name = (h && h.textContent.replace(/^How to play /, '').trim()) || file;
+    const dl = a.classList.contains('dl');
+    window.hubTrack((dl ? 'download/' : 'play/') + file, (dl ? 'Download: ' : 'Play: ') + name);
+  });
 </script>
 
 </body>
