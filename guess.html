@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Guess the Word</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Lilita+One&family=Lexend:wght@400;600;700;800&display=swap">
+<style>
+  /* Layout: the word, its picture and a big timer fill the stage on the left; the scoreboard of players runs down the right. Setup is a single card. */
+  :root {
+    --bg: #0d1424; --glow: #24365f; --surface: #131d33; --panel: #1a2742; --panel-hi: #223253;
+    --line: rgba(230, 236, 255, .16); --text: #f2f5ff; --text-dim: rgba(242, 245, 255, .66);
+    --accent: #ffd23f; --accent-deep: #b48c00; --go: #2bb673; --go-deep: #148043; --bad: #ff5a5f; --bad-deep: #b3262b; --purple: #8b5cf6;
+    --card: #fffaf0; --card-ink: #1b2330;
+    --display: "Lilita One", "Arial Black", Impact, system-ui, sans-serif;
+    --word: "Andika", "Lexend", system-ui, sans-serif;
+    --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); background-image: radial-gradient(circle at 40% -20%, var(--glow) 0, transparent 60%); color: var(--text); font-family: var(--body); overflow: hidden; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: var(--body); font-size: .7em; font-weight: 700; border: 1px solid currentColor; border-radius: 5px; padding: 0 5px; margin-left: 6px; opacity: .8; }
+
+  /* setup */
+  #setup { height: 100%; overflow: auto; display: grid; place-items: center; padding: 24px 16px; }
+  .card { width: min(820px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: clamp(20px, 4vw, 36px); }
+  .logo { font-family: var(--display); font-size: clamp(2.4rem, 7vw, 4.2rem); line-height: 1; margin: 0; }
+  .logo span { color: var(--accent); }
+  .lede { color: var(--text-dim); line-height: 1.55; margin: 12px 0 8px; }
+  .label { display: block; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--text-dim); margin: 20px 0 8px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg button { padding: 9px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-weight: 700; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #1a1405; border-color: var(--accent); }
+  textarea { width: 100%; min-height: 110px; resize: vertical; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; line-height: 1.5; }
+  .note { color: var(--text-dim); font-size: .88rem; margin: 6px 0 0; }
+  .note.warn { color: #ffb4b4; font-weight: 700; }
+  .go { margin-top: 26px; width: 100%; padding: 16px; border: 0; border-radius: 16px; background: var(--go); color: #04170c; font-family: var(--display); font-size: 1.6rem; box-shadow: 0 6px 0 var(--go-deep); }
+
+  .sheet { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(5,8,16,.8); padding: 16px; }
+  .card.ed { max-height: 100%; overflow: auto; }
+  .rows { display: grid; gap: 8px; margin-top: 12px; }
+  .row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px; border-radius: 14px; background: var(--panel); border: 2px solid transparent; }
+  .row.drag { border-color: var(--accent); }
+  .row .pic { width: 84px; height: 84px; border-radius: 12px; background: #fff; border: 2px dashed #9aa3b8; display: grid; place-items: center; overflow: hidden; padding: 0; color: #5b6780; font-size: .72rem; font-weight: 700; line-height: 1.15; text-align: center; }
+  .row .pic:focus { border-style: solid; border-color: var(--accent); }
+  .row .pic img { width: 100%; height: 100%; object-fit: contain; }
+  .row .wd { font-family: var(--word); font-weight: 700; font-size: 1.3rem; overflow-wrap: anywhere; }
+  .row .acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .row .acts button, .row .acts label { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 6px 10px; font-weight: 600; font-size: .85rem; cursor: pointer; }
+  .wordcard .pic img { width: 100%; height: 100%; object-fit: contain; border-radius: 14px; }
+  .wordcard .cr { position: absolute; left: 14px; right: 14px; bottom: 4px; font-size: .62rem; line-height: 1.2; opacity: .65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .wordcard .cr a { color: inherit; }
+  .wordcard .hideph { position: absolute; top: 8px; left: 10px; border: 1px solid rgba(0,0,0,.15); background: rgba(255,255,255,.85); color: #3a4256; border-radius: 9px; font-size: .72rem; font-weight: 700; padding: 3px 8px; cursor: pointer; opacity: .55; }
+  .wordcard .hideph:hover, .wordcard .hideph:focus-visible { opacity: 1; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+  .ph { background: var(--panel); border-radius: 14px; padding: 8px; display: grid; gap: 6px; align-content: start; border: 2px solid transparent; }
+  .ph .im { height: 120px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; color: #5b6780; font-size: .8rem; font-weight: 700; text-align: center; padding: 4px; }
+  .ph .im img { width: 100%; height: 100%; object-fit: contain; }
+  .ph.off { border-color: #ff8a8a; }
+  .ph.off .im img { opacity: .2; }
+  .ph .wd { font-family: var(--word); font-weight: 700; font-size: 1.1rem; }
+  .ph .c { font-size: .66rem; opacity: .7; line-height: 1.25; overflow-wrap: anywhere; }
+  .ph button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 5px 10px; font-weight: 600; font-size: .85rem; cursor: pointer; color: inherit; }
+  @media (max-width: 620px) { .row { grid-template-columns: 70px minmax(0, 1fr); } .row .pic { width: 70px; height: 70px; } .row .acts { grid-column: 1 / -1; justify-content: flex-start; } }
+  /* game */
+  #game { height: 100%; display: grid; grid-template-rows: auto 1fr; gap: 10px; padding: 12px 16px 14px; }
+  header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  header .title { font-family: var(--display); font-size: 1.6rem; margin-right: auto; }
+  header .title span { color: var(--accent); }
+  .tb { padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font-weight: 600; font-size: .9rem; }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px); gap: 12px; min-height: 0; }
+  .stage { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; display: grid; grid-template-rows: auto 1fr auto; padding: 14px 18px 16px; min-height: 0; overflow: hidden; }
+  .who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; text-align: center; font-weight: 700; font-size: clamp(1rem, 2.4vh, 1.3rem); }
+  .who b { font-family: var(--display); font-size: 1.35em; color: var(--accent); font-weight: 400; }
+  .who select { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; color: var(--text); font: inherit; }
+  .center { display: grid; place-items: center; min-height: 0; }
+  .wordcard { display: grid; grid-template-columns: auto auto; align-items: center; gap: clamp(14px, 3vw, 40px); background: var(--card); color: var(--card-ink); border-radius: 28px; padding: clamp(14px, 3vh, 32px) clamp(20px, 4vw, 48px); box-shadow: 0 16px 40px rgba(0,0,0,.45); max-width: 100%; }
+  .wordcard.nopic { grid-template-columns: auto; }
+  .wordcard { position: relative; }
+  .wordcard .lvl { position: absolute; top: 10px; right: 14px; font-size: clamp(.9rem, 2.4vh, 1.4rem); letter-spacing: -2px; }
+  .wordcard .pic { width: clamp(80px, min(26vh, 34vw), 260px); height: clamp(80px, min(26vh, 34vw), 260px); display: grid; place-items: center; font-size: clamp(64px, min(21vh, 28vw), 210px); line-height: 1; }
+  .wordcard .pic svg { width: 100%; height: 100%; }
+  .wordcard .w { font-family: var(--word); font-weight: 700; font-size: clamp(1.6rem, min(11vh, 10vw), 7rem); line-height: 1.05; overflow-wrap: break-word; text-align: center; }
+  .wordcard.pop { animation: pop .5s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  .cover { display: grid; place-items: center; gap: 16px; text-align: center; }
+  .cover .chair { font-size: clamp(70px, 16vh, 140px); line-height: 1; }
+  .cover h2 { font-family: var(--display); font-weight: 400; font-size: clamp(1.6rem, 5vh, 2.8rem); margin: 0; }
+  .cover p { color: var(--text-dim); margin: 0; max-width: 34ch; }
+  .timer { position: absolute; top: 12px; right: 14px; width: clamp(84px, 15vh, 140px); aspect-ratio: 1; }
+  .timer svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .timer .n { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: clamp(1.8rem, 5.5vh, 3.2rem); }
+  .timer.low .n { color: var(--bad); }
+  .timer.low { animation: pulse .5s ease-in-out infinite alternate; }
+  @keyframes pulse { to { transform: scale(1.08); } }
+  .stage.flash { animation: flash .35s ease-in-out 4; }
+  @keyframes flash { 50% { box-shadow: inset 0 0 0 12px var(--bad); } }
+  .controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
+  .btn { border: 0; border-radius: 16px; padding: 12px 22px; font-family: var(--display); font-size: clamp(1rem, 2.6vh, 1.5rem); background: var(--accent); color: #1a1405; box-shadow: 0 5px 0 var(--accent-deep); }
+  .btn.good { background: var(--go); color: #04170c; box-shadow: 0 5px 0 var(--go-deep); }
+  .btn.bad { background: var(--bad); color: #fff; box-shadow: 0 5px 0 var(--bad-deep); }
+  .btn.ghost { background: var(--panel); color: var(--text); box-shadow: 0 5px 0 rgba(0,0,0,.3); }
+  .btn.purple { background: var(--purple); color: #fff; box-shadow: 0 5px 0 #5b3bb3; }
+  .clue { display: grid; gap: 10px; justify-items: center; }
+  .clue .q { font-family: var(--display); font-size: clamp(1.2rem, 3.4vh, 1.9rem); text-align: center; }
+  .clue .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .clue .chips button { border: 2px solid var(--purple); background: var(--panel); border-radius: 999px; padding: 8px 16px; font-weight: 700; }
+  .clue .chips button:hover { background: var(--purple); }
+  .banner { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 5; }
+  .banner div { font-family: var(--display); font-size: clamp(2.2rem, 8vw, 5.4rem); padding: 10px 34px; border-radius: 22px; background: var(--go); color: #04170c; box-shadow: 0 0 0 6px #fff, 0 20px 50px rgba(0,0,0,.6); animation: big 1.8s ease-out forwards; text-align: center; line-height: 1.05; }
+  .banner.bad div { background: var(--bad); color: #fff; }
+  .banner.purple div { background: var(--purple); color: #fff; }
+  @keyframes big { 0% { transform: scale(.3) rotate(-8deg); opacity: 0; } 15% { transform: scale(1.1) rotate(2deg); opacity: 1; } 85% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
+
+  .board { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 12px; display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  .board h2 { margin: 0 0 8px; font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+  .list { overflow: auto; display: grid; align-content: start; gap: 6px; }
+  .pl { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 12px; background: var(--panel); border: 2px solid transparent; }
+  .pl.hot { border-color: var(--accent); background: var(--panel-hi); }
+  .pl .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl .nm small { display: block; font-size: .7rem; color: var(--accent); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .pl .sc { font-family: var(--display); font-size: 1.5rem; min-width: 1.6em; text-align: right; }
+  .pl .sc.bump { animation: bump .5s; color: var(--accent); }
+  @keyframes bump { 40% { transform: scale(1.5); } }
+  .pl button { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-weight: 800; padding: 0; }
+
+  @media (max-width: 760px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .board { max-height: 32vh; }
+    .wordcard { grid-template-columns: 1fr; justify-items: center; }
+    .timer { width: 64px; top: 8px; right: 8px; }
+    .stage { padding: 10px 10px 12px; }
+    .who { padding-right: 70px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .wordcard.pop, .timer.low, .stage.flash, .banner div, .pl .sc.bump { animation: none; } }
+</style>
+
+<section id="setup">
+  <div class="card">
+    <h1 class="logo">Guess the <span>Word</span></h1>
+    <p class="lede">One player sits with their back to the screen. Everyone else sees the word and gives clues, without saying or signing the word itself. Can the guesser get it before time runs out?</p>
+
+    <span class="label">Players or teams (one per line)</span>
+    <textarea id="players" aria-label="Players or teams, one per line" spellcheck="false"></textarea>
+    <p class="note" id="plNote"></p>
+
+    <span class="label" id="lblSrc">Words</span>
+    <div class="seg" id="segSrc" role="group" aria-labelledby="lblSrc"></div>
+    <div id="bankBox">
+      <span class="label" id="lblLv">Level</span>
+      <div class="seg" id="segLv" role="group" aria-labelledby="lblLv"></div>
+      <span class="label" id="lblCat">Word groups (choose any)</span>
+      <div class="seg" id="segCat" role="group" aria-labelledby="lblCat"></div>
+      <p class="note" id="lvNote"></p>
+    </div>
+    <div id="ownBox" hidden>
+      <span class="label">Your vocabulary words (one per line)</span>
+      <textarea id="ownWords" aria-label="Your vocabulary words, one per line" spellcheck="false"></textarea>
+      <p class="note" id="ownNote"></p>
+      <button class="tb" type="button" id="picEdBtn" style="margin-top:8px">Add your own pictures to these words</button>
+    </div>
+
+    <span class="label" id="lblP">Pictures</span>
+    <div class="seg" id="segP" role="group" aria-labelledby="lblP"></div>
+    <div id="builtinBox">
+      <span class="label" id="lblB">For words without a picture of your own</span>
+      <div class="seg" id="segB" role="group" aria-labelledby="lblB"></div>
+      <p class="note" id="photoNote"></p>
+      <button class="tb" type="button" id="prevBtn" style="margin-top:8px">Preview the photos</button>
+    </div>
+
+    <span class="label" id="lblT">Time to guess</span>
+    <div class="seg" id="segT" role="group" aria-labelledby="lblT"></div>
+    <span class="label" id="lblG">Points for the guesser when they get it in time</span>
+    <div class="seg" id="segG" role="group" aria-labelledby="lblG"></div>
+    <span class="label" id="lblC">Points for the best clue</span>
+    <div class="seg" id="segC" role="group" aria-labelledby="lblC"></div>
+    <span class="label" id="lblS">Sound</span>
+    <div class="seg" id="segS" role="group" aria-labelledby="lblS"></div>
+
+    <button class="go" id="startBtn" type="button">Start the game</button>
+  </div>
+</section>
+
+<div class="sheet" id="picEd" hidden>
+  <div class="card ed" role="dialog" aria-modal="true" aria-labelledby="peH">
+    <h2 id="peH" style="margin:0 0 6px">Your pictures</h2>
+    <p class="note" style="font-size:.95rem">To use a picture from the web: right-click it, choose <b>Copy image</b>, click a word's picture box here, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>⌘</kbd>+<kbd>V</kbd> on a Mac). You can also drag a picture onto a row, upload one, or paste a picture's web address.</p>
+    <div class="rows" id="peRows"></div>
+    <p class="note warn" id="peNote"></p>
+    <button class="go" type="button" id="peDone">Done</button>
+  </div>
+</div>
+
+<div class="sheet" id="phEd" hidden>
+  <div class="card ed" role="dialog" aria-modal="true" aria-labelledby="phH">
+    <h2 id="phH" style="margin:0 0 6px">Preview the photos</h2>
+    <p class="note" style="font-size:.95rem" id="phIntro"></p>
+    <div class="pgrid" id="phGrid"></div>
+    <button class="go" type="button" id="phDone">Done</button>
+  </div>
+</div>
+
+<section id="game" hidden>
+  <header>
+    <div class="title">Guess the <span>Word</span></div>
+    <button class="tb" id="undoBtn" type="button">Undo <kbd>U</kbd></button>
+    <button class="tb" id="fullBtn" type="button">Full screen</button>
+    <button class="tb" id="setupBtn" type="button">Settings</button>
+  </header>
+  <div class="main">
+    <div class="stage" id="stage">
+      <div class="who" id="who"></div>
+      <div class="center" id="center"></div>
+      <div class="controls" id="controls"></div>
+      <div class="timer" id="timer" hidden><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" fill="rgba(0,0,0,.35)" stroke="rgba(255,255,255,.15)" stroke-width="10"/><circle id="ring" cx="50" cy="50" r="44" fill="none" stroke="#ffd23f" stroke-width="10" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><div class="n" id="tn" role="timer" aria-live="off"></div></div>
+    </div>
+    <aside class="board"><h2>Scoreboard</h2><div class="list" id="list"></div></aside>
+  </div>
+</section>
+
+<script>
+const BANK = {
+  Animals: { peacock:'🦚', sloth:'🦥', otter:'🦦', kangaroo:'🦘', flamingo:'🦩', hedgehog:'🦔', lizard:'🦎', rhinoceros:'🦏', hippopotamus:'🦛', crocodile:'🐊', lobster:'🦞', dinosaur:'🦕', dog:'', cat:'', fish:'🐟', bird:'🐦', horse:'🐴', cow:'🐮', pig:'🐷', duck:'🦆', frog:'🐸', bear:'🐻', lion:'🦁', tiger:'🐯', monkey:'🐒', elephant:'🐘', rabbit:'🐰', turtle:'🐢', snake:'🐍', owl:'🦉', bee:'🐝', butterfly:'🦋', spider:'🕷️', chicken:'🐔', sheep:'🐑', giraffe:'🦒', zebra:'🦓', penguin:'🐧', whale:'🐳', octopus:'🐙', mouse:'🐭', squirrel:'🐿️' },
+  Food: { avocado:'🥑', broccoli:'🥦', pretzel:'🥨', waffle:'🧇', coconut:'🥥', pineapple:'🍍', apple:'🍎', banana:'🍌', grapes:'🍇', orange:'🍊', strawberry:'🍓', watermelon:'🍉', carrot:'🥕', corn:'🌽', bread:'🍞', cheese:'🧀', egg:'🥚', pizza:'🍕', hamburger:'🍔', sandwich:'🥪', taco:'🌮', cookie:'🍪', cake:'🍰', 'ice cream':'🍦', popcorn:'🍿', milk:'🥛', juice:'🧃', soup:'🍲', rice:'🍚', pancakes:'🥞', lemon:'🍋', peanut:'🥜', donut:'🍩', pie:'🥧', salad:'🥗', candy:'🍬' },
+  School: { microscope:'🔬', telescope:'🔭', magnet:'🧲', compass:'🧭', 'magnifying glass':'🔍', thermometer:'🌡️', microphone:'🎤', hourglass:'⌛', book:'📖', pencil:'✏️', crayon:'🖍️', backpack:'🎒', scissors:'✂️', ruler:'📏', computer:'💻', clock:'🕰️', calendar:'📅', paper:'📄', globe:'🌎', paint:'🎨', notebook:'📓', bus:'🚌', teacher:'', student:'🧑‍🎓', school:'', lunch:'', chair:'', desk:'', map:'🗺️', calculator:'🧮', bell:'🔔', trophy:'🏆' },
+  Home: { battery:'🔋', envelope:'✉️', camera:'📷', house:'🏠', bed:'🛏️', door:'🚪', window:'🪟', lamp:'💡', couch:'🛋️', bathtub:'🛁', toilet:'🚽', key:'🔑', phone:'📱', television:'📺', broom:'🧹', soap:'🧼', toothbrush:'🪥', cup:'🥤', fork:'🍴', spoon:'🥄', plate:'🍽️', scarf:'🧣', mirror:'🪞', candle:'🕯️', gift:'🎁', balloon:'🎈', umbrella:'☂️' },
+  'Sports and Play': { saxophone:'🎷', accordion:'🪗', parachute:'🪂', 'soccer ball':'⚽', basketball:'🏀', football:'🏈', baseball:'⚾', tennis:'🎾', bike:'🚲', skateboard:'🛹', kite:'🪁', swim:'🏊', run:'🏃', dance:'💃', goal:'🥅', bowling:'🎳', golf:'⛳', skate:'⛸️', ski:'⛷️', fishing:'🎣', puzzle:'🧩', dice:'🎲', drum:'🥁', guitar:'🎸', piano:'🎹', trumpet:'🎺', yoyo:'🪀', medal:'🏅' },
+  'Nature and Weather': { hurricane:'🌀', comet:'☄️', sun:'☀️', moon:'🌙', star:'⭐', cloud:'☁️', rain:'🌧️', snow:'❄️', rainbow:'🌈', tree:'🌳', flower:'🌸', leaf:'🍃', mountain:'⛰️', volcano:'🌋', ocean:'🌊', fire:'🔥', wind:'💨', lightning:'⚡', tornado:'🌪️', cactus:'🌵', mushroom:'🍄', rock:'🪨', island:'🏝️', earth:'🌍', snowman:'⛄', seed:'🌱', shell:'🐚' },
+  'People and Jobs': { baby:'👶', boy:'', girl:'', man:'👨', woman:'👩', family:'👪', doctor:'🧑‍⚕️', nurse:'👩‍⚕️', firefighter:'🧑‍🚒', police:'👮', farmer:'🧑‍🌾', cook:'🧑‍🍳', artist:'🧑‍🎨', astronaut:'🧑‍🚀', pilot:'🧑‍✈️', builder:'👷', king:'🤴', queen:'👸', dad:'', mom:'👩‍👦', friend:'🧑‍🤝‍🧑', clown:'🤡', detective:'🕵️', mechanic:'🧑‍🔧', scientist:'🧑‍🔬' },
+  'Things That Go': { satellite:'🛰️', car:'🚗', truck:'🚚', train:'🚂', airplane:'✈️', boat:'⛵', ship:'🚢', helicopter:'🚁', rocket:'🚀', tractor:'🚜', ambulance:'🚑', 'fire truck':'🚒', taxi:'🚕', motorcycle:'🏍️', scooter:'🛴', canoe:'🛶', cart:'🛒', bridge:'🌉', road:'🛣️' },
+  Feelings: { happy:'😀', sad:'😢', angry:'😠', scared:'😨', tired:'😴', surprised:'😮', silly:'🤪', sick:'🤒', cool:'😎', worried:'😟', excited:'🤩', bored:'🥱', confused:'😕', love:'❤️' }
+};
+const MILD = 'dog cat fish bird horse cow pig duck frog bear lion bee chicken mouse sheep apple banana grapes orange egg pizza cookie cake milk juice ice cream candy bread cheese carrot corn hamburger sandwich book pencil crayon backpack bus teacher school lunch chair house bed door key phone cup spoon fork plate balloon gift bathtub toilet soccer ball ball kite drum run swim dance sun moon star rain snow tree flower fire baby boy girl man woman mom dad family car truck train boat airplane happy sad angry tired'.split(' ');
+const SPICY_LIST = ['peacock','sloth','otter','kangaroo','flamingo','hedgehog','lizard','rhinoceros','hippopotamus','crocodile','lobster','dinosaur','octopus','squirrel','avocado','broccoli','pretzel','waffle','coconut','pineapple','microscope','telescope','magnet','compass','magnifying glass','thermometer','microphone','hourglass','calculator','calendar','globe','battery','envelope','camera','saxophone','accordion','parachute','skateboard','hurricane','comet','volcano','tornado','lightning','cactus','island','earth','astronaut','scientist','detective','mechanic','firefighter','pilot','satellite','helicopter','ambulance','submarine','canoe','bridge','motorcycle','surprised','worried','excited','confused','bored','cool','silly','television','toothbrush','mirror','candle','trumpet','guitar','piano','fishing','bowling','golf','tennis','puzzle','scissors','ruler','notebook','computer','map'];
+const LEVEL = {};
+MILD.forEach((w) => { LEVEL[w] = 'mild'; });
+['ice cream', 'soccer ball'].forEach((w) => { LEVEL[w] = 'mild'; });
+SPICY_LIST.forEach((w) => { LEVEL[w] = 'spicy'; });
+const levelOf = (w) => LEVEL[w.toLowerCase()] || 'medium';
+
+const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", "kangaroo": "Kangaroo", "flamingo": "Flamingo", "hedgehog": "Hedgehog", "lizard": "Lizard", "rhinoceros": "Rhinoceros", "hippopotamus": "Hippopotamus", "crocodile": "Crocodile", "lobster": "Lobster", "dinosaur": "Dinosaur", "dog": "Dog", "cat": "Cat", "fish": "Goldfish", "bird": "Bird", "horse": "Horse", "cow": "Cattle", "pig": "Domestic pig", "duck": "Mallard", "frog": "Frog", "bear": "Brown bear", "lion": "Lion", "tiger": "Tiger", "monkey": "Monkey", "elephant": "African bush elephant", "rabbit": "Rabbit", "turtle": "Turtle", "snake": "Snake", "owl": "Owl", "bee": "Western honey bee", "butterfly": "Butterfly", "spider": "Spider", "chicken": "Chicken", "sheep": "Sheep", "giraffe": "Giraffe", "zebra": "Zebra", "penguin": "Penguin", "whale": "Humpback whale", "octopus": "Octopus", "mouse": "House mouse", "squirrel": "Squirrel", "avocado": "Avocado", "broccoli": "Broccoli", "pretzel": "Pretzel", "waffle": "Waffle", "coconut": "Coconut", "pineapple": "Pineapple", "apple": "Apple", "banana": "Banana", "grapes": "Grape", "orange": "Orange (fruit)", "strawberry": "Strawberry", "watermelon": "Watermelon", "carrot": "Carrot", "corn": "Maize", "bread": "Bread", "cheese": "Cheese", "egg": "Egg as food", "pizza": "Pizza", "hamburger": "Hamburger", "sandwich": "Sandwich", "taco": "Taco", "cookie": "Cookie", "cake": "Cake", "ice cream": "Ice cream", "popcorn": "Popcorn", "milk": "Milk", "juice": "Juice", "soup": "Soup", "rice": "Rice", "pancakes": "Pancake", "lemon": "Lemon", "peanut": "Peanut", "donut": "Doughnut", "pie": "Pie", "salad": "Salad", "candy": "Candy", "microscope": "Microscope", "telescope": "Telescope", "magnet": "Magnet", "compass": "Compass", "magnifying glass": "Magnifying glass", "thermometer": "Thermometer", "microphone": "Microphone", "hourglass": "Hourglass", "book": "Book", "pencil": "Pencil", "crayon": "Crayon", "backpack": "Backpack", "scissors": "Scissors", "ruler": "Ruler", "computer": "Laptop", "clock": "Clock", "calendar": "Calendar", "paper": "Paper", "globe": "Globe", "paint": "Paint", "notebook": "Notebook", "bus": "School bus", "chair": "Chair", "desk": "Desk", "map": "Map", "calculator": "Calculator", "bell": "Bell", "trophy": "Trophy", "battery": "Battery (electricity)", "envelope": "Envelope", "camera": "Camera", "house": "House", "bed": "Bed", "door": "Door", "window": "Window", "lamp": "Lamp", "couch": "Couch", "bathtub": "Bathtub", "toilet": "Toilet", "key": "Key (lock)", "phone": "Smartphone", "television": "Television set", "broom": "Broom", "soap": "Soap", "toothbrush": "Toothbrush", "cup": "Mug", "fork": "Fork", "spoon": "Spoon", "plate": "Plate (dishware)", "scarf": "Scarf", "candle": "Candle", "gift": "Gift wrapping", "balloon": "Toy balloon", "umbrella": "Umbrella", "saxophone": "Saxophone", "accordion": "Accordion", "parachute": "Parachute", "soccer ball": "Ball (association football)", "basketball": "Basketball (ball)", "football": "American football (ball)", "baseball": "Baseball (ball)", "tennis": "Tennis ball", "bike": "Bicycle", "skateboard": "Skateboard", "kite": "Kite", "bowling": "Bowling pin", "golf": "Golf ball", "skate": "Ice skate", "ski": "Ski", "fishing": "Fishing rod", "puzzle": "Jigsaw puzzle", "dice": "Dice", "drum": "Drum", "guitar": "Guitar", "piano": "Piano", "trumpet": "Trumpet", "yoyo": "Yo-yo", "medal": "Medal", "hurricane": "Tropical cyclone", "comet": "Comet", "sun": "Sun", "moon": "Moon", "star": "Star", "cloud": "Cloud", "rain": "Rain", "snow": "Snow", "rainbow": "Rainbow", "tree": "Tree", "flower": "Flower", "leaf": "Leaf", "mountain": "Mountain", "volcano": "Volcano", "ocean": "Ocean", "fire": "Fire", "wind": "Wind", "lightning": "Lightning", "tornado": "Tornado", "cactus": "Cactus", "mushroom": "Mushroom", "rock": "Rock (geology)", "island": "Island", "earth": "Earth", "snowman": "Snowman", "seed": "Seed", "shell": "Seashell", "satellite": "Satellite", "car": "Car", "truck": "Truck", "train": "Train", "airplane": "Airplane", "boat": "Boat", "ship": "Ship", "helicopter": "Helicopter", "rocket": "Rocket", "tractor": "Tractor", "ambulance": "Ambulance", "fire truck": "Fire engine", "taxi": "Taxicab", "motorcycle": "Motorcycle", "scooter": "Kick scooter", "canoe": "Canoe", "cart": "Shopping cart", "bridge": "Bridge", "road": "Road"};
+
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const STORE = 'guess-the-word-v1';
+  const ALLCATS = Object.keys(BANK);
+  const LOOKUP = {}; ALLCATS.forEach((c) => Object.keys(BANK[c]).forEach((w) => { LOOKUP[w.toLowerCase()] = BANK[c][w]; }));
+  let set = { players: 'Team 1\nTeam 2\nTeam 3\nTeam 4', src: 'bank', level: 'mild', pics: true, builtin: true, own_pics: {}, hidden_ph: {}, cats: ['Animals', 'Food', 'School', 'Home'], own: '', time: 60, gpts: 1, cpts: 1, sound: true };
+  try { Object.assign(set, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
+  if (!set.hidden_ph || typeof set.hidden_ph !== 'object') set.hidden_ph = {};
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(set)); } catch (e) {} };
+
+  let players = [], scores = [], guesser = 0, deck = [], word = null, phase = 'cover', left = 0, iv = 0, history = [], bumpIdx = -1;
+
+  /* ---------- pictures ---------- */
+  /* Real photos: each built-in word is matched to a hand-picked Wikipedia article (PHOTO in the word list) and shows
+     that article's free-licensed lead photo (JPG only, so no diagrams or cartoons), with the photographer and license.
+     Words about people, jobs, feelings and actions have no entry, so they never get an automatic photo. */
+  const PH = {}, PEND = {};
+  let photoState = 'unknown';
+  const WAPI = 'https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*';
+  const keyOf = (w) => String(w).toLowerCase().trim();
+  const photoTitle = (k) => (Object.prototype.hasOwnProperty.call(PHOTO, k) ? PHOTO[k] : null);
+  const strip = (h) => { if (!h) return ''; try { return new DOMParser().parseFromString(String(h), 'text/html').body.textContent.replace(/\s+/g, ' ').trim().slice(0, 80); } catch (e) { return ''; } };
+  function follow(q, t) { let x = t; (q.normalized || []).forEach((n) => { if (n.from === x) x = n.to; }); (q.redirects || []).forEach((n) => { if (n.from === x) x = n.to; }); return x; }
+  async function loadPhotos(words) {
+    const keys = [...new Set(words.map(keyOf))].filter((k) => photoTitle(k) && PH[k] === undefined && !PEND[k]);
+    for (let i = 0; i < keys.length; i += 40) {
+      const chunk = keys.slice(i, i + 40); chunk.forEach((k) => { PEND[k] = 1; });
+      try {
+        const r = await fetch(WAPI + '&redirects=1&prop=pageimages&piprop=thumbnail%7Cname&pithumbsize=640&pilicense=free&pilimit=50&titles=' + encodeURIComponent(chunk.map(photoTitle).join('|')));
+        const q = (await r.json()).query || {}; photoState = 'ok';
+        const pages = {}; (q.pages || []).forEach((p) => { pages[p.title] = p; });
+        const files = [];
+        chunk.forEach((k) => {
+          const p = pages[follow(q, photoTitle(k))];
+          if (p && p.thumbnail && p.pageimage && /\.jpe?g$/i.test(p.pageimage)) { PH[k] = { src: p.thumbnail.source, file: p.pageimage, credit: '', page: '' }; files.push('File:' + p.pageimage); } else PH[k] = null;
+        });
+        if (files.length) {
+          try {
+            const r2 = await fetch(WAPI + '&prop=imageinfo&iiprop=extmetadata%7Curl&iiextmetadatafilter=Artist%7CLicenseShortName&titles=' + encodeURIComponent(files.join('|')));
+            const q2 = (await r2.json()).query || {}, info = {};
+            (q2.pages || []).forEach((p) => { if (p.imageinfo && p.imageinfo[0]) info[p.title] = p.imageinfo[0]; });
+            chunk.forEach((k) => {
+              const ph = PH[k]; if (!ph) return;
+              const ii = info[follow(q2, 'File:' + ph.file)]; if (!ii) return;
+              const m = ii.extmetadata || {};
+              ph.page = /^https:\/\//.test(ii.descriptionurl || '') ? ii.descriptionurl : '';
+              ph.credit = [strip(m.Artist && m.Artist.value), m.LicenseShortName && strip(m.LicenseShortName.value)].filter(Boolean).join(' · ');
+            });
+          } catch (e) {}
+        }
+      } catch (e) { if (photoState !== 'ok') photoState = 'blocked'; }
+      chunk.forEach((k) => { delete PEND[k]; });
+      photoChanged();
+    }
+  }
+  function photoFor(w) { const k = keyOf(w); return set.builtin && !set.hidden_ph[k] && !(set.own_pics && set.own_pics[k]) && PH[k] ? PH[k] : null; }
+  function picFor(w, force) {
+    const k = keyOf(w);
+    if (!set.pics && !force) return '';
+    if (set.own_pics && set.own_pics[k]) return `<img src="${set.own_pics[k]}" alt="">`;
+    const ph = photoFor(w);
+    return ph ? `<img src="${esc(ph.src)}" alt="" referrerpolicy="no-referrer">` : '';
+  }
+  function creditFor(w) {
+    const ph = set.pics ? photoFor(w) : null; if (!ph) return '';
+    return `<button class="hideph" type="button" data-hide="${esc(keyOf(w))}" title="Never show this photo again">Hide photo</button><div class="cr">Photo: ${esc(ph.credit || 'Wikimedia Commons')}${ph.page ? ` · <a href="${esc(ph.page)}" target="_blank" rel="noopener">source</a>` : ''}</div>`;
+  }
+  function cardHTML(w, extra, lv) {
+    const pic = picFor(w);
+    return `<div class="wordcard${extra || ''}${pic ? '' : ' nopic'}">${lv ? `<span class="lvl" title="${lv}" aria-label="${lv} level">${lv === 'mild' ? '🌶' : lv === 'medium' ? '🌶🌶' : '🌶🌶🌶'}</span>` : ''}${pic ? `<div class="pic">${pic}</div>` : ''}<div class="w">${esc(w)}</div>${creditFor(w)}</div>`;
+  }
+  function repaintCard() {
+    const old = document.querySelector('#center .wordcard'); if (!old || !word) return;
+    const lv = old.querySelector('.lvl') ? levelOf(word) : '';
+    const t = document.createElement('div'); t.innerHTML = cardHTML(word, '', lv); const nw = t.firstElementChild;
+    nw.style.cssText = old.style.cssText; old.replaceWith(nw);
+  }
+  function photoChanged() {
+    if ((phase === 'play' || phase === 'clue') && word && photoFor(word) && document.querySelector('#center .wordcard.nopic')) repaintCard();
+    if (!$('phEd').hidden) renderPh();
+    if (!$('setup').hidden) photoNote();
+  }
+  function preload(w) { const ph = w && set.pics ? photoFor(w) : null; if (ph) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.src = ph.src; } }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.wordcard .hideph'); if (!b) return;
+    set.hidden_ph[b.dataset.hide] = true; save(); repaintCard();
+  });
+  function photoNote() {
+    const n = $('photoNote'); if (!n) return;
+    n.classList.toggle('warn', set.builtin && photoState === 'blocked');
+    $('prevBtn').hidden = !set.builtin;
+    n.textContent = !set.builtin ? 'Words without your own picture show the word only.'
+      : photoState === 'blocked' ? 'Real photos can\'t load right now. They need the internet, and they are blocked inside Claude. Use the website version of the hub, or add your own pictures. Until then, words show without a picture.'
+      : 'Real photographs from Wikipedia, free to use, with the photographer credited. Words about people, jobs, feelings and actions never get an automatic photo. Check them with Preview, and hide any you don\'t want.';
+  }
+  function previewWords() { return (set.src === 'own' ? parseOwn() : set.cats.flatMap((c) => catWords(c))).filter((w) => photoTitle(keyOf(w))); }
+  function renderPh() {
+    const ws = previewWords(), g = $('phGrid');
+    $('phIntro').textContent = photoState === 'blocked' ? 'Real photos can\'t load right now. They need the internet, and they are blocked inside Claude. Use the website version of the hub to preview and use them.'
+      : ws.length ? `${ws.length} words can get a photo. Hide any photo you don't want; hidden photos stay hidden on this computer. Words about people, jobs, feelings and actions never get an automatic photo.` : 'None of these words has an automatic photo. Add your own pictures instead.';
+    g.innerHTML = ws.map((w) => {
+      const k = keyOf(w), ph = PH[k], off = !!set.hidden_ph[k], mine = set.own_pics && set.own_pics[k];
+      const im = mine ? '<span>Uses your own picture</span>' : ph ? `<img src="${esc(ph.src)}" alt="Photo for ${esc(w)}" loading="lazy" referrerpolicy="no-referrer">` : ph === null ? '<span>No photo found</span>' : photoState === 'blocked' ? '<span>Can\'t load here</span>' : '<span>Loading…</span>';
+      return `<div class="ph${off ? ' off' : ''}"><div class="im">${im}</div><div class="wd">${esc(w)}</div>${ph && !mine ? `<div class="c">${esc(ph.credit || 'Wikimedia Commons')}</div><button type="button" data-k="${esc(k)}" aria-pressed="${off}">${off ? 'Hidden. Show it' : 'Hide this photo'}</button>` : ''}</div>`;
+    }).join('');
+  }
+  $('phGrid').addEventListener('click', (e) => { const b = e.target.closest('button[data-k]'); if (!b) return; const k = b.dataset.k; if (set.hidden_ph[k]) delete set.hidden_ph[k]; else set.hidden_ph[k] = true; save(); renderPh(); });
+  $('prevBtn').onclick = () => { renderPh(); $('phEd').hidden = false; $('phDone').focus(); loadPhotos(previewWords()); };
+  $('phDone').onclick = () => { $('phEd').hidden = true; };
+
+  /* ---------- setup ---------- */
+  function seg(el, opts, isOn, pick) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { pick(v); save(); renderSetup(); }; el.appendChild(b); });
+  }
+  function parsePlayers() { return set.players.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 30); }
+  function parseOwn() { const seen = new Set(); return set.own.split(/\n|,/).map((s) => s.trim()).filter((s) => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase())); }
+  function renderSetup() {
+    $('players').value = set.players;
+    const pl = parsePlayers(); $('plNote').textContent = pl.length < 2 ? 'Add at least 2 players or teams.' : `${pl.length} on the scoreboard. Type student names or team names.`;
+    $('plNote').classList.toggle('warn', pl.length < 2);
+    seg($('segSrc'), [['bank', 'Random words'], ['own', 'My own word list']], (v) => set.src === v, (v) => { set.src = v; });
+    $('bankBox').hidden = set.src !== 'bank'; $('ownBox').hidden = set.src !== 'own';
+    seg($('segLv'), [['mild', '🌶 Mild (PreK–K)'], ['medium', '🌶🌶 Medium (1st–3rd)'], ['spicy', '🌶🌶🌶 Spicy (4th–5th)'], ['all', 'All levels']], (v) => set.level === v, (v) => { set.level = v; });
+    seg($('segCat'), ALLCATS.map((c) => [c, `${c} (${catWords(c).length})`]), (v) => set.cats.includes(v), (v) => { set.cats = set.cats.includes(v) ? set.cats.filter((x) => x !== v) : set.cats.concat(v); });
+    const nLv = set.cats.flatMap((c) => catWords(c)).length;
+    $('lvNote') && ($('lvNote').textContent = set.src === 'bank' ? `${nLv} words at this level in the groups you chose.` : '');
+    $('ownWords').value = set.own;
+    seg($('segT'), [[0, 'No time limit'], [60, '60 seconds'], [45, '45 seconds'], [30, '30 seconds']], (v) => set.time === v, (v) => { set.time = v; });
+    seg($('segG'), [[0, 'None'], [1, '+1'], [2, '+2'], [5, '+5']], (v) => set.gpts === v, (v) => { set.gpts = v; });
+    seg($('segC'), [[1, '+1'], [2, '+2'], [5, '+5']], (v) => set.cpts === v, (v) => { set.cpts = v; });
+    seg($('segS'), [[true, 'On'], [false, 'Off']], (v) => set.sound === v, (v) => { set.sound = v; });
+    seg($('segP'), [[true, 'Show pictures'], [false, 'Words only']], (v) => set.pics === v, (v) => { set.pics = v; });
+    $('builtinBox').hidden = !set.pics;
+    seg($('segB'), [[true, 'Real photos chosen for me'], [false, 'No picture']], (v) => set.builtin === v, (v) => { set.builtin = v; });
+    photoNote();
+    if (set.pics && set.builtin && photoState === 'unknown') loadPhotos(['dog']);
+    ownNote();
+  }
+  $('players').addEventListener('input', () => { set.players = $('players').value; save(); const pl = parsePlayers(); $('plNote').textContent = pl.length < 2 ? 'Add at least 2 players or teams.' : `${pl.length} on the scoreboard. Type student names or team names.`; $('plNote').classList.toggle('warn', pl.length < 2); });
+  function ownNote() {
+    const ow = parseOwn(), mine = ow.filter((w) => set.own_pics[w.toLowerCase()]).length;
+    $('ownNote').classList.remove('warn');
+    $('ownNote').textContent = ow.length ? `${ow.length} word${ow.length === 1 ? '' : 's'}${mine ? `, ${mine} with your own pictures` : ''}.` : 'Type or paste your words, one per line.';
+    $('picEdBtn').hidden = !ow.length;
+  }
+  $('ownWords').addEventListener('input', () => { set.own = $('ownWords').value; save(); ownNote(); });
+
+  /* ---------- your own pictures ---------- */
+  function shrink(blob, cb) {
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => { const k = Math.min(1, 360 / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k)); const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); x.drawImage(im, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); cb(cv.toDataURL('image/jpeg', .85)); };
+    im.onerror = () => { URL.revokeObjectURL(url); $('peNote').textContent = 'That file is not a picture the browser can open. Try a JPG or PNG.'; };
+    im.src = url;
+  }
+  function fromLink(link, key) {
+    link = (link || '').trim(); if (!/^https?:\/\//i.test(link) && !/^data:image\//i.test(link)) { $('peNote').textContent = 'Paste a web address that starts with http:// or https://'; return; }
+    const im = new Image();
+    im.onload = () => { set.own_pics[key] = link; savePics(); renderPe(); };
+    im.onerror = () => { $('peNote').textContent = 'That picture could not be loaded here. Instead, right-click the picture on the web page, choose Copy image, click the picture box, and press Ctrl+V.'; };
+    im.src = link;
+  }
+  function savePics() { try { localStorage.setItem(STORE, JSON.stringify(set)); $('peNote').textContent = ''; } catch (e) { $('peNote').textContent = /quota/i.test(e && (e.name + e.message)) ? 'These pictures are too big to keep on this computer after you close the page. Try fewer or smaller pictures.' : ''; } }
+  function renderPe() {
+    const box = $('peRows'); box.innerHTML = '';
+    parseOwn().forEach((w) => {
+      const key = w.toLowerCase(), src = set.own_pics[key];
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = `<button class="pic" type="button" aria-label="Picture for ${esc(w)}. Press Ctrl+V to paste a copied picture.">${src ? `<img src="${src}" alt="">` : 'Paste,<br>drop or<br>upload'}</button><span class="wd">${esc(w)}</span><div class="acts"><label>Upload<input type="file" accept="image/*" hidden></label><button type="button" class="lnk">Web link</button>${src ? '<button type="button" class="clr">Remove</button>' : ''}</div>`;
+      const set1 = (u) => { set.own_pics[key] = u; savePics(); renderPe(); };
+      row.querySelector('input').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) shrink(f, set1); });
+      row.querySelector('.lnk').onclick = () => { const u = prompt('Paste the picture\'s web address:'); if (u) fromLink(u, key); };
+      const clr = row.querySelector('.clr'); if (clr) clr.onclick = () => { delete set.own_pics[key]; savePics(); renderPe(); };
+      row.querySelector('.pic').onclick = (e) => { e.currentTarget.focus(); $('peNote').textContent = 'Now press Ctrl+V (or ⌘+V) to paste a picture you copied, or drag one onto this row.'; };
+      row.addEventListener('paste', (e) => {
+        const it = [...((e.clipboardData && e.clipboardData.items) || [])].find((x) => x.type.startsWith('image/'));
+        if (it) { e.preventDefault(); shrink(it.getAsFile(), set1); return; }
+        const t = e.clipboardData && e.clipboardData.getData('text'); if (t && /^https?:\/\//i.test(t.trim())) { e.preventDefault(); fromLink(t, key); }
+      });
+      row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag'); });
+      row.addEventListener('dragleave', () => row.classList.remove('drag'));
+      row.addEventListener('drop', (e) => {
+        e.preventDefault(); row.classList.remove('drag');
+        const f = [...(e.dataTransfer.files || [])].find((x) => x.type.startsWith('image/')); if (f) { shrink(f, set1); return; }
+        const html = e.dataTransfer.getData('text/html'), m = html && html.match(/<img[^>]+src="([^"]+)"/i);
+        const link = (m && m[1]) || e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain'); if (link) fromLink(link.split('\n')[0], key);
+      });
+      box.appendChild(row);
+    });
+  }
+  $('picEdBtn').onclick = () => { renderPe(); $('picEd').hidden = false; $('peDone').focus(); };
+  $('peDone').onclick = () => { $('picEd').hidden = true; ownNote(); };
+
+  function catWords(c) { return Object.keys(BANK[c] || {}).filter((w) => set.level === 'all' || levelOf(w) === set.level); }
+  function buildDeck() {
+    let words = set.src === 'own' ? parseOwn() : set.cats.flatMap((c) => catWords(c));
+    if (!words.length && set.src !== 'own') words = set.cats.flatMap((c) => Object.keys(BANK[c] || {}));
+    for (let i = words.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [words[i], words[j]] = [words[j], words[i]]; }
+    return words;
+  }
+  function start() {
+    const pl = parsePlayers();
+    if (pl.length < 2) { $('plNote').classList.add('warn'); $('players').focus(); return; }
+    if (set.src === 'own' && !parseOwn().length) { $('ownNote').textContent = 'Add at least one word.'; $('ownNote').classList.add('warn'); $('ownWords').focus(); return; }
+    if (set.src === 'bank' && !set.cats.length) { set.cats = ['Animals']; save(); }
+    players = pl; scores = pl.map(() => 0); guesser = 0; history = []; deck = buildDeck();
+    if (set.pics && set.builtin) loadPhotos(deck);
+    $('setup').hidden = true; $('game').hidden = false;
+    cover();
+  }
+
+  /* ---------- game flow ---------- */
+  function snap() { history.push(JSON.stringify({ scores, guesser })); if (history.length > 200) history.shift(); }
+  function nextWord() { if (!deck.length) { deck = buildDeck(); if (set.pics && set.builtin) loadPhotos(deck); } return deck.pop(); }
+  function stopTimer() { clearInterval(iv); iv = 0; $('timer').classList.remove('low'); }
+  function cover() {
+    stopTimer(); phase = 'cover'; word = null; $('timer').hidden = true;
+    renderWho();
+    $('center').innerHTML = `<div class="cover"><div class="chair" aria-hidden="true">🪑</div><h2>${esc(players[guesser])}, sit with your back to the screen.</h2><p>When the guesser can't see the screen, show the word. Everyone else gives clues without saying, signing or spelling the word.</p></div>`;
+    controls(`<button class="btn" type="button" id="showBtn">Show the word<kbd>Space</kbd></button>`);
+    $('showBtn').onclick = show;
+    $('showBtn').focus({ preventScroll: true });
+    renderBoard();
+  }
+  function renderWho() {
+    const opts = players.map((p, i) => `<option value="${i}"${i === guesser ? ' selected' : ''}>${esc(p)}</option>`).join('');
+    $('who').innerHTML = `<span>Guesser:</span> <b>${esc(players[guesser])}</b>${phase === 'cover' ? ` <label>Change: <select id="pickG" aria-label="Choose the guesser">${opts}</select></label>` : ''}`;
+    const sel = $('pickG'); if (sel) sel.onchange = () => { guesser = +sel.value; cover(); };
+  }
+  function show(again) {
+    word = nextWord(); phase = 'play';
+    renderWho();
+    const lv = set.src === 'bank' ? levelOf(word) : '';
+    $('center').innerHTML = cardHTML(word, ' pop', lv);
+    if (set.pics && set.builtin && PH[keyOf(word)] === undefined) loadPhotos([word]);
+    preload(deck[deck.length - 1]);
+    controls(`<button class="btn good" type="button" id="gotBtn">Got it!<kbd>G</kbd></button><button class="btn ghost" type="button" id="passBtn">New word<kbd>N</kbd></button>${set.time ? '' : '<button class="btn bad" type="button" id="stopBtn">Stop<kbd>X</kbd></button>'}`);
+    $('gotBtn').onclick = gotIt; $('passBtn').onclick = () => show(true);
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if ($('stopBtn')) $('stopBtn').onclick = timeUp;
+    if (again !== true) startTimer();
+    pop();
+  }
+  function startTimer() {
+    stopTimer();
+    if (!set.time) { $('timer').hidden = true; return; }
+    left = set.time; $('timer').hidden = false; drawTimer();
+    iv = setInterval(() => { left--; drawTimer(); if (left <= 5 && left > 0) tick(); if (left <= 0) timeUp(); }, 1000);
+  }
+  function drawTimer() {
+    $('tn').textContent = Math.max(0, left);
+    $('ring').setAttribute('stroke-dashoffset', String(276.5 * (1 - Math.max(0, left) / set.time)));
+    $('ring').setAttribute('stroke', left <= 10 ? '#ff5a5f' : '#ffd23f');
+    $('timer').classList.toggle('low', left <= 10 && left > 0);
+  }
+  function gotIt() {
+    if (phase !== 'play') return;
+    stopTimer(); snap();
+    if (set.gpts) { scores[guesser] += set.gpts; bumpIdx = guesser; }
+    banner(set.gpts ? `Got it! +${set.gpts}` : 'Got it!', ''); cheer(); renderBoard();
+    afterRound(true);
+  }
+  function timeUp() {
+    if (phase !== 'play') return;
+    stopTimer(); snap();
+    const s = $('stage'); s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash');
+    banner(set.time ? "Time's up!" : 'Stopped', 'bad'); buzz();
+    afterRound(false);
+  }
+  function afterRound(got) {
+    phase = 'clue';
+    $('center').innerHTML = `<div class="clue">${cardHTML(word, '', '').replace('<div class="wordcard', '<div style="transform:scale(.8)" class="wordcard')}
+      <div class="q">${got ? `${esc(players[guesser])} got it!` : `The word was “${esc(word)}”.`} Who gave the best clue?</div>
+      <div class="chips" id="clueChips">${players.map((p, i) => i === guesser ? '' : `<button type="button" data-i="${i}">${esc(p)} +${set.cpts}</button>`).join('')}</div></div>`;
+    $('clueChips').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; bestClue(+b.dataset.i); };
+    controls(`<button class="btn ghost" type="button" id="noClue">No clue points</button><button class="btn" type="button" id="nextBtn">Next guesser<kbd>Space</kbd></button>`);
+    $('noClue').onclick = nextRound; $('nextBtn').onclick = nextRound;
+    $('nextBtn').focus({ preventScroll: true });
+  }
+  function bestClue(i) {
+    snap(); scores[i] += set.cpts; bumpIdx = i; renderBoard();
+    banner(`Best clue: ${players[i]} +${set.cpts}`, 'purple'); cheer();
+    setTimeout(nextRound, 1500);
+  }
+  function nextRound() { if (phase !== 'clue') return; phase = 'between'; guesser = (guesser + 1) % players.length; cover(); }
+  function controls(h) { $('controls').innerHTML = h; }
+  function banner(t, cls) { const b = document.createElement('div'); b.className = 'banner ' + (cls || ''); b.innerHTML = `<div>${esc(t)}</div>`; $('stage').appendChild(b); setTimeout(() => b.remove(), 1850); }
+  function renderBoard() {
+    const l = $('list'); l.innerHTML = '';
+    players.forEach((p, i) => {
+      const row = document.createElement('div'); row.className = 'pl' + (i === guesser ? ' hot' : '');
+      row.innerHTML = `<span class="nm">${i === guesser ? '<small>Guesser</small>' : ''}${esc(p)}</span><button type="button" aria-label="Take a point from ${esc(p)}">−</button><span class="sc${i === bumpIdx ? ' bump' : ''}">${scores[i]}</span><button type="button" aria-label="Give a point to ${esc(p)}">+</button>`;
+      const [minus, plus] = row.querySelectorAll('button');
+      minus.onclick = () => { snap(); scores[i] = Math.max(0, scores[i] - 1); bumpIdx = -1; renderBoard(); };
+      plus.onclick = () => { snap(); scores[i] += 1; bumpIdx = i; renderBoard(); };
+      l.appendChild(row);
+    });
+    bumpIdx = -1;
+    $('undoBtn').disabled = !history.length;
+  }
+  function undo() { const h = history.pop(); if (!h) return; const s = JSON.parse(h); scores = s.scores; renderBoard(); }
+
+  /* ---------- sound (optional) ---------- */
+  let ac = null;
+  function audio() { if (!set.sound) return null; try { if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { return null; } return ac; }
+  function tone(f, s, d, type, vol) { const a = audio(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type || 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d); o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02); }
+  function pop() { const a = audio(); if (a) tone(660, a.currentTime, .1); }
+  function tick() { const a = audio(); if (a) tone(1000, a.currentTime, .05, 'square', .05); }
+  function cheer() { const a = audio(); if (!a) return; const t = a.currentTime; [659, 784, 1046].forEach((f, k) => tone(f, t + k * .1, .22)); }
+  function buzz() { const a = audio(); if (a) tone(150, a.currentTime, .5, 'sawtooth', .08); }
+
+  /* ---------- wiring ---------- */
+  $('startBtn').onclick = start;
+  $('undoBtn').onclick = undo;
+  $('setupBtn').onclick = () => { stopTimer(); $('game').hidden = true; $('setup').hidden = false; renderSetup(); };
+  $('fullBtn').onclick = () => { try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); } catch (e) {} };
+  document.addEventListener('keydown', (e) => {
+    if ($('game').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const k = e.key.toLowerCase();
+    if (k === ' ' || k === 'enter') { if (e.target && e.target.tagName === 'BUTTON') return; e.preventDefault(); if (phase === 'cover') show(); else if (phase === 'clue') nextRound(); }
+    else if (k === 'g') gotIt();
+    else if (k === 'n' && phase === 'play') show(true);
+    else if (k === 'x' && phase === 'play' && !set.time) timeUp();
+    else if (k === 'u') undo();
+  });
+  renderSetup();
+})();
+</script>
+
+</body>
+</html>

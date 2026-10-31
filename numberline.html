@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Number Line</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: top bar (activity picker + buttons), the question prompt, the big number line in the middle,
+     a feedback line, and the answer area (keypad, answer buttons, < = >, number cards, or a Check button). */
+  :root {
+    --bg: #fff8ec; --sky: #e6f4ff; --ink: #24314a; --ink-2: #5b6780; --line: #d9cdb6;
+    --card: #ffffff; --blank: #fff1c2; --blank-edge: #f0c64a;
+    --good: #22b35e; --good-deep: #148043; --try: #ff8a3d; --try-deep: #c95a14;
+    --btn: #4f8df5; --btn-deep: #2c5fc0; --pin: #ef5a5a; --pin-deep: #b83636; --violet: #8b5cf6;
+    --display: "Fredoka", "Andika", system-ui, sans-serif;
+    --num: "Andika", "Fredoka", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: linear-gradient(var(--sky), var(--bg) 55%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--btn); outline-offset: 3px; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; gap: 6px; padding: 10px 16px 14px; max-width: 1280px; margin: 0 auto; }
+  .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mode { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .mode .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--btn); color: #fff; display: grid; place-items: center; flex: none; font-weight: 700; font-size: 1.1rem; }
+  .mode select { border: 0; background: #fff; border-radius: 12px; padding: 7px 10px; font-weight: 700; font-size: 1.05rem; box-shadow: 0 3px 0 #e2d8c4; max-width: 100%; min-width: 0; }
+  .tb { border: 0; background: #fff; border-radius: 12px; padding: 8px 14px; font-weight: 600; color: var(--ink-2); box-shadow: 0 3px 0 #e2d8c4; font-size: .95rem; }
+  .tb.next { background: var(--btn); color: #fff; box-shadow: 0 4px 0 var(--btn-deep); }
+  .tb.next.pulse { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.08); } }
+  kbd { font-family: var(--num); font-size: .72em; border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; opacity: .7; }
+
+  .prompt { text-align: center; font-weight: 700; font-size: clamp(1.3rem, 4.2vh, 2.4rem); line-height: 1.5; min-height: 1.3em; }
+  .prompt .op { margin: 0 .25em; }
+  .prompt .slots { margin-top: 4px; }
+  .chip { vertical-align: middle; margin: 0 .15em; line-height: 1.25; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 16px; padding: 2px 16px; border-bottom: 6px solid var(--line); font-family: var(--num); font-size: 1.15em; min-width: 1.6em; box-shadow: 0 6px 16px rgba(36,49,74,.1); }
+  .chip.cpin { border-bottom-color: var(--pin); }
+  .chip.cask { background: var(--blank); border-bottom-color: var(--blank-edge); color: #b58200; }
+  .chip.cgood { background: #d9f7e5; border-bottom-color: var(--good); color: var(--good-deep); }
+  .op { font-family: var(--num); color: var(--ink-2); }
+  .chip.cv { border-bottom-color: var(--violet); }
+  .arc.anim { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw .4s ease-out forwards; animation-delay: var(--dl); }
+  .arcl.anim { opacity: 0; animation: fade .2s forwards; animation-delay: calc(var(--dl) + .3s); }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes fade { to { opacity: 1; } }
+
+  .linebox { position: relative; min-height: 0; display: grid; align-items: center; }
+  .nl { position: relative; width: 100%; height: clamp(190px, 38vh, 330px); touch-action: none; user-select: none; -webkit-user-select: none; }
+  .nl svg { position: absolute; inset: 0; overflow: visible; }
+  .lab, .blank, .mk, .flag, .arrow, .tag { position: absolute; transform: translateX(-50%); }
+  .lab { font-family: var(--num); font-weight: 700; color: var(--ink); line-height: 1; text-align: center; white-space: nowrap; font-size: var(--lf, 24px); }
+  .lab.hide { visibility: hidden; }
+  .lab.good { color: var(--good-deep); }
+  .fr { display: inline-flex; align-items: center; gap: .12em; }
+  .fs { display: inline-flex; flex-direction: column; align-items: center; font-size: .78em; line-height: 1.02; }
+  .fs > span:first-child { border-bottom: .09em solid currentColor; padding: 0 .12em .04em; }
+  .fs > span:last-child { padding-top: .04em; }
+  .blank { min-width: 1.7em; padding: .14em .22em; border-radius: 12px; background: var(--blank); border: 3px dashed var(--blank-edge); color: #b58200; font-family: var(--num); font-weight: 700; font-size: var(--lf, 24px); line-height: 1; text-align: center; cursor: pointer; }
+  .blank.on { border-style: solid; box-shadow: 0 0 0 5px rgba(79,141,245,.35); animation: wiggle 1.6s ease-in-out infinite; }
+  .blank.done { background: #d9f7e5; border: 3px solid var(--good); color: var(--good-deep); cursor: default; animation: bounce .5s cubic-bezier(.3,1.7,.5,1); }
+  .blank.shown { background: #ffe9d6; border: 3px solid var(--try); color: var(--try-deep); cursor: default; }
+  .blank.wrong { animation: shake .45s; }
+  @keyframes wiggle { 0%, 100% { transform: translateX(-50%) rotate(-3deg); } 50% { transform: translateX(-50%) rotate(3deg) scale(1.05); } }
+  @keyframes bounce { 0% { transform: translateX(-50%) scale(.5); } 100% { transform: translateX(-50%) scale(1); } }
+  @keyframes shake { 20%, 60% { transform: translateX(calc(-50% - 12px)); } 40%, 80% { transform: translateX(calc(-50% + 12px)); } }
+  .mk { width: 44px; height: 58px; pointer-events: none; }
+  .mk svg { position: static; width: 100%; height: 100%; overflow: visible; }
+  .mk.drag { pointer-events: auto; cursor: grab; }
+  .mk.drop { animation: drop .45s cubic-bezier(.3,1.5,.5,1); }
+  @keyframes drop { 0% { transform: translate(-50%, -60px); opacity: 0; } 100% { transform: translate(-50%, 0); opacity: 1; } }
+  .tag { font-family: var(--num); font-weight: 700; background: #fff; border-radius: 10px; padding: 3px 9px; box-shadow: 0 3px 10px rgba(36,49,74,.18); font-size: calc(var(--lf, 24px) * .9); white-space: nowrap; line-height: 1.05; }
+  .tag.good { background: var(--good); color: #fff; }
+  .tag.try { background: var(--try); color: #fff; }
+  .tag.pin { background: var(--pin); color: #fff; }
+  .tag.v { background: var(--violet); color: #fff; }
+  .tag.ask { background: var(--blank); color: #b58200; border: 2px solid var(--blank-edge); }
+  .flag { width: 4px; background: var(--ink-2); border-radius: 2px; }
+  .flag b { position: absolute; top: -2px; left: 2px; font-family: var(--num); font-size: .9rem; background: #e9edf5; color: var(--ink-2); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+  .arrow { width: 40px; display: grid; justify-items: center; }
+  .arrow svg { position: static; width: 40px; height: 56px; overflow: visible; }
+  .arrow.bob svg { animation: bob 1.4s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-8px); } }
+  .hint { position: absolute; left: 50%; transform: translateX(-50%); top: 6px; font-weight: 600; color: var(--ink-2); font-size: clamp(.9rem, 2.2vh, 1.15rem); white-space: nowrap; pointer-events: none; }
+
+  .msg { font-size: clamp(1.3rem, 4.4vh, 2.5rem); font-weight: 700; min-height: 1.3em; text-align: center; line-height: 1.15; }
+  .msg.good { color: var(--good); animation: pop .5s cubic-bezier(.3,1.7,.5,1); }
+  .msg.try { color: var(--try); animation: pop .4s ease-out; }
+  .msg.info { color: var(--ink-2); }
+  @keyframes pop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+
+  .ans { display: flex; justify-content: center; align-items: stretch; gap: 10px; flex-wrap: wrap; min-height: 56px; }
+  .entry { min-width: 150px; background: #fff; border-radius: 18px; border: 4px solid var(--blank-edge); display: grid; place-items: center; font-family: var(--num); font-weight: 700; font-size: clamp(1.8rem, 6vh, 3rem); padding: 4px 16px; line-height: 1; }
+  .entry .ph { color: #c9bfa8; }
+  .entry.wrong { animation: shake2 .45s; border-color: var(--try); }
+  @keyframes shake2 { 20%, 60% { transform: translateX(-12px); } 40%, 80% { transform: translateX(12px); } }
+  .keys { display: grid; grid-template-columns: repeat(var(--kc, 8), minmax(44px, 1fr)); gap: 7px; flex: 1 1 520px; max-width: 760px; }
+  .keys button, .big { border: 0; border-radius: 16px; background: var(--btn); color: #fff; font-family: var(--num); font-weight: 700; font-size: clamp(1.3rem, 4.6vh, 2.2rem); padding: clamp(4px, 1.1vh, 10px) 6px; box-shadow: 0 6px 0 var(--btn-deep); transition: transform .08s; line-height: 1.1; }
+  .keys button:active, .big:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--btn-deep); }
+  .keys .alt { background: #fff; color: var(--ink); box-shadow: 0 6px 0 var(--line); font-size: clamp(1rem, 3.2vh, 1.5rem); }
+  .keys .ok { grid-column: span 2; }
+  .keys .ok, .big.ok { background: var(--good); box-shadow: 0 6px 0 var(--good-deep); }
+  .keys .ok:active, .big.ok:active { box-shadow: 0 2px 0 var(--good-deep); }
+  .big { min-width: 120px; padding-left: 24px; padding-right: 24px; }
+  .big:disabled { background: #d6dbe5; color: #8c95a8; box-shadow: 0 6px 0 #b8bfcc; cursor: default; text-decoration: line-through; }
+  .big.right { background: var(--good); box-shadow: 0 6px 0 var(--good-deep); }
+  .big.wrong { animation: shake2 .45s; }
+  .big.cmp { min-width: 110px; font-size: clamp(2rem, 7vh, 3.4rem); }
+  .cards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .card { border: 0; border-radius: 16px; background: #fff; color: var(--ink); font-family: var(--num); font-weight: 700; font-size: clamp(1.4rem, 5vh, 2.4rem); padding: 6px 18px; min-width: 84px; border-bottom: 7px solid var(--line); box-shadow: 0 6px 14px rgba(36,49,74,.12); }
+  .card.used { visibility: hidden; }
+  .card.wrong { animation: shake2 .45s; border-bottom-color: var(--try); }
+  .slots { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; font-family: var(--num); font-weight: 700; font-size: clamp(1.1rem, 3.6vh, 1.8rem); }
+  .slots .s { min-width: 2.2em; min-height: 1.6em; border-radius: 10px; border: 3px dashed var(--line); display: grid; place-items: center; padding: 2px 8px; background: rgba(255,255,255,.6); }
+  .slots .s.f { border: 3px solid var(--good); background: #d9f7e5; color: var(--good-deep); }
+  .slots .s.r { border: 3px solid var(--try); background: #ffe9d6; color: var(--try-deep); }
+  .slots i { font-style: normal; color: var(--ink-2); }
+
+  canvas#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 30; }
+
+  /* Settings */
+  .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(36,49,74,.45); display: grid; place-items: center; padding: 12px; }
+  .panel { background: #fffdf8; border-radius: 22px; width: min(980px, 100%); max-height: 100%; overflow: auto; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .panel h2 { margin: 0 0 4px; font-size: 1.6rem; }
+  .panel h3 { margin: 18px 0 6px; font-size: 1.15rem; color: var(--btn-deep); border-top: 2px solid #efe6d5; padding-top: 12px; }
+  .panel .lbl { display: block; font-weight: 600; margin: 10px 0 5px; color: var(--ink-2); font-size: .95rem; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { border: 2px solid #e2d8c4; background: #fff; border-radius: 12px; padding: 6px 12px; font-weight: 600; font-size: .95rem; }
+  .seg button[aria-pressed="true"] { background: var(--btn); border-color: var(--btn); color: #fff; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .tile { display: grid; grid-template-columns: 40px 1fr; gap: 2px 10px; align-items: center; text-align: left; border: 2px solid #e2d8c4; background: #fff; border-radius: 14px; padding: 8px 10px; }
+  .tile .ic { grid-row: span 2; width: 40px; height: 40px; border-radius: 12px; background: #eef2f8; display: grid; place-items: center; font-weight: 700; color: var(--ink-2); }
+  .tile b { font-size: 1rem; }
+  .tile small { color: var(--ink-2); font-size: .8rem; line-height: 1.2; }
+  .tile[aria-pressed="true"] { border-color: var(--btn); background: #eef4ff; }
+  .tile[aria-pressed="true"] .ic { background: var(--btn); color: #fff; }
+  .row2 { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .row2 label { display: grid; gap: 4px; font-weight: 600; color: var(--ink-2); font-size: .95rem; }
+  .row2 input { width: 130px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 8px 10px; font-family: var(--num); font-weight: 700; font-size: 1.2rem; background: #fff; }
+  textarea { width: 100%; min-height: 64px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 8px 10px; font-family: var(--num); font-size: 1.05rem; background: #fff; resize: vertical; }
+  .note { margin: 6px 0 0; color: var(--ink-2); font-size: .9rem; line-height: 1.35; }
+  .note.warn { color: #b3261e; font-weight: 600; }
+  .prev { margin-top: 10px; background: #fff; border-radius: 16px; border: 2px solid #efe6d5; padding: 4px 8px; }
+  .prev .nl { height: 130px; }
+  .go { display: block; margin: 18px auto 0; border: 0; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 12px 40px; border-radius: 16px; box-shadow: 0 6px 0 var(--good-deep); }
+  .go:disabled { background: #c8ced9; box-shadow: 0 6px 0 #a9b0bd; cursor: default; }
+  .opt[hidden] { display: none; }
+
+  @media (max-width: 640px) {
+    .app { padding: 8px 10px 10px; }
+    .tb { padding: 7px 10px; font-size: .85rem; }
+    .mode .ic { display: none; }
+    .keys { --kc: 5 !important; }
+    .entry { min-width: 100%; }
+    .big { min-width: 90px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .blank.on, .tb.next.pulse, .arrow.bob svg, .msg.good, .msg.try, .mk.drop, .blank.done { animation: none !important; } }
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="mode"><div class="ic" id="modeIc" aria-hidden="true"></div><select id="modeSel" aria-label="Activity"></select></div>
+    <button class="tb" id="showBtn" type="button">Show answer</button>
+    <button class="tb next" id="nextBtn" type="button">Next <kbd>N</kbd></button>
+    <button class="tb" id="gearBtn" type="button">Settings</button>
+  </div>
+  <div class="prompt" id="prompt" aria-live="polite"></div>
+  <div class="linebox"><div class="nl" id="nl"></div></div>
+  <div class="msg" id="msg" role="status" aria-live="assertive"></div>
+  <div class="ans" id="ans"></div>
+</div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Number Line settings</h2>
+    <p class="note">Pick the activities, type the range, and choose what the number line shows. The preview at the bottom updates as you go.</p>
+
+    <h3>Activities (choose any)</h3>
+    <div class="tiles" id="modeTiles"></div>
+    <span class="lbl" id="lOrder">When there is more than one activity</span><div class="seg" id="sOrder" role="group" aria-labelledby="lOrder"></div>
+
+    <h3>Numbers</h3>
+    <span class="lbl" id="lType">Kind of numbers</span><div class="seg" id="sType" role="group" aria-labelledby="lType"></div>
+    <div class="row2" style="margin-top:10px">
+      <label>From <input id="from" inputmode="decimal" autocomplete="off"></label>
+      <label>To <input id="to" inputmode="decimal" autocomplete="off"></label>
+      <label class="opt" id="countWrap">Count by (tick marks) <input id="countBy" inputmode="decimal" placeholder="Auto" autocomplete="off"></label>
+    </div>
+    <div class="opt" id="fracOpts">
+      <span class="lbl" id="lDen">Denominators (choose any)</span><div class="seg" id="sDen" role="group" aria-labelledby="lDen"></div>
+      <span class="lbl" id="lMix">Numbers bigger than 1</span><div class="seg" id="sMix" role="group" aria-labelledby="lMix"></div>
+    </div>
+    <div class="opt" id="decOpts">
+      <span class="lbl" id="lPl">Decimal places</span><div class="seg" id="sPl" role="group" aria-labelledby="lPl"></div>
+    </div>
+    <span class="lbl" id="lMine">Your own numbers (optional, separated by commas or new lines)</span>
+    <textarea id="mine" aria-labelledby="lMine" placeholder="Example: 12, 37, 45" spellcheck="false"></textarea>
+    <p class="note" id="mineNote">Used for placing, estimating, rounding, ordering, comparing and the mystery number. Leave empty and the computer picks.</p>
+
+    <h3>The number line</h3>
+    <span class="lbl" id="lTicks">Tick marks</span><div class="seg" id="sTicks" role="group" aria-labelledby="lTicks"></div>
+    <span class="lbl" id="lLab">Numbers to show on the line (choose any)</span><div class="seg" id="sLab" role="group" aria-labelledby="lLab"></div>
+
+    <h3>Answers</h3>
+    <span class="lbl" id="lIn">How students answer</span><div class="seg" id="sIn" role="group" aria-labelledby="lIn"></div>
+    <p class="note">The mystery number always uses the keypad, and comparing always uses &lt; = &gt;.</p>
+    <div class="opt" data-mode="place estimate">
+      <span class="lbl" id="lTol">How close counts for placing and estimating</span><div class="seg" id="sTol" role="group" aria-labelledby="lTol"></div>
+    </div>
+    <div class="opt" data-mode="missing">
+      <span class="lbl" id="lMiss">Missing numbers on each line</span><div class="seg" id="sMiss" role="group" aria-labelledby="lMiss"></div>
+    </div>
+    <div class="opt" data-mode="round">
+      <span class="lbl" id="lRnd">Round to the nearest (choose any)</span><div class="seg" id="sRnd" role="group" aria-labelledby="lRnd"></div>
+    </div>
+    <div class="opt" data-mode="sequence">
+      <span class="lbl" id="lSeqN">Numbers to put in order</span><div class="seg" id="sSeqN" role="group" aria-labelledby="lSeqN"></div>
+      <span class="lbl" id="lDir">Order</span><div class="seg" id="sDir" role="group" aria-labelledby="lDir"></div>
+    </div>
+    <div class="opt" data-mode="jumps">
+      <span class="lbl" id="lOp">Jumps</span><div class="seg" id="sOp" role="group" aria-labelledby="lOp"></div>
+      <span class="lbl" id="lHop">Show the hops</span><div class="seg" id="sHop" role="group" aria-labelledby="lHop"></div>
+    </div>
+
+    <h3>Preview</h3>
+    <div class="prev"><div class="nl" id="prevNl"></div></div>
+    <p class="note" id="err"></p>
+    <button class="go" id="goBtn" type="button">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const STORE = 'number-line-v1';
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+
+  /* ---------- exact numbers: {n, d} keeps the denominator it is shown with (2/4 stays 2/4) ---------- */
+  const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; };
+  const lcm = (a, b) => a / gcd(a, b) * b;
+  const N = (n, d = 1) => ({ n, d });
+  const val = (x) => x.n / x.d;
+  const eq = (a, b) => a.n * b.d === b.n * a.d;
+  const cmp = (a, b) => Math.sign(a.n * b.d - b.n * a.d);
+  const isInt = (x) => x.n % x.d === 0;
+  const toDen = (x, d) => N(Math.round(x.n * d / x.d), d);
+  const fits = (x, d) => (x.n * d) % x.d === 0;
+  const add = (a, b) => { const d = lcm(a.d, b.d); return N(a.n * (d / a.d) + b.n * (d / b.d), d); };
+  const sub = (a, b) => add(a, N(-b.n, b.d));
+
+  /* ---------- settings ---------- */
+  const MODES = {
+    missing: { name: 'Missing numbers', sub: 'Fill in the blanks on the line', ic: '?' },
+    place: { name: 'Place the number', sub: 'Drag the pin to where it goes', ic: '📍' },
+    point: { name: "What's this point?", sub: 'Name the number at the arrow', ic: '👇' },
+    estimate: { name: 'Estimate the point', sub: 'About what number is the dot?', ic: '🎯' },
+    round: { name: 'Round the number', sub: 'Which is it closer to?', ic: '≈' },
+    mystery: { name: 'Mystery number', sub: 'Guess with “more” and “less” clues', ic: '🕵️' },
+    sequence: { name: 'Put in order', sub: 'Order the numbers, then see them on the line', ic: '123' },
+    jumps: { name: 'Jumps', sub: 'Add and subtract with hops', ic: '🐸' },
+    compare: { name: 'Compare', sub: 'Choose <, = or >', ic: '<>' }
+  };
+  const ORDER = Object.keys(MODES);
+  const DEF = { modes: ['missing', 'place', 'point', 'round', 'sequence'], order: 'mix', type: 'whole', from: '0', to: '20', countBy: '', dens: [2, 4], mixed: true, places: 1,
+    ticks: true, labels: ['ends'], input: 'keypad', tol: 10, miss: 3, rnd: { whole: ['r10'], dec: ['r1'], frac: ['r1'] }, seqN: 5, dir: 'up', op: 'both', hop: 'wait', mine: '' };
+  let S = JSON.parse(JSON.stringify(DEF)), stored = false;
+  try { const raw = localStorage.getItem(STORE); if (raw) { Object.assign(S, JSON.parse(raw)); stored = true; } } catch (e) {}
+  S.modes = (Array.isArray(S.modes) ? S.modes : DEF.modes).filter((m) => MODES[m]);
+  if (!S.rnd || typeof S.rnd !== 'object') S.rnd = JSON.parse(JSON.stringify(DEF.rnd));
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+  let KIND = S.type, R = null;
+
+  /* ---------- reading and writing numbers ---------- */
+  function parseNum(s) {
+    s = String(s).replace(/,/g, '').trim(); let m;
+    if ((m = s.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/))) { const d = +m[3]; return d ? N(+m[1] * d + +m[2], d) : null; }
+    if ((m = s.match(/^(\d+)\s*\/\s*(\d+)$/))) { const d = +m[2]; return d ? N(+m[1], d) : null; }
+    if ((m = s.match(/^(\d*)\.(\d{1,6})$/))) { const d = 10 ** m[2].length; return N(+(m[1] || 0) * d + +m[2], d); }
+    if (/^\d{1,9}$/.test(s)) return N(+s, 1);
+    return null;
+  }
+  function parts(x) {
+    if (x.n % x.d === 0) return { w: x.n / x.d };
+    if (S.mixed && x.n > x.d) return { w: Math.floor(x.n / x.d), n: x.n % x.d, d: x.d };
+    return { n: x.n, d: x.d };
+  }
+  function fmtT(x) {
+    if (KIND === 'frac') { const p = parts(x); return p.n === undefined ? String(p.w) : `${p.w ? p.w + ' ' : ''}${p.n}/${p.d}`; }
+    if (KIND === 'dec') { let s = (x.n / x.d).toFixed(x.keep || 6); if (!x.keep && s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, ''); return s; }
+    const v = Math.round(x.n / x.d); return v >= 10000 ? v.toLocaleString('en-US') : String(v);
+  }
+  function fmtH(x) {
+    if (KIND === 'frac') { const p = parts(x); if (p.n === undefined) return String(p.w); return `<span class="fr" aria-label="${esc(fmtT(x))}">${p.w ? `<span>${p.w}</span>` : ''}<span class="fs"><span>${p.n}</span><span>${p.d}</span></span></span>`; }
+    return esc(fmtT(x));
+  }
+  function entryH(s) {
+    const m = s.match(/^(\d+ )?(\d*)\/(\d*)$/);
+    if (KIND === 'frac' && m) return `<span class="fr">${m[1] ? `<span>${m[1].trim()}</span>` : ''}<span class="fs"><span>${m[2] || '&nbsp;'}</span><span>${m[3] || '&nbsp;'}</span></span></span>`;
+    return esc(s.replace(/ /g, ' + '));
+  }
+
+  /* ---------- range from the settings ---------- */
+  function autoStep(span) {
+    const c = []; for (let p = 1; p <= span * 10; p *= 10) c.push(p, 2 * p, 25 * p / 10, 5 * p);
+    const list = c.filter((x) => Number.isInteger(x)).sort((a, b) => a - b);
+    let s = list.find((x) => span % x === 0 && span / x <= 20) || list.find((x) => span / x <= 20) || span;
+    const p10 = 10 ** Math.ceil(Math.log10(s));
+    if (p10 !== s && span % p10 === 0 && span / p10 >= 5) s = p10;
+    return s;
+  }
+  function compute() {
+    KIND = S.type;
+    const r = { errs: [], warn: '' }, err = (t) => r.errs.push(t);
+    const lo = parseNum(S.from), hi = parseNum(S.to);
+    if (!S.modes.length) err('Choose at least one activity.');
+    if (!lo || !hi) { err('Type a number in From and in To.'); return r; }
+    if (cmp(hi, lo) <= 0) { err('To must be bigger than From.'); return r; }
+    if (KIND === 'whole') { r.D = 1; if (!isInt(lo) || !isInt(hi)) err('Use whole numbers for From and To, or choose Fractions or Decimals.'); }
+    if (KIND === 'dec') { r.D = 10 ** S.places; if (!fits(lo, r.D) || !fits(hi, r.D)) err(`From and To can have at most ${S.places === 1 ? 'one decimal place' : 'two decimal places'}.`); }
+    if (KIND === 'frac') {
+      if (!isInt(lo) || !isInt(hi)) err('For fractions, use whole numbers for From and To, like 0 to 1 or 0 to 3.');
+      const span = val(hi) - val(lo);
+      r.dens = S.dens.filter((d) => span * d <= 48).sort((a, b) => a - b);
+      if (!S.dens.length) err('Choose at least one denominator.');
+      else if (!r.dens.length) err('That range is too long for these fractions. Try a shorter range, like 0 to 2.');
+      else if (r.dens.length < S.dens.length) r.warn = `Skipping ${S.dens.filter((d) => !r.dens.includes(d)).map((d) => DEN_NAME[d]).join(', ')}: too many tick marks for this range.`;
+    }
+    if (r.errs.length) return r;
+    r.lo = lo; r.hi = hi;
+    if (KIND !== 'frac') {
+      r.a = toDen(lo, r.D).n; r.b = toDen(hi, r.D).n; const span = r.b - r.a;
+      if (S.countBy.trim()) {
+        const c = parseNum(S.countBy);
+        if (!c || c.n <= 0) err('Count by must be a number bigger than 0, or leave it empty for Auto.');
+        else if (!fits(c, r.D)) err(`Count by can have at most ${S.places === 1 ? 'one decimal place' : 'two decimal places'}.`);
+        else { const u = c.n * r.D / c.d; if (span / u > 60) err('Counting by that number makes too many tick marks. Count by a bigger number.'); else if (span / u < 2) err('Count by a smaller number, so the line has at least 2 jumps.'); else if (span % u) err(`Counting by ${S.countBy.trim()} doesn't land on ${S.to.trim()}. Pick a number that counts evenly from ${S.from.trim()} to ${S.to.trim()}.`); else r.step = u; }
+      } else r.step = autoStep(span);
+      if (span < 2) err('Make the range a little bigger so there are numbers in between.');
+    }
+    r.mine = []; let bad = 0;
+    S.mine.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean).forEach((s) => {
+      const x = parseNum(s);
+      if (!x || cmp(x, lo) < 0 || cmp(x, hi) > 0) { bad++; return; }
+      if (KIND === 'whole' && !isInt(x)) { bad++; return; }
+      if (KIND === 'dec') { if (!fits(x, r.D)) { bad++; return; } const y = toDen(x, r.D); if (/\.\d*0$/.test(s)) y.keep = S.places; r.mine.push(y); return; }
+      if (KIND === 'frac') { if ((val(hi) - val(lo)) * x.d > 48) { bad++; return; } }
+      r.mine.push(x);
+    });
+    r.mineBad = bad;
+    return r;
+  }
+  const DEN_NAME = { 2: 'halves', 3: 'thirds', 4: 'fourths', 5: 'fifths', 6: 'sixths', 8: 'eighths', 10: 'tenths', 12: 'twelfths' };
+
+  /* ---------- number line views ---------- */
+  function mkView(a, b, step, den) {
+    const ticks = []; for (let k = a.n; k <= b.n; k += step) ticks.push(N(k, den));
+    if (ticks[ticks.length - 1].n !== b.n) ticks.push(N(b.n, den));
+    const v = { a, b, ticks, step: N(step, den), den };
+    const s = a.n + b.n;
+    if (S.labels.includes('mid') && s % 2 === 0 && !ticks.some((t) => t.n === s / 2)) { ticks.push(N(s / 2, den)); ticks.sort((x, y) => x.n - y.n); v.midTick = true; }
+    return v;
+  }
+  function baseView(d) {
+    if (KIND === 'frac') { const a = toDen(R.lo, d), b = toDen(R.hi, d); return mkView(a, b, 1, d); }
+    return mkView(N(R.a, R.D), N(R.b, R.D), R.step, R.D);
+  }
+  const fracDen = () => pick(R.dens);
+  const gridOf = (d) => (KIND === 'frac' ? d : R.D);
+  function labelFlags(v) {
+    const L = new Set(S.labels), last = v.ticks.length - 1, mid = N(v.a.n + v.b.n, 2 * v.den);
+    return v.ticks.map((t, i) => L.has('all') || (L.has('ends') && (i === 0 || i === last)) || (L.has('mid') && eq(t, mid))
+      || (L.has('whole') && KIND !== 'whole' && isInt(t)) || (L.has('tens') && KIND === 'whole' && isInt(t) && (t.n / t.d) % 10 === 0)
+      || (L.has('hund') && KIND === 'whole' && isInt(t) && (t.n / t.d) % 100 === 0));
+  }
+  function gridRand(a, b, g, avoid, inclusive) {
+    let lo = Math.ceil(a.n * g / a.d - 1e-9), hi = Math.floor(b.n * g / b.d + 1e-9);
+    if (!inclusive) { lo++; hi--; }
+    if (hi < lo) return null;
+    let x = null;
+    for (let t = 0; t < 40; t++) { x = N(rnd(lo, hi), g); if (!avoid || !avoid(x)) return x; }
+    return x;
+  }
+  let mineBag = [];
+  function fromMine(ok) {
+    if (!R.mine.length) return null;
+    for (let t = 0; t < R.mine.length * 2; t++) {
+      if (!mineBag.length) mineBag = shuffle(R.mine.slice());
+      const x = mineBag.pop(); if (!ok || ok(x)) return { ...x };
+    }
+    return null;
+  }
+  function viewFor(x) { return KIND === 'frac' ? baseView(x && R.dens.includes(x.d) ? x.d : x ? x.d : fracDen()) : baseView(); }
+  const span = (v) => val(v.b) - val(v.a);
+
+  /* ---------- drawing ---------- */
+  const PIN = (c, d) => `<svg viewBox="0 0 44 58" aria-hidden="true"><path d="M22 56 C14 40 4 32 4 20 A18 18 0 0 1 40 20 C40 32 30 40 22 56Z" fill="${c}" stroke="${d}" stroke-width="3"/><circle cx="22" cy="20" r="7" fill="#fff"/></svg>`;
+  const PINC = { pin: ['#ef5a5a', '#b83636'], good: ['#22b35e', '#148043'], v: ['#8b5cf6', '#6d3fd6'], btn: ['#4f8df5', '#2c5fc0'] };
+  const ARROW = (c) => `<svg viewBox="0 0 40 56" aria-hidden="true"><path d="M14 2 H26 V32 H38 L20 54 L2 32 H14 Z" fill="${c}" stroke="#fff" stroke-width="3" stroke-linejoin="round"/></svg>`;
+  function drawLine(el, v, d) {
+    d = d || {};
+    const W = el.clientWidth || 800, H = el.clientHeight || 240;
+    const pad = Math.max(30, Math.min(72, W * 0.055)), Y = Math.round(H * (d.low ? 0.4 : 0.54));
+    const lf = Math.max(13, Math.min(30, H * 0.105, W / 34));
+    const X = (x) => pad + (W - 2 * pad) * (typeof x === 'number' ? x : (val(x) - val(v.a)) / span(v));
+    el._g = { pad, W, v };
+    el.style.setProperty('--lf', lf + 'px');
+    const ink = '#24314a';
+    let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true">`;
+    (d.shade || []).forEach(([p, q]) => { const x1 = X(p), x2 = X(q); if (x2 - x1 > 0.5) s += `<rect x="${x1}" y="${Y - 44}" width="${x2 - x1}" height="88" rx="8" fill="#9aa3b5" opacity=".28"/>`; });
+    if (d.band) { const x1 = Math.max(pad - 6, X(d.band[0])), x2 = Math.min(W - pad + 6, X(d.band[1])); s += `<rect x="${x1}" y="${Y - 26}" width="${Math.max(4, x2 - x1)}" height="52" rx="10" fill="#22b35e" opacity=".22"/>`; }
+    s += `<line x1="${pad - 22}" y1="${Y}" x2="${W - pad + 22}" y2="${Y}" stroke="${ink}" stroke-width="5" stroke-linecap="round"/>`;
+    s += `<path d="M${pad - 30} ${Y} l14 -10 v20 z M${W - pad + 30} ${Y} l-14 -10 v20 z" fill="${ink}"/>`;
+    const flags = d.labels || [];
+    v.ticks.forEach((t, i) => {
+      const end = i === 0 || i === v.ticks.length - 1, major = end || flags[i] || isInt(t) && KIND !== 'whole';
+      if (!d.ticks && !end && !flags[i] && !(d.blankAt && d.blankAt.has(i))) return;
+      const h = major ? 17 : 12;
+      s += `<line x1="${X(t)}" y1="${Y - h}" x2="${X(t)}" y2="${Y + h}" stroke="${ink}" stroke-width="${major ? 4 : 3}" stroke-linecap="round"/>`;
+    });
+    (d.marks || []).forEach((m) => { s += `<line x1="${X(m.x)}" y1="${Y - 17}" x2="${X(m.x)}" y2="${Y + 17}" stroke="${m.c || ink}" stroke-width="4" stroke-linecap="round"/>`; });
+    (d.dots || []).forEach((m) => { s += `<circle cx="${X(m.x)}" cy="${Y}" r="${Math.max(9, lf * .42)}" fill="${m.c || '#ef5a5a'}" stroke="#fff" stroke-width="3"/>`; });
+    (d.arcs || []).forEach((a, i) => {
+      const x1 = X(a.x1), x2 = X(a.x2), hgt = Math.min(Y * 0.5, 16 + Math.abs(x2 - x1) * 0.26), mx = (x1 + x2) / 2;
+      const dl = `style="--dl:${(i * 0.42).toFixed(2)}s"`, an = a.anim && !reduce ? ' anim' : '';
+      s += `<path class="arc${an}" ${dl} d="M${x1} ${Y - 6} Q${mx} ${Y - 6 - hgt * 2} ${x2} ${Y - 6}" pathLength="1" fill="none" stroke="${a.c || '#8b5cf6'}" stroke-width="4" stroke-linecap="round"/>`;
+      const ah = x2 > x1 ? -1 : 1;
+      s += `<path class="arcl${an}" ${dl} d="M${x2} ${Y - 6} l${ah * 9} -10 l${ah * 3} 9 z" fill="${a.c || '#8b5cf6'}"/>`;
+      if (a.label) s += `<text class="arcl${an}" ${dl} x="${mx}" y="${Y - 12 - hgt}" text-anchor="middle" font-family="Andika, sans-serif" font-weight="700" font-size="${Math.max(12, lf * 0.62)}" fill="${a.c || '#6d3fd6'}">${esc(a.label)}</text>`;
+    });
+    s += '</svg>';
+    let h = s;
+    v.ticks.forEach((t, i) => { if (flags[i]) h += `<div class="lab${d.goodLab && d.goodLab.has(i) ? ' good' : ''}" style="left:${X(t)}px;top:${Y + 24}px">${fmtH(t)}</div>`; });
+    (d.extraLab || []).forEach((l) => { h += `<div class="lab ${l.cls || ''}" style="left:${X(l.x)}px;top:${Y + 24}px">${l.html}</div>`; });
+    (d.blanks || []).forEach((b) => { h += `<button type="button" class="blank ${b.cls || ''}" data-b="${b.k}" style="left:${X(v.ticks[b.i])}px;top:${Y + 21}px" aria-label="${b.aria}">${b.html}</button>`; });
+    const tagged = [];
+    (d.flags || []).forEach((f) => { h += `<div class="flag" style="left:${X(f.x)}px;top:${Y - 34}px;height:34px"><b>${f.html}</b></div>`; });
+    (d.pins || []).forEach((p) => {
+      const c = PINC[p.c || 'pin'];
+      h += `<div class="mk${p.drop && !reduce ? ' drop' : ''}${p.drag ? ' drag' : ''}" ${p.id ? `id="${p.id}"` : ''} style="left:${X(p.x)}px;top:${Y - 60}px">${PIN(c[0], c[1])}</div>`;
+      if (p.tag) tagged.push({ x: X(p.x), html: p.tag, cls: p.tagCls || p.c || 'pin', base: Y - 60 - 6 });
+    });
+    if (d.arrow) { const a = d.arrow; h += `<div class="arrow${a.bob && !reduce ? ' bob' : ''}" style="left:${X(a.x)}px;top:${Y - 66}px">${ARROW(a.c || '#ef5a5a')}</div>`; if (a.tag) tagged.push({ x: X(a.x), html: a.tag, cls: a.tagCls || 'pin', base: Y - 66 - 6 }); }
+    (d.tags || []).forEach((t) => tagged.push({ x: X(t.x), html: t.html, cls: t.cls || 'v', base: Y - (t.up || 14) }));
+    tagged.sort((p, q) => p.x - q.x);
+    let lastX = -1e9, lvl = 0;
+    tagged.forEach((t) => { lvl = t.x - lastX < Math.max(64, lf * 2.6) ? lvl + 1 : 0; lastX = t.x; h += `<div class="tag ${t.cls}" style="left:${t.x}px;top:${t.base}px;transform:translate(-50%, calc(-100% - ${lvl * (lf * 1.5)}px))">${t.html}</div>`; });
+    if (d.hint) h += `<div class="hint">${esc(d.hint)}</div>`;
+    el.innerHTML = h;
+    fixLabels(el, lf);
+  }
+  function fixLabels(el, lf) {
+    const labs = [...el.querySelectorAll('.lab, .blank')];
+    if (labs.length < 3) return;
+    const overl = () => { const r = labs.filter((x) => !x.classList.contains('hide')).map((x) => x.getBoundingClientRect()).sort((p, q) => p.left - q.left); for (let i = 1; i < r.length; i++) if (r[i].left < r[i - 1].right + 4) return true; return false; };
+    let f = lf;
+    while (overl() && f > 12) { f = Math.max(12, f * 0.88); el.style.setProperty('--lf', f + 'px'); }
+    let step = 2;
+    while (overl() && step < 12) {
+      labs.forEach((x) => x.classList.remove('hide'));
+      const plain = labs.filter((x) => x.classList.contains('lab')).sort((p, q) => p.getBoundingClientRect().left - q.getBoundingClientRect().left);
+      plain.forEach((x, i) => { if (i > 0 && i < plain.length - 1 && i % step) x.classList.add('hide'); });
+      step++;
+    }
+  }
+
+  /* ---------- feedback ---------- */
+  function say(t, cls) { const m = $('msg'); m.className = 'msg'; void m.offsetWidth; m.className = 'msg ' + (cls || ''); m.textContent = t; }
+  function prompt(h) { $('prompt').innerHTML = h; }
+  let Q = null, modeNow = null, ro = null;
+  function redraw() { if (Q) drawLine($('nl'), Q.view, Q.deco()); }
+  function finish(t, good) {
+    Q.solved = true; say(t, good ? 'good' : 'info'); if (good) confetti();
+    $('nextBtn').classList.add('pulse'); refresh();
+    $('ans').innerHTML = '<button class="big ok" type="button" id="bigNext">Next ➜</button>';
+    $('bigNext').onclick = next; $('bigNext').focus({ preventScroll: true });
+  }
+  const win = (t) => finish(t, true);
+  const reveal = (t) => { Q.revealed = true; finish(t, false); };
+  function refresh() { prompt(Q.prompt()); redraw(); }
+  function miss(t, tooBigSmall, x, target) {
+    Q.tries++;
+    if (Q.tries >= 3) { Q.reveal(); return; }
+    const h = tooBigSmall ? (cmp(x, target) > 0 ? ' Try a smaller number.' : ' Try a bigger number.') : '';
+    say((t || 'Not quite.') + h, 'try');
+  }
+
+  /* ---------- answer areas ---------- */
+  let ENTRY = '', submitFn = null;
+  function keypad(onSubmit) {
+    submitFn = onSubmit; ENTRY = '';
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+    if (KIND === 'dec') keys.push('.');
+    if (KIND === 'frac') keys.push('/', ' ');
+    keys.push('⌫', '✓');
+    $('ans').innerHTML = `<div class="entry" id="entry" aria-live="polite"></div><div class="keys" style="--kc:${keys.length + 1}">${keys.map((k) => `<button type="button" data-k="${k === ' ' ? 'sp' : k}" class="${k === '✓' ? 'ok' : /\d/.test(k) ? '' : 'alt'}" aria-label="${k === ' ' ? 'Space between whole number and fraction' : k === '⌫' ? 'Erase' : k === '✓' ? 'Check' : k === '/' ? 'Fraction bar' : k === '.' ? 'Decimal point' : k}">${k === ' ' ? '<span style="white-space:nowrap">1&nbsp;<span style="font-size:.75em">□/□</span></span>' : k === '✓' ? 'Check' : k}</button>`).join('')}</div>`;
+    $('ans').querySelector('.keys').onclick = (e) => { const b = e.target.closest('button'); if (b) typeKey(b.dataset.k === 'sp' ? ' ' : b.dataset.k); };
+    showEntry();
+  }
+  function showEntry() { const e = $('entry'); if (e) e.innerHTML = ENTRY ? entryH(ENTRY) : '<span class="ph">?</span>'; }
+  function typeKey(k) {
+    if (!submitFn || Q.solved) return;
+    if (k === '⌫' || k === 'Backspace') ENTRY = ENTRY.slice(0, -1);
+    else if (k === '✓' || k === 'Enter') { const x = parseNum(ENTRY); if (!x) { const e = $('entry'); e.classList.remove('wrong'); void e.offsetWidth; e.classList.add('wrong'); say(ENTRY ? (KIND === 'frac' ? 'Type a number like 3/4 or 1 1/2.' : 'Type a number.') : 'Type your answer first.', 'try'); return; } submitFn(x); ENTRY = ''; }
+    else if (/^\d$/.test(k)) { if (ENTRY.replace(/\D/g, '').length < 9) ENTRY += k; }
+    else if (k === '.' && KIND === 'dec' && !ENTRY.includes('.')) ENTRY += ENTRY ? '.' : '0.';
+    else if (k === '/' && KIND === 'frac' && !ENTRY.includes('/') && /\d$/.test(ENTRY)) ENTRY += '/';
+    else if (k === ' ' && KIND === 'frac' && /^\d+$/.test(ENTRY)) ENTRY += ' ';
+    showEntry();
+  }
+  function choices(list, correct, onRight, onWrong) {
+    submitFn = null;
+    $('ans').innerHTML = list.map((x, i) => `<button class="big" type="button" data-i="${i}">${fmtH(x)}</button>`).join('');
+    $('ans').onclick = (e) => {
+      const b = e.target.closest('button.big'); if (!b || b.id === 'bigNext' || Q.solved) return;
+      const x = list[+b.dataset.i];
+      if (eq(x, correct)) { b.classList.add('right'); onRight(x); } else { b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong'); b.disabled = true; onWrong(x); }
+    };
+  }
+  function answerUI(correctFn, onRight, onWrong, mcList) {
+    $('ans').onclick = null;
+    if (S.input === 'choice' && mcList) choices(mcList(), correctFn(), onRight, onWrong);
+    else keypad((x) => (eq(x, correctFn()) ? onRight(x) : onWrong(x)));
+  }
+  function distract(t, stepN, extra) {
+    const out = [t], add1 = (x) => { if (x && x.n >= 0 && cmp(x, R.lo) >= 0 && cmp(x, R.hi) <= 0 && !out.some((y) => eq(y, x))) out.push(x); };
+    (extra || []).forEach(add1);
+    [1, -1, 2, -2, 3, -3, 4, -4].forEach((k) => { if (out.length < 4) add1(add(t, N(stepN.n * k, stepN.d))); });
+    [10, -10, 5, -5].forEach((k) => { if (out.length < 4) add1(add(t, N(stepN.n * k, stepN.d))); });
+    return shuffle(out.slice(0, 4));
+  }
+  const tolOf = (v) => span(v) * S.tol / 100;
+
+  /* ---------- the activities ---------- */
+  const MAKE = {};
+
+  MAKE.missing = () => {
+    const v = baseView(KIND === 'frac' ? fracDen() : 0), last = v.ticks.length - 1;
+    const flags = labelFlags(v);
+    let cand = []; for (let i = 1; i < last; i++) if (!flags[i]) cand.push(i);
+    if (!cand.length) for (let i = 1; i < last; i++) cand.push(i);
+    shuffle(cand);
+    const crowded = v.ticks.length > 13 || ($('nl').clientWidth || 800) / v.ticks.length < 60;
+    const want = Math.min(S.miss, cand.length), pickI = [];
+    for (const i of cand) { if (pickI.length >= want) break; if (crowded && (pickI.some((j) => Math.abs(j - i) < 2) || flags[i - 1] || flags[i + 1])) continue; pickI.push(i); }
+    for (const i of cand) { if (pickI.length >= want) break; if (!pickI.includes(i)) pickI.push(i); }
+    pickI.sort((a, b) => a - b);
+    const blanks = pickI.map((i, k) => ({ i, k, st: 'open' }));
+    pickI.forEach((i) => { flags[i] = false; });
+    const q = { view: v, blanks, act: 0 };
+    const cur = () => q.blanks.find((b) => b.k === q.act);
+    q.prompt = () => `Fill in the missing number${blanks.length > 1 ? 's' : ''}.`;
+    q.deco = () => ({ ticks: true, labels: flags, blankAt: new Set(pickI), blanks: q.blanks.map((b) => ({ i: b.i, k: b.k, cls: b.st === 'done' ? 'done' : b.st === 'shown' ? 'shown' : b.k === q.act && !q.solved ? 'on' : '', html: b.st === 'open' ? '?' : fmtH(v.ticks[b.i]), aria: b.st === 'open' ? 'Missing number' : fmtT(v.ticks[b.i]) })) });
+    const advance = () => {
+      const nx = q.blanks.find((b) => b.st === 'open' && b.k > q.act) || q.blanks.find((b) => b.st === 'open');
+      if (!nx) { const allRight = q.blanks.every((b) => b.st === 'done'); if (allRight) win(q.blanks.length > 1 ? 'You filled them all in!' : 'Yes!'); else reveal('Done! Look at the orange numbers again.'); return; }
+      q.act = nx.k; q.tries = 0; ui(); redraw();
+    };
+    const ui = () => answerUI(() => v.ticks[cur().i], () => { cur().st = 'done'; say('Yes!', 'good'); advance(); }, (x) => {
+      const b = cur(); q.tries++;
+      const el = document.querySelector(`.blank[data-b="${b.k}"]`); if (el) { el.classList.remove('wrong'); void el.offsetWidth; el.classList.add('wrong'); }
+      if (q.tries >= 3) { b.st = 'shown'; say(`That one is ${fmtT(v.ticks[b.i])}.`, 'info'); advance(); return; }
+      say(`Not quite.${cmp(x, v.ticks[b.i]) > 0 ? ' Try a smaller number.' : ' Try a bigger number.'}`, 'try');
+    }, () => distract(v.ticks[cur().i], v.step));
+    q.ui = ui;
+    q.click = (k) => { const b = q.blanks.find((x) => x.k === k); if (b && b.st === 'open' && !q.solved) { q.act = k; q.tries = 0; ui(); redraw(); say(''); } };
+    q._a = () => v.ticks[cur().i];
+    q.reveal = () => { q.blanks.forEach((b) => { if (b.st === 'open') b.st = 'shown'; }); reveal('Here are the missing numbers.'); };
+    return q;
+  };
+
+  MAKE.point = () => {
+    let t = null, v;
+    const mx = fromMine((x) => { const w = viewFor(x); return w.ticks.some((y, i) => i > 0 && i < w.ticks.length - 1 && eq(y, x)); });
+    if (mx) { v = viewFor(mx); t = v.ticks.findIndex((y) => eq(y, mx)); }
+    else { v = baseView(KIND === 'frac' ? fracDen() : 0); const flags0 = labelFlags(v), c = []; for (let i = 1; i < v.ticks.length - 1; i++) if (!flags0[i]) c.push(i); t = c.length ? pick(c) : rnd(1, v.ticks.length - 2); }
+    const flags = labelFlags(v); flags[t] = false;
+    const target = v.ticks[t], q = { view: v };
+    q.prompt = () => 'What number is the arrow pointing to?';
+    q.deco = () => ({ ticks: true, labels: flags, arrow: { x: target, bob: !q.solved, c: q.solved ? (q.revealed ? '#ff8a3d' : '#22b35e') : '#ef5a5a', tag: q.solved ? fmtH(target) : '', tagCls: q.revealed ? 'try' : 'good' } });
+    q.ui = () => answerUI(() => target, () => win(`Yes! It's ${fmtT(target)}.`), (x) => miss('Not quite.', true, x, target), () => distract(target, v.step));
+    q._a = () => target;
+    q.reveal = () => reveal(`The arrow is pointing to ${fmtT(target)}.`);
+    return q;
+  };
+
+  function offTick(v, g) {
+    const ticked = (x) => v.ticks.some((y) => eq(x, y));
+    return gridRand(v.a, v.b, g, S.ticks ? ticked : null);
+  }
+
+  MAKE.estimate = () => {
+    const mx = fromMine((x) => cmp(x, R.lo) > 0 && cmp(x, R.hi) < 0);
+    const v = viewFor(mx), g = KIND === 'frac' ? (v.den * 2 <= 24 ? v.den * 2 : v.den) : gridOf();
+    const t = mx || offTick(v, g) || gridRand(v.a, v.b, g, null, true);
+    const tol = tolOf(v), q = { view: v };
+    q.prompt = () => 'About what number is the dot?';
+    q.deco = () => ({ ticks: S.ticks, labels: labelFlags(v), dots: [{ x: t, c: q.solved ? '#22b35e' : '#ef5a5a' }], arrow: { x: t, bob: !q.solved, c: q.solved ? '#22b35e' : '#ef5a5a', tag: q.solved ? fmtH(t) : '', tagCls: 'good' }, band: q.solved ? [Math.max(0, (val(t) - val(v.a) - tol) / span(v)), Math.min(1, (val(t) - val(v.a) + tol) / span(v))] : null });
+    const ok = (x) => Math.abs(val(x) - val(t)) <= tol + 1e-9;
+    const mc = () => {
+      const out = [t];
+      for (let k = 0; k < 120 && out.length < 4; k++) { const y = gridRand(v.a, v.b, g, null, true); if (y && out.every((z) => Math.abs(val(z) - val(y)) >= Math.max(2.2 * tol, span(v) * 0.12))) out.push(y); }
+      return shuffle(out);
+    };
+    q.ui = () => {
+      if (S.input === 'choice') choices(mc(), t, () => win(`Great estimate! The dot is at ${fmtT(t)}.`), () => say('Not quite. Look at the numbers near the dot.', 'try'));
+      else keypad((x) => {
+        if (ok(x)) win(eq(x, t) ? `Exactly right! The dot is at ${fmtT(t)}.` : `Great estimate! The dot is at ${fmtT(t)}.`);
+        else miss('Not close enough.', true, x, t);
+      });
+    };
+    q._a = () => t;
+    q.reveal = () => reveal(`The dot is at ${fmtT(t)}.`);
+    return q;
+  };
+
+  const RND = {
+    whole: [['r10', N(10), 'ten'], ['r100', N(100), 'hundred'], ['r1000', N(1000), 'thousand']],
+    dec: [['r1', N(1), 'whole number'], ['r01', N(1, 10), 'tenth']],
+    frac: [['r1', N(1), 'whole number'], ['rh', N(1, 2), 'half']]
+  };
+  function roundOpts() {
+    let list = RND[KIND].filter(([k, r]) => (S.rnd[KIND] || []).includes(k));
+    list = list.filter(([k, r]) => (KIND !== 'whole' || val(R.hi) > val(r)) && (k !== 'r01' || S.places === 2));
+    if (!list.length) list = RND[KIND].filter(([k, r]) => (KIND !== 'whole' || val(R.hi) > val(r)) && (k !== 'r01' || S.places === 2)).slice(0, 1);
+    return list;
+  }
+  MAKE.round = () => {
+    const [, r, rname] = pick(roundOpts());
+    const multiple = (x) => (x.n * r.d) % (x.d * r.n) === 0;
+    const d = KIND === 'frac' ? fracDen() : 0;
+    let t = fromMine((x) => !multiple(x));
+    if (!t) {
+      const g = KIND === 'frac' ? d : R.D;
+      t = gridRand(R.lo, R.hi, g, (x) => multiple(x), true);
+      if (!t || multiple(t)) t = gridRand(R.lo, R.hi, g, null, true);
+    }
+    const num = t.n * r.d, den = t.d * r.n;
+    const fl = Math.floor(num / den), k = Math.floor((2 * num + den) / (2 * den));
+    const L = N(fl * r.n, r.d), U = N((fl + 1) * r.n, r.d), ans = N(k * r.n, r.d);
+    let v;
+    if (KIND === 'frac') { const dd = t.d, w = Math.floor(val(t)); v = mkView(N(w * dd, dd), N((w + 1) * dd, dd), 1, dd); }
+    else { const D = KIND === 'dec' ? Math.max(R.D, r.d * 10) : 1, a = toDen(L, D), b = toDen(U, D); v = mkView(a, b, Math.max(1, (b.n - a.n) / 10), D); }
+    const flags = labelFlags(v), mid = N(v.a.n + v.b.n, 2 * v.den);
+    v.ticks.forEach((x, i) => { if (i === 0 || i === v.ticks.length - 1 || eq(x, mid)) flags[i] = true; });
+    const extra = [];
+    if (!v.ticks.some((x) => eq(x, mid))) extra.push({ x: mid, html: KIND === 'frac' ? fmtH(N(v.a.n * 2 / v.den + 1, 2)) : fmtH(mid) });
+    if (KIND === 'frac' && r.d === 2) [L, U].forEach((x) => { if (!v.ticks.some((y) => eq(x, y)) && !eq(x, mid)) extra.push({ x, html: fmtH(x) }); });
+    const q = { view: v };
+    const showAns = KIND === 'frac' ? ans : toDen(ans, v.den);
+    q.prompt = () => `Round <span class="chip cpin">${fmtH(t)}</span> to the nearest <b>${rname}</b>.${q.solved ? ` <span class="chip ${q.revealed ? 'cask' : 'cgood'}">${fmtH(showAns)}</span>` : ''}`;
+    q.deco = () => ({ ticks: S.ticks, labels: flags, extraLab: extra, marks: extra.map((e) => ({ x: e.x })), pins: [{ x: t, c: 'pin', tag: fmtH(t), drop: !q.drawn }], arcs: q.solved && !eq(t, ans) ? [{ x1: t, x2: ans, c: '#22b35e', anim: !q.arcDone }] : [] });
+    const choiceList = () => { const o = [L, U]; const up = add(U, r), dn = sub(L, r); if (dn.n >= 0 && Math.random() < 0.5) o.push(dn); else o.push(up); return shuffle(o.map((x) => (KIND === 'frac' ? x : toDen(x, v.den)))); };
+    q.ui = () => answerUI(() => ans, () => win(`Yes! ${fmtT(t)} rounds to ${fmtT(showAns)}.`), (x) => {
+      Q.tries++;
+      if (Q.tries >= 3) { q.reveal(); return; }
+      say(eq(x, L) || eq(x, U) ? 'Not quite. Is it past the middle mark?' : `Not quite. It rounds to ${fmtT(KIND === 'frac' ? L : toDen(L, v.den))} or ${fmtT(KIND === 'frac' ? U : toDen(U, v.den))}.`, 'try');
+    }, choiceList);
+    q._a = () => showAns;
+    q.reveal = () => reveal(`${fmtT(t)} rounds to ${fmtT(showAns)}.`);
+    return q;
+  };
+
+  MAKE.place = () => {
+    const mx = fromMine((x) => cmp(x, R.lo) > 0 && cmp(x, R.hi) < 0);
+    const v = viewFor(mx), g = KIND === 'frac' ? v.den : gridOf();
+    const t = mx || gridRand(v.a, v.b, g) || gridRand(v.a, v.b, g, null, true);
+    const tol = tolOf(v), q = { view: v, p: null };
+    const tf = (val(t) - val(v.a)) / span(v);
+    q.prompt = () => `Where does <span class="chip cpin">${fmtH(t)}</span> go?`;
+    q.deco = () => {
+      const d = { ticks: S.ticks, labels: labelFlags(v), pins: [] };
+      if (q.solved) { d.band = [Math.max(0, tf - tol / span(v)), Math.min(1, tf + tol / span(v))]; d.marks = [{ x: t, c: '#148043' }]; d.tags = [{ x: t, html: fmtH(t), cls: 'good', up: q.p !== null && Math.abs(q.p - tf) < 0.06 ? 70 : 18 }]; }
+      if (q.p !== null) d.pins.push({ x: q.p, c: q.solved && !q.revealed ? 'good' : 'pin', drag: !q.solved, id: 'dragPin' });
+      if (q.p === null && !q.solved) d.hint = 'Tap or drag on the line to place the pin.';
+      return d;
+    };
+    q.check = () => {
+      if (q.solved) return;
+      if (q.p === null) { say('Tap the line to place the pin first.', 'try'); return; }
+      const got = val(v.a) + q.p * span(v);
+      if (Math.abs(got - val(t)) <= tol + 1e-9) { win(`Yes! That's where ${fmtT(t)} goes.`); return; }
+      q.tries++;
+      if (q.tries >= 3) { q.reveal(); return; }
+      say(got < val(t) ? 'Not quite. Move it to the right ➜' : '⬅ Not quite. Move it to the left', 'try');
+    };
+    q.ui = () => { submitFn = null; $('ans').onclick = null; $('ans').innerHTML = '<button class="big ok" type="button" id="checkBtn">Check <kbd>Enter</kbd></button>'; $('checkBtn').onclick = q.check; };
+    q._a = () => tf;
+    q.reveal = () => reveal(`Here is where ${fmtT(t)} goes.`);
+    q.drag = true;
+    return q;
+  };
+
+  MAKE.mystery = () => {
+    const v = baseView(KIND === 'frac' ? fracDen() : 0), g = KIND === 'frac' ? v.den : gridOf();
+    const t = fromMine((x) => cmp(x, v.a) > 0 && cmp(x, v.b) < 0) || gridRand(v.a, v.b, g) || gridRand(v.a, v.b, g, null, true);
+    const q = { view: v, lo: v.a, hi: v.b, guesses: [] };
+    q.prompt = () => `I'm thinking of a number between <span class="chip">${fmtH(v.a)}</span> and <span class="chip">${fmtH(v.b)}</span>.${q.guesses.length ? ` <span style="font-size:.7em;color:var(--ink-2)">Guesses: ${q.guesses.length}</span>` : ''}`;
+    q.deco = () => ({ ticks: S.ticks, labels: labelFlags(v), shade: [[v.a, q.lo], [q.hi, v.b]], flags: q.guesses.filter((x) => !eq(x, t)).map((x) => ({ x, html: fmtH(x) })), pins: q.solved ? [{ x: t, c: q.revealed ? 'pin' : 'good', tag: fmtH(t), tagCls: q.revealed ? 'try' : 'good', drop: true }] : [] });
+    q.ui = () => { $('ans').onclick = null; keypad((x) => {
+      if (cmp(x, v.a) < 0 || cmp(x, v.b) > 0) { say(`That's not on this line. Guess a number between ${fmtT(v.a)} and ${fmtT(v.b)}.`, 'try'); return; }
+      q.guesses.push(x);
+      if (eq(x, t)) { win(`You found it! It was ${fmtT(t)}. ${q.guesses.length === 1 ? 'First try!' : `${q.guesses.length} guesses.`}`); return; }
+      if (cmp(x, t) < 0) { if (cmp(x, q.lo) > 0) q.lo = x; say(`More than ${fmtT(x)} ➜`, 'try'); }
+      else { if (cmp(x, q.hi) < 0) q.hi = x; say(`⬅ Less than ${fmtT(x)}`, 'try'); }
+      refresh();
+    }); };
+    q._a = () => t;
+    q.reveal = () => reveal(`The mystery number was ${fmtT(t)}.`);
+    return q;
+  };
+
+  function primaryView(nums) {
+    if (KIND !== 'frac') return baseView();
+    const ds = [...new Set(nums.map((x) => x.d))];
+    let l = ds.reduce(lcm, 1);
+    if ((val(R.hi) - val(R.lo)) * l > 48 || l === 1) l = R.dens[0];
+    return baseView(l);
+  }
+  function someNums(n) {
+    const out = [];
+    const mine = R.mine.length >= 3 ? shuffle(R.mine.slice()) : [];
+    for (const x of mine) { if (out.length >= n) break; if (!out.some((y) => eq(x, y))) out.push({ ...x }); }
+    for (let k = 0; out.length < n && k < 400; k++) {
+      const g = KIND === 'frac' ? pick(R.dens) : R.D;
+      const x = gridRand(R.lo, R.hi, g, null, true);
+      if (x && !out.some((y) => eq(x, y))) out.push(x);
+    }
+    return out;
+  }
+  MAKE.sequence = () => {
+    const nums = someNums(Math.max(3, S.seqN));
+    const up = S.dir === 'mix' ? Math.random() < 0.5 : S.dir === 'up';
+    const sorted = nums.slice().sort((a, b) => (up ? cmp(a, b) : cmp(b, a)));
+    const v = primaryView(nums), q = { view: v, k: 0, used: new Set(), cards: shuffle(nums.map((x, i) => i)) };
+    q.prompt = () => `Put the numbers in order from <b>${up ? 'least to greatest' : 'greatest to least'}</b>.<div class="slots" style="flex-basis:100%">${sorted.map((x, i) => `${i ? `<i>${up ? '&lt;' : '&gt;'}</i>` : ''}<span class="s${i < q.k ? ' f' : q.revealed ? ' r' : ''}">${i < q.k || q.revealed ? fmtH(x) : ''}</span>`).join('')}</div>`;
+    q.deco = () => ({ ticks: S.ticks, labels: labelFlags(v), pins: sorted.map((x, i) => (i < q.k || q.revealed ? { x, c: i < q.k ? 'good' : 'pin', tag: fmtH(x), tagCls: i < q.k ? 'good' : 'try', drop: i === q.k - 1 && !q.revealed } : null)).filter(Boolean) });
+    q.ui = () => {
+      submitFn = null;
+      $('ans').innerHTML = `<div class="cards">${q.cards.map((i) => `<button class="card${q.used.has(i) ? ' used' : ''}" type="button" data-i="${i}">${fmtH(nums[i])}</button>`).join('')}</div>`;
+      $('ans').onclick = (e) => {
+        const b = e.target.closest('.card'); if (!b || q.solved) return;
+        const i = +b.dataset.i, x = nums[i];
+        if (eq(x, sorted[q.k])) {
+          q.used.add(i); b.classList.add('used'); q.k++;
+          if (q.k === sorted.length) { win('In order! Look at them on the number line.'); return; }
+          say('Yes!', 'good'); refresh();
+        } else { q.tries++; b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong'); say(up ? 'Not yet. Find the smallest number left.' : 'Not yet. Find the biggest number left.', 'try'); }
+      };
+    };
+    q._a = () => sorted;
+    q.reveal = () => reveal('Here is the order.');
+    return q;
+  };
+
+  MAKE.jumps = () => {
+    const d = KIND === 'frac' ? fracDen() : 0, v = baseView(d), g = KIND === 'frac' ? v.den : R.D;
+    const stepU = v.step.n * g / v.step.d, spanU = Math.round(span(v) * g);
+    const lo = Math.round(val(v.a) * g), hi = Math.round(val(v.b) * g);
+    const subOp = S.op === 'sub' || (S.op === 'both' && Math.random() < 0.5);
+    let b;
+    const maxK = Math.min(10, Math.floor(spanU * 0.6 / stepU));
+    if (maxK >= 1 && Math.random() < 0.75) b = stepU * rnd(1, maxK);
+    else b = rnd(1, Math.max(1, Math.floor(spanU * 0.6)));
+    let a = subOp ? rnd(lo + b, hi) : rnd(lo, hi - b);
+    if (Number.isInteger(stepU) && stepU > 1 && b % stepU === 0 && Math.random() < 0.6) { const ak = Math.ceil((subOp ? lo + b : lo) / stepU), bk = Math.floor((subOp ? hi : hi - b) / stepU); if (bk >= ak) a = rnd(ak, bk) * stepU; }
+    const A = N(a, g), B = N(b, g), res = N(subOp ? a - b : a + b, g);
+    const hops = [];
+    if (b % stepU === 0 && b / stepU <= 12) for (let i = 0; i < b / stepU; i++) { const p = subOp ? a - i * stepU : a + i * stepU; hops.push([N(p, g), N(subOp ? p - stepU : p + stepU, g)]); }
+    else hops.push([A, res]);
+    const hopLabel = (subOp ? '−' : '+') + fmtT(N(hops.length > 1 ? stepU : b, g));
+    const q = { view: v, shown: S.hop === 'now' };
+    q.prompt = () => `<span class="chip cv">${fmtH(A)}</span><span class="op">${subOp ? '−' : '+'}</span><span class="chip">${fmtH(B)}</span><span class="op">=</span><span class="chip ${q.solved ? (q.revealed ? 'cask' : 'cgood') : 'cask'}">${q.solved ? fmtH(res) : '?'}</span>`;
+    q.deco = () => {
+      const dd = { ticks: S.ticks, labels: labelFlags(v), pins: [{ x: A, c: 'v', tag: fmtH(A), tagCls: 'v' }], arcs: [] };
+      if (q.shown || q.solved) { dd.arcs = hops.map(([p, r2]) => ({ x1: p, x2: r2, label: hopLabel, anim: !q.anim })); q.anim = true; }
+      if (q.solved) dd.pins.push({ x: res, c: q.revealed ? 'pin' : 'good', tag: fmtH(res), tagCls: q.revealed ? 'try' : 'good', drop: true });
+      else if (q.shown) dd.tags = [{ x: res, html: '?', cls: 'ask', up: 18 }];
+      return dd;
+    };
+    q.show = () => { if (q.shown) return; q.shown = true; redraw(); const b2 = $('hopBtn'); if (b2) b2.remove(); };
+    q.ui = () => {
+      answerUI(() => res, () => win(`Yes! ${fmtT(A)} ${subOp ? '−' : '+'} ${fmtT(B)} = ${fmtT(res)}`), (x) => { if (!q.shown) q.show(); miss('Not quite. Count the jumps on the line.', false, x, res); },
+        () => distract(res, N(Math.min(stepU, Math.max(1, Math.round(b / 2))), g), [subOp ? add(A, B) : sub(A, B)]));
+      if (!q.shown) { const hb = document.createElement('button'); hb.className = 'big'; hb.id = 'hopBtn'; hb.type = 'button'; hb.style.background = 'var(--violet)'; hb.style.boxShadow = '0 6px 0 #6d3fd6'; hb.innerHTML = 'Show the jumps <kbd>J</kbd>'; hb.onclick = q.show; $('ans').prepend(hb); }
+    };
+    q._a = () => res;
+    q.reveal = () => { q.shown = true; reveal(`${fmtT(A)} ${subOp ? '−' : '+'} ${fmtT(B)} = ${fmtT(res)}`); };
+    return q;
+  };
+
+  MAKE.compare = () => {
+    let A, B;
+    const eqCase = Math.random() < 0.18;
+    if (R.mine.length >= 2) { const p = shuffle(R.mine.slice()); A = { ...p[0] }; B = { ...p[1] }; }
+    else if (eqCase && KIND === 'frac') {
+      const pairs = []; R.dens.forEach((x) => R.dens.forEach((y) => { if (x < y && gcd(x, y) > 1) pairs.push([x, y]); }));
+      if (pairs.length) { const [d1, d2] = pick(pairs), gg = gcd(d1, d2), base = gridRand(R.lo, R.hi, gg); if (base) { A = N(base.n * d1 / gg, d1); B = N(base.n * d2 / gg, d2); if (Math.random() < 0.5) [A, B] = [B, A]; } }
+    } else if (eqCase && KIND === 'dec' && S.places === 2) {
+      const base = gridRand(R.lo, R.hi, 10); if (base) { A = N(base.n * 10, 100); A.keep = 2; B = N(base.n * 10, 100); if (Math.random() < 0.5) [A, B] = [B, A]; }
+    } else if (eqCase && KIND === 'whole' && Math.random() < 0.4) { A = gridRand(R.lo, R.hi, 1, null, true); B = { ...A }; }
+    if (!A) { const two = someNums(2); A = two[0]; B = two[1] || two[0]; }
+    const v = primaryView([A, B]), c = cmp(A, B), sym = c < 0 ? '<' : c > 0 ? '>' : '=';
+    const words = { '<': 'is less than', '>': 'is greater than', '=': 'is equal to' };
+    const q = { view: v, pins: false };
+    q.prompt = () => `<span class="chip cpin">${fmtH(A)}</span><span class="chip ${q.solved ? 'cgood' : 'cask'}" style="min-width:2em">${q.solved ? esc(sym) : '?'}</span><span class="chip" style="border-bottom-color:var(--violet)">${fmtH(B)}</span>`;
+    q.deco = () => ({ ticks: S.ticks, labels: labelFlags(v), pins: q.pins || q.solved ? [{ x: A, c: 'pin', tag: fmtH(A), tagCls: 'pin', drop: !q.pinsDrawn }, { x: B, c: 'v', tag: fmtH(B), tagCls: 'v', drop: !q.pinsDrawn }] : [] });
+    q.pick = (s) => {
+      if (q.solved) return;
+      const btn = [...document.querySelectorAll('#ans .cmp')].find((b) => b.dataset.s === s);
+      if (s === sym) { if (btn) btn.classList.add('right'); win(`Yes! ${fmtT(A)} ${words[sym]} ${fmtT(B)}.`); q.pinsDrawn = q.pins; return; }
+      if (btn) { btn.classList.remove('wrong'); void btn.offsetWidth; btn.classList.add('wrong'); btn.disabled = true; }
+      q.tries++; const first = !q.pins; q.pins = true; redraw(); q.pinsDrawn = true;
+      say(first ? 'Not quite. Look where they are on the number line.' : 'Not quite. Try again.', 'try');
+    };
+    q.ui = () => {
+      submitFn = null;
+      $('ans').innerHTML = ['<', '=', '>'].map((s2) => `<button class="big cmp" type="button" data-s="${s2}" aria-label="${words[s2]}">${esc(s2)}</button>`).join('') + '<button class="big" type="button" id="pinBtn" style="background:#fff;color:var(--ink);box-shadow:0 6px 0 var(--line);font-size:clamp(1rem,3vh,1.4rem)">Show on the line</button>';
+      $('ans').onclick = (e) => { const b = e.target.closest('.cmp'); if (b) q.pick(b.dataset.s); };
+      $('pinBtn').onclick = () => { q.pins = true; redraw(); q.pinsDrawn = true; $('pinBtn').remove(); };
+    };
+    q._a = () => sym;
+    q.reveal = () => { q.pins = true; reveal(`${fmtT(A)} ${words[sym]} ${fmtT(B)}.`); };
+    return q;
+  };
+
+  /* ---------- flow ---------- */
+  let lastMode = null;
+  function nextMode() {
+    const ms = S.modes;
+    if (ms.length === 1) return ms[0];
+    if (S.order === 'turns') { const i = ms.indexOf(lastMode); return ms[(i + 1) % ms.length]; }
+    let m; do { m = pick(ms); } while (m === lastMode);
+    return m;
+  }
+  function start(mode) {
+    modeNow = mode || nextMode(); lastMode = modeNow;
+    $('modeSel').value = modeNow; $('modeIc').textContent = MODES[modeNow].ic;
+    let tries = 0;
+    do { try { Q = MAKE[modeNow](); } catch (e) { Q = null; console.error(e); } } while (!Q && ++tries < 5);
+    if (!Q) { say('Something went wrong with these settings. Open Settings and try a different range.', 'try'); return; }
+    Q.tries = 0; Q.solved = false;
+    $('nextBtn').classList.remove('pulse'); say(''); $('ans').onclick = null;
+    refresh(); Q.drawn = true; Q.ui();
+    if (Q.drag) setupDrag();
+  }
+  const next = () => start();
+  $('nextBtn').onclick = next;
+  $('showBtn').onclick = () => { if (Q && !Q.solved) Q.reveal(); };
+  $('modeSel').onchange = () => start($('modeSel').value);
+  $('nl').addEventListener('click', (e) => { const b = e.target.closest('.blank'); if (b && Q && Q.click) { Q.click(+b.dataset.b); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } });
+
+  function setupDrag() {
+    const el = $('nl'); let dragging = false;
+    const at = (e) => { const r = el.getBoundingClientRect(), g = el._g; return Math.max(0, Math.min(1, (e.clientX - r.left - g.pad) / (g.W - 2 * g.pad))); };
+    el.onpointerdown = (e) => { if (!Q || !Q.drag || Q.solved) return; dragging = true; try { el.setPointerCapture(e.pointerId); } catch (x) {} Q.p = at(e); redraw(); say(''); e.preventDefault(); };
+    el.onpointermove = (e) => { if (!dragging || !Q || Q.solved) return; Q.p = at(e); const p = $('dragPin'); if (p) p.style.left = (el._g.pad + (el._g.W - 2 * el._g.pad) * Q.p) + 'px'; };
+    el.onpointerup = el.onpointercancel = () => { dragging = false; };
+  }
+
+  window.__nl = { q: () => Q, S: () => S, fmt: (x) => fmtT(x), mode: () => modeNow };
+
+  /* ---------- keyboard ---------- */
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden) { if (e.key === 'Escape' && R && !R.errs.length) closeSheet(); return; }
+    const tg = e.target && e.target.tagName;
+    if (tg === 'SELECT' || tg === 'INPUT' || tg === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey || !Q) return;
+    const k = e.key;
+    if (Q.solved) { if (k === 'Enter' || k === ' ' || k === 'n' || k === 'N') { e.preventDefault(); next(); } return; }
+    if (k === 'n' || k === 'N') { e.preventDefault(); next(); return; }
+    if (modeNow === 'compare') { const s = { '<': '<', ',': '<', '=': '=', '>': '>', '.': '>' }[k]; if (s) { e.preventDefault(); Q.pick(s); } return; }
+    if (modeNow === 'jumps' && (k === 'j' || k === 'J')) { e.preventDefault(); Q.show(); return; }
+    if (modeNow === 'place') {
+      if (k === 'ArrowLeft' || k === 'ArrowRight') { e.preventDefault(); if (Q.p === null) Q.p = 0.5; Q.p = Math.max(0, Math.min(1, Q.p + (k === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 0.0025 : 0.01))); redraw(); }
+      if (k === 'Enter') { e.preventDefault(); Q.check(); }
+      return;
+    }
+    if (submitFn && (/^[\d./ ]$/.test(k) || k === 'Backspace' || k === 'Enter')) {
+      if (tg === 'BUTTON' && (k === 'Enter' || k === ' ') && !e.target.closest('.keys')) return;
+      e.preventDefault(); typeKey(k);
+    }
+  });
+
+  /* ---------- confetti ---------- */
+  const fx = $('fx'), cx = fx.getContext('2d'); let bits = [], raf = 0;
+  function confetti() {
+    if (reduce) return;
+    fx.width = innerWidth; fx.height = innerHeight;
+    const cols = ['#ef5a5a', '#ffc93d', '#22b35e', '#4f8df5', '#8b5cf6', '#ff8a3d'];
+    for (let i = 0; i < 90; i++) bits.push({ x: innerWidth / 2 + (Math.random() - .5) * 200, y: innerHeight * .45, vx: (Math.random() - .5) * 16, vy: -Math.random() * 15 - 4, r: Math.random() * 6.28, s: 6 + Math.random() * 7, c: pick(cols), t: 0 });
+    if (!raf) raf = requestAnimationFrame(tickFx);
+  }
+  function tickFx() {
+    cx.clearRect(0, 0, fx.width, fx.height);
+    bits.forEach((p) => { p.t++; p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += .2; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.c; cx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); cx.restore(); });
+    bits = bits.filter((p) => p.y < fx.height + 20 && p.t < 160);
+    raf = bits.length ? requestAnimationFrame(tickFx) : (cx.clearRect(0, 0, fx.width, fx.height), 0);
+  }
+
+  /* ---------- settings sheet ---------- */
+  function seg(el, opts, isOn, pickFn, multi) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { pickFn(v); save(); renderSheet(); }; el.appendChild(b); });
+  }
+  const toggle = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : arr.concat(v));
+  function renderSheet() {
+    $('modeTiles').innerHTML = ORDER.map((m) => `<button class="tile" type="button" data-m="${m}" aria-pressed="${S.modes.includes(m)}"><span class="ic" aria-hidden="true">${MODES[m].ic}</span><b>${MODES[m].name}</b><small>${MODES[m].sub}</small></button>`).join('');
+    seg($('sOrder'), [['mix', 'Mix them up'], ['turns', 'Take turns in order']], (v) => S.order === v, (v) => { S.order = v; });
+    seg($('sType'), [['whole', 'Whole numbers'], ['frac', 'Fractions'], ['dec', 'Decimals']], (v) => S.type === v, (v) => {
+      if (S.type === v) return; S.type = v; S.countBy = '';
+      if (v === 'frac') { S.from = '0'; S.to = '1'; } else if (v === 'dec') { S.from = '0'; S.to = '1'; } else { S.from = '0'; S.to = '20'; }
+    });
+    $('from').value = S.from; $('to').value = S.to; $('countBy').value = S.countBy; $('mine').value = S.mine;
+    $('countWrap').hidden = S.type === 'frac'; $('fracOpts').hidden = S.type !== 'frac'; $('decOpts').hidden = S.type !== 'dec';
+    seg($('sDen'), [2, 3, 4, 5, 6, 8, 10, 12].map((d) => [d, DEN_NAME[d][0].toUpperCase() + DEN_NAME[d].slice(1)]), (v) => S.dens.includes(v), (v) => { S.dens = toggle(S.dens, v); });
+    seg($('sMix'), [[true, 'Mixed numbers (1 ¼)'], [false, 'Improper fractions (5/4)']], (v) => S.mixed === v, (v) => { S.mixed = v; });
+    seg($('sPl'), [[1, 'Tenths (0.1)'], [2, 'Hundredths (0.01)']], (v) => S.places === v, (v) => { S.places = v; });
+    seg($('sTicks'), [[true, 'Show tick marks'], [false, 'No tick marks (only the numbers shown)']], (v) => S.ticks === v, (v) => { S.ticks = v; });
+    const labOpts = [['ends', 'Start and end'], ['mid', 'Midpoint']].concat(S.type === 'whole' ? [['tens', 'Tens'], ['hund', 'Hundreds']] : [['whole', 'Whole numbers']]).concat([['all', 'Every tick mark']]);
+    seg($('sLab'), labOpts, (v) => S.labels.includes(v), (v) => { S.labels = toggle(S.labels, v); });
+    seg($('sIn'), [['keypad', 'Type on a keypad'], ['choice', 'Multiple choice']], (v) => S.input === v, (v) => { S.input = v; });
+    seg($('sTol'), [[10, 'Close (within 10%)'], [5, 'Closer (within 5%)'], [2.5, 'Very close (within 2.5%)']], (v) => S.tol === v, (v) => { S.tol = v; });
+    seg($('sMiss'), [[1, '1'], [3, '3'], [5, '5']], (v) => S.miss === v, (v) => { S.miss = v; });
+    const ro2 = RND[S.type].filter(([k]) => k !== 'r01' || S.places === 2);
+    seg($('sRnd'), ro2.map(([k, r, n]) => [k, n[0].toUpperCase() + n.slice(1)]), (v) => (S.rnd[S.type] || []).includes(v), (v) => { S.rnd[S.type] = toggle(S.rnd[S.type] || [], v); });
+    seg($('sSeqN'), [[4, '4'], [5, '5'], [6, '6']], (v) => S.seqN === v, (v) => { S.seqN = v; });
+    seg($('sDir'), [['up', 'Least to greatest'], ['down', 'Greatest to least'], ['mix', 'Mix']], (v) => S.dir === v, (v) => { S.dir = v; });
+    seg($('sOp'), [['add', 'Add'], ['sub', 'Subtract'], ['both', 'Both']], (v) => S.op === v, (v) => { S.op = v; });
+    seg($('sHop'), [['wait', 'When I click Show the jumps'], ['now', 'Right away']], (v) => S.hop === v, (v) => { S.hop = v; });
+    document.querySelectorAll('.opt[data-mode]').forEach((o) => { o.hidden = !o.dataset.mode.split(' ').some((m) => S.modes.includes(m)); });
+    check();
+  }
+  function check() {
+    R = compute();
+    const errs = R.errs.slice();
+    if (!errs.length && S.modes.includes('round') && KIND === 'whole' && !roundOpts().length) errs.push('Rounding needs numbers above 10. Make the range bigger.');
+    if (!errs.length && S.modes.includes('round') && !(S.rnd[S.type] || []).length) R.warn = (R.warn ? R.warn + ' ' : '') + 'No rounding place chosen, so rounding will use the first one.';
+    const e = $('err');
+    e.className = 'note' + (errs.length ? ' warn' : '');
+    e.textContent = errs.length ? errs.join(' ') : R.warn || (KIND === 'frac' && R.dens.length > 1 ? `Each question uses one of: ${R.dens.map((d) => DEN_NAME[d]).join(', ')}. Preview shows ${DEN_NAME[R.dens[0]]}.` : '');
+    $('mineNote').className = 'note' + (R.mineBad ? ' warn' : '');
+    $('mineNote').textContent = R.mineBad ? `${R.mineBad} of your numbers ${R.mineBad === 1 ? 'is' : 'are'} not used: ${R.mineBad === 1 ? 'it is' : 'they are'} outside the range or the wrong kind of number.` : R.mine && R.mine.length ? `${R.mine.length} of your numbers will be used for placing, estimating, rounding, ordering, comparing and the mystery number.` : 'Used for placing, estimating, rounding, ordering, comparing and the mystery number. Leave empty and the computer picks.';
+    $('goBtn').disabled = errs.length > 0;
+    if (!errs.length) { R.errs = []; const v = baseView(KIND === 'frac' ? R.dens[0] : 0); drawLine($('prevNl'), v, { ticks: S.ticks, labels: labelFlags(v) }); }
+    else { R.errs = errs; $('prevNl').innerHTML = ''; }
+  }
+  $('modeTiles').onclick = (e) => { const b = e.target.closest('.tile'); if (!b) return; S.modes = ORDER.filter((m) => (m === b.dataset.m ? !S.modes.includes(m) : S.modes.includes(m))); save(); renderSheet(); };
+  [['from', 'from'], ['to', 'to'], ['countBy', 'countBy'], ['mine', 'mine']].forEach(([id, k]) => $(id).addEventListener('input', () => { S[k] = $(id).value; save(); check(); }));
+  function openSheet() { $('sheet').hidden = false; renderSheet(); requestAnimationFrame(() => check()); $('goBtn').focus({ preventScroll: true }); }
+  function closeSheet() {
+    check(); if (R.errs.length) return;
+    $('sheet').hidden = true; mineBag = []; save();
+    $('modeSel').innerHTML = S.modes.map((m) => `<option value="${m}">${MODES[m].name}</option>`).join('');
+    lastMode = null; start(S.modes.includes(modeNow) ? (S.order === 'turns' ? S.modes[0] : null) : null);
+  }
+  $('goBtn').onclick = closeSheet;
+  $('gearBtn').onclick = openSheet;
+
+  if ('ResizeObserver' in window) { let t = 0; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { if ($('sheet').hidden) redraw(); else check(); }, 60); }).observe(document.body); }
+
+  /* first run: show settings; afterwards start straight away with the saved settings */
+  KIND = S.type; R = compute();
+  if (stored && !R.errs.length) { $('sheet').hidden = true; closeSheet(); } else openSheet();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Under Which Cup?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titan+One&family=Lexend:wght@400;600;700;800&display=swap">
+<style>
+  /* Layout: street-performer table. Header strip, cups on a green felt table in the left panel, team score cards on the right. */
+  :root {
+    --bg: #160c12; --glow: #4a1a2c; --surface: #1f121a; --panel: #2c1823; --panel-hi: #3a1f2e;
+    --line: rgba(255, 235, 240, .16); --text: #fff5f7; --text-dim: rgba(255, 245, 247, .66);
+    --accent: #ffd23f; --accent-deep: #b48c00; --pop: #e3354b; --pop-deep: #9b1c2e;
+    --skip: #23202a; --skip-line: #48404f; --hint-bg: rgba(22, 12, 18, .9); --scrim: rgba(10, 5, 8, .86);
+    --display: "Titan One", "Arial Black", Impact, system-ui, sans-serif;
+    --body: "Lexend", "Segoe UI", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 50% -20%, var(--glow) 0, transparent 60%);
+    color: var(--text);
+    font-family: var(--body);
+    overflow: hidden;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  kbd { font-family: var(--body); font-size: .75em; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; opacity: .85; }
+
+  .wrap {
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+  }
+
+  /* ---------- Setup ---------- */
+  .setup { display: grid; place-items: center; overflow-y: auto; }
+  .setup-card {
+    width: 100%; max-width: 720px; margin-block: auto;
+    background: var(--surface); border: 2px solid var(--line); border-radius: 22px;
+    padding: clamp(20px, 4vw, 36px);
+    display: flex; flex-direction: column; gap: 20px; box-sizing: border-box;
+  }
+  .logo { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 3.6rem); line-height: .95; margin: 0; color: var(--accent); text-shadow: 0 4px 0 var(--accent-deep); text-wrap: balance; letter-spacing: .01em; }
+  .logo small { display: block; font-family: var(--body); font-weight: 700; font-size: .3em; color: var(--pop); text-shadow: none; letter-spacing: .14em; text-transform: uppercase; margin-top: 10px; }
+  .lede { margin: 0; color: var(--text-dim); max-width: 60ch; line-height: 1.5; }
+  .field-row { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+  .label em { font-style: normal; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button {
+    min-width: 52px; padding: 10px 14px; border-radius: 12px;
+    background: var(--panel); border: 2px solid var(--line); font-weight: 700; font-size: 1rem;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .seg.multi button[aria-pressed="true"]::before { content: "✓ "; }
+  .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .name-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 6px 10px; border: 2px solid var(--line); min-width: 0; }
+  .name-row input { background: transparent; border: 0; padding: 6px 0; width: 100%; min-width: 0; font-weight: 600; }
+  .name-row input:focus { outline: none; }
+  .name-row:focus-within { border-color: var(--accent); }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+  .start {
+    align-self: flex-start;
+    font-family: var(--display); font-size: 1.5rem; letter-spacing: .02em;
+    background: var(--pop); color: #fff; border: 0; border-radius: 14px; padding: 14px 30px;
+    box-shadow: 0 6px 0 var(--pop-deep);
+  }
+  .start:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--pop-deep); }
+  .how { margin: 0; padding-left: 1.2em; color: var(--text-dim); line-height: 1.6; font-size: .92rem; }
+
+  /* ---------- Game ---------- */
+  .game { display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+  .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .top .brand { font-family: var(--display); color: var(--accent); font-size: 1.4rem; margin-right: auto; letter-spacing: .02em; }
+  .round { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .tool {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; font-size: .88rem; font-weight: 600; white-space: nowrap;
+  }
+  .tool:hover { background: var(--panel-hi); }
+  .tool:disabled { opacity: .4; cursor: default; }
+  .tool.skip { background: var(--skip); border-color: var(--skip-line); }
+  .tool.armed { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px); gap: 14px; min-height: 0; }
+  .play-box { position: relative; min-height: 0; min-width: 0; border-radius: 18px; overflow: hidden; background: var(--surface); border: 2px solid var(--line); }
+  canvas#play { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: pointer; }
+  .status { position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .status .who { font-family: var(--display); font-size: clamp(1.1rem, 2.2vw, 1.6rem); line-height: 1.1; letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .tokens { display: flex; gap: 6px; }
+  .tokens i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); box-shadow: inset -2px -3px 0 rgba(0,0,0,.3); display: block; }
+  .tokens i.used { background: transparent; box-shadow: inset 0 0 0 2px var(--text-dim); }
+  .hint {
+    position: absolute; left: 12px; bottom: 12px; z-index: 2;
+    background: var(--hint-bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: .9rem; white-space: nowrap; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis;
+  }
+  .banner, .toast { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; pointer-events: none; }
+  .banner div, .toast div {
+    font-family: var(--display); font-size: clamp(1.6rem, 5vw, 3.4rem); text-align: center; line-height: 1.05; letter-spacing: .02em;
+    padding: 18px 28px; border-radius: 18px; background: var(--banner, var(--pop)); color: #fff;
+    box-shadow: 0 8px 0 rgba(0,0,0,.3); max-width: 86%; text-wrap: balance; overflow-wrap: anywhere;
+    animation: pop .45s cubic-bezier(.3,1.5,.5,1);
+  }
+  .toast { place-items: start center; padding-top: 14%; }
+  .toast div { background: var(--toast, var(--accent)); color: var(--toast-ink, #1a1a1a); }
+  .banner small, .toast small { display: block; font-family: var(--body); font-size: .36em; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; opacity: .9; }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .board { display: flex; flex-direction: column; gap: 8px; min-height: 0; padding-top: 8px; }
+  .team {
+    flex: 1 1 0; max-height: 132px; min-height: 0;
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+    background: var(--panel); border: 3px solid transparent; border-radius: 14px;
+    padding: 8px 12px; text-align: left; position: relative;
+  }
+  .team:hover { background: var(--panel-hi); }
+  .team.active { border-color: var(--tc); background: var(--panel-hi); }
+  .team .dot { grid-row: 1 / span 2; width: 22px; height: 22px; background: var(--tc); }
+  .team .tname { font-weight: 700; font-size: clamp(.9rem, 1.3vw, 1.1rem); line-height: 1.15; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team .meta { font-size: .76rem; color: var(--text-dim); grid-column: 2; font-variant-numeric: tabular-nums; }
+  .team .score { grid-row: 1 / span 2; grid-column: 3; font-family: var(--display); font-size: clamp(1.6rem, 3vw, 2.5rem); font-variant-numeric: tabular-nums; }
+  .team .up {
+    position: absolute; top: -9px; right: 10px; background: var(--tc); color: #14153d;
+    font-size: .66rem; font-weight: 700; letter-spacing: .12em; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;
+  }
+  .team .bump { animation: bump .6s ease; display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.3); color: var(--accent); } }
+
+  /* ---------- Final ---------- */
+  .final { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--scrim); padding: 16px; overflow-y: auto; }
+  .final-card {
+    width: 100%; max-width: 560px; box-sizing: border-box;
+    background: var(--surface); border: 3px solid var(--accent); border-radius: 22px; padding: 26px;
+    display: flex; flex-direction: column; gap: 14px; animation: pop .5s cubic-bezier(.3,1.5,.5,1);
+  }
+  .final-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(1.9rem, 5vw, 3.1rem); line-height: 1; color: var(--accent); text-wrap: balance; overflow-wrap: anywhere; }
+  .final-kicker { font-size: .8rem; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; color: var(--pop); }
+  .standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .standings li { display: grid; grid-template-columns: 2.4em auto 1fr auto; gap: 10px; align-items: center; background: var(--panel); border-radius: 12px; padding: 8px 12px; }
+  .standings .rank { font-family: var(--display); color: var(--text-dim); }
+  .standings li:first-child .rank { color: var(--accent); }
+  .standings .nm { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .standings .pts { font-family: var(--display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+  .final-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .final-actions button { border: 0; border-radius: 12px; padding: 12px 20px; font-weight: 700; background: var(--accent); color: var(--bg); }
+  .final-actions button.ghost { background: transparent; color: var(--text); border: 2px solid var(--line); }
+
+  @media (max-width: 820px) {
+    body { overflow: auto; }
+    .wrap.game { height: auto; min-height: 100%; }
+    .stage { grid-template-columns: 1fr; }
+    .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); order: -1; }
+    .team { max-height: none; }
+    .play-box { height: 74vh; min-height: 440px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .banner div, .toast div, .final-card, .team .bump { animation: none; }
+  }
+</style>
+
+<section class="wrap setup" id="setup">
+  <div class="setup-card">
+    <h1 class="logo">Under Which Cup?<small>Classroom review edition</small></h1>
+    <p class="lede">Ask a question. When a team answers correctly, watch closely: the points go under one cup, then the cups get shuffled. Pick the right cup to win the points! Wrong answer? Skip to the next team.</p>
+    <div class="field-row">
+      <span class="label" id="lblTeams">Number of teams</span>
+      <div class="seg" id="segTeams" role="group" aria-labelledby="lblTeams"></div>
+    </div>
+    <div class="field-row">
+      <span class="label">Team names</span>
+      <div class="names" id="names"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblPer">Tries per turn</span>
+      <div class="seg" id="segPer" role="group" aria-labelledby="lblPer"></div>
+    </div>
+    <div class="field-row">
+      <span class="label" id="lblRounds">Rounds</span>
+      <div class="seg" id="segRounds" role="group" aria-labelledby="lblRounds"></div>
+    </div>
+    <div id="gameOpts" class="field-row"></div>
+    <ul class="how"><li>After a correct answer, click <b>Show the points</b> (or press <kbd>Space</kbd>). One cup lifts to show the points, then the cups shuffle.</li><li>Click the cup you think has the points (or use <kbd>←</kbd> <kbd>→</kbd> and <kbd>Space</kbd>). Right cup: the points are yours. Empty: the game shows where the points were.</li></ul>
+    <button class="start" id="startBtn" type="button">Start game</button>
+  </div>
+</section>
+
+<section class="wrap game" id="game" hidden>
+  <div class="top">
+    <div class="brand">Under Which Cup?</div>
+    <div class="round" id="roundLbl">Round 1</div>
+    <button class="tool skip" id="skipBtn" type="button">Wrong answer, skip <kbd>S</kbd></button>
+    <button class="tool" id="undoBtn" type="button" disabled>Undo <kbd>U</kbd></button>
+    <button class="tool" id="soundBtn" type="button" aria-pressed="true">Sound: On</button>
+    <button class="tool" id="fullBtn" type="button">Full screen</button>
+    <button class="tool" id="endBtn" type="button">End game</button>
+  </div>
+  <div class="stage">
+    <div class="play-box" id="playBox">
+      <canvas id="play" aria-label="Cups on a table for the Under Which Cup game."></canvas>
+      <div class="status"><div class="who" id="whoLbl"></div><div class="tokens" id="tokensLbl"></div></div>
+      <div class="hint" id="hint"></div>
+      <div class="banner" id="banner" hidden><div id="bannerTxt"></div></div>
+      <div class="toast" id="toast" hidden><div id="toastTxt"></div></div>
+    </div>
+    <div class="board" id="board" aria-label="Scoreboard"></div>
+  </div>
+</section>
+
+<div class="final" id="final" hidden role="dialog" aria-modal="true" aria-labelledby="finalName">
+  <div class="final-card">
+    <div class="final-kicker" id="finalKicker">Game over · Winner</div>
+    <h2 id="finalName"></h2>
+    <ol class="standings" id="standings"></ol>
+    <div class="final-actions">
+      <button id="againBtn" type="button">Play again, same teams</button>
+      <button id="setupBtn" class="ghost" type="button">Change setup</button>
+      <button id="finalUndo" class="ghost" type="button">Undo last turn</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function makeGame(core) {
+  let ui = null, o = {}, mode = 'idle', cups = [], prizeCup = 0, prize = 10, sel = 0, timers = [], W = 800, H = 500, cupW = 140, cupH = 160, slotX = [];
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const later = (fn, ms) => new Promise((res) => timers.push(setTimeout(res, ms))).then(fn);
+  const wait = (ms) => new Promise((res) => timers.push(setTimeout(res, ms)));
+  const SPEED = { slow: { swaps: 5, ms: 650 }, medium: { swaps: 8, ms: 430 }, fast: { swaps: 12, ms: 290 } };
+  const cupSVG = `<svg viewBox="0 0 120 140" aria-hidden="true"><defs><linearGradient id="cg" x1="0" x2="1"><stop offset="0" stop-color="#9b1c2e"/><stop offset=".35" stop-color="#e3354b"/><stop offset=".55" stop-color="#ff6b7c"/><stop offset="1" stop-color="#a51d31"/></linearGradient></defs><path d="M22 6 H98 L114 128 Q60 140 6 128 Z" fill="url(#cg)"/><ellipse cx="60" cy="7" rx="38" ry="6" fill="#7a1222"/><path d="M8 118 Q60 130 112 118 L114 128 Q60 140 6 128 Z" fill="#c22a3e"/><path d="M14 104 Q60 114 106 104" stroke="#fff" stroke-opacity=".35" stroke-width="4" fill="none"/><path d="M34 16 L28 110" stroke="#fff" stroke-opacity=".28" stroke-width="7" stroke-linecap="round"/></svg>`;
+
+  /* ---------- UI ---------- */
+  function ensureUI() {
+    if (ui) return;
+    const css = document.createElement('style');
+    css.textContent = `
+      #playBox .toast { place-items: end center !important; padding: 0 0 12px !important; }
+      #playBox .toast div { font-size: clamp(1.1rem, 2.6vw, 2rem) !important; }
+      .cg { position: absolute; inset: 0; z-index: 2; display: grid; grid-template-rows: 1fr auto; padding: 40px 14px 50px; box-sizing: border-box; font-family: var(--body); color: var(--text); }
+      .cg .table { position: relative; border-radius: 26px; background: radial-gradient(ellipse at 50% 30%, #3b7a4f, #1f4d31 70%); box-shadow: inset 0 0 0 10px #6b4220, inset 0 0 0 14px #3f260f, inset 0 10px 40px rgba(0,0,0,.5); overflow: hidden; }
+      .cg .slot { position: absolute; bottom: 18%; width: var(--cw); transform: translateX(-50%); }
+      .cg .shadow { position: absolute; bottom: calc(18% - 10px); height: 22px; width: var(--cw); border-radius: 50%; background: rgba(0,0,0,.35); transform: translateX(-50%); filter: blur(3px); }
+      .cg .prize { position: absolute; bottom: 18%; width: calc(var(--cw) * .62); aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #fff6c2, #ffd23f 45%, #d99a00); box-shadow: 0 0 0 5px #b07c00, 0 6px 14px rgba(0,0,0,.4); font-family: var(--display); color: #5a3a00; font-size: calc(var(--cw) * .26); opacity: 0; transition: opacity .2s; }
+      .cg .prize.show { opacity: 1; }
+      .cg .prize.glow { box-shadow: 0 0 0 5px #b07c00, 0 0 40px #ffe36b, 0 0 80px #ffd23f; }
+      .cg .cup { position: absolute; left: 0; bottom: 18%; width: var(--cw); height: var(--ch); will-change: transform; cursor: default; border: 0; padding: 0; background: none; }
+      .cg .cup svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 10px 10px rgba(0,0,0,.45)); }
+      .cg.picking .cup { cursor: pointer; }
+      .cg .cup .hl { position: absolute; left: 50%; top: -46px; transform: translateX(-50%); font-size: 34px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.4); opacity: 0; }
+      .cg.picking:not(.kbmode) .cup:hover .hl, .cg.picking .cup.kb .hl { opacity: 1; animation: cgbob .7s ease-in-out infinite; }
+      .cg.picking:not(.kbmode) .cup:hover svg, .cg.picking .cup.kb svg { filter: drop-shadow(0 0 14px #fff) drop-shadow(0 10px 10px rgba(0,0,0,.45)); }
+      .cg .pos { position: absolute; bottom: calc(18% - var(--cw) * .42); transform: translateX(-50%); width: calc(var(--cw) * .36); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.35); border: 3px solid rgba(255,255,255,.75); color: #fff; font-family: var(--display); font-size: calc(var(--cw) * .2); }
+      .cg .cup .num { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%); font-family: var(--display); color: #fff; font-size: calc(var(--cw) * .2); opacity: .9; text-shadow: 0 2px 0 rgba(0,0,0,.3); }
+      @keyframes cgbob { 50% { transform: translate(-50%, -8px); } }
+      .cg .bar { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; min-height: 64px; padding-top: 10px; }
+      .cg .say { font-family: var(--display); font-size: clamp(1.1rem, 3vh, 1.9rem); text-align: center; }
+      .cg .say small { display: block; font-family: var(--body); font-size: .5em; color: var(--text-dim); margin-top: 4px; }
+      .cg .btn { border: 0; border-radius: 16px; padding: 12px 24px; font-family: var(--display); font-size: clamp(1rem, 2.6vh, 1.5rem); background: var(--accent); color: #1a1405; box-shadow: 0 5px 0 var(--accent-deep); cursor: pointer; }
+      .cg .btn kbd { font-family: var(--body); font-size: .6em; border: 1px solid currentColor; border-radius: 5px; padding: 0 5px; margin-left: 8px; opacity: .8; }
+      .cg .big { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4; }
+      .cg .big div { font-family: var(--display); font-size: clamp(2.2rem, 7vw, 5rem); padding: 10px 34px; border-radius: 22px; background: #2bb673; color: #04170c; box-shadow: 0 0 0 6px #fff, 0 20px 50px rgba(0,0,0,.6); animation: cgbig 2s ease-out forwards; text-align: center; line-height: 1.05; }
+      .cg .big.bad div { background: #e2384d; color: #fff; }
+      @keyframes cgbig { 0% { transform: scale(.3) rotate(-8deg); opacity: 0; } 15% { transform: scale(1.1) rotate(2deg); opacity: 1; } 85% { transform: scale(1); opacity: 1; } 100% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .cg .big div, .cg.picking .cup .hl { animation: none; } }`;
+    document.head.appendChild(css);
+    ui = document.createElement('div');
+    ui.className = 'cg';
+    ui.innerHTML = `<div class="table" id="cgTable"></div><div class="bar" id="cgBar"></div>`;
+    $('playBox').appendChild(ui);
+    document.addEventListener('keydown', (e) => {
+      if (mode !== 'pick' || (e.key !== ' ' && e.key !== 'Enter') || (e.target && /INPUT|SELECT|BUTTON/.test(e.target.tagName) && !e.target.closest('.cg'))) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (!kbUsed) { kbUsed = true; markKb(); return; }
+      const c = cups.findIndex((x) => x.slot === sel); if (c >= 0) choose(c);
+    }, true);
+    $('cgTable').addEventListener('pointermove', () => { if (kbUsed && mode === 'pick') { kbUsed = false; markKb(); } });
+    $('cgTable').addEventListener('click', (e) => { const c = e.target.closest('.cup'); if (c && mode === 'pick') choose(+c.dataset.k); });
+  }
+  function n() { return o.cups || 3; }
+  function layout() {
+    if (!ui) return;
+    const t = $('cgTable').getBoundingClientRect(); W = t.width || 800; H = t.height || 400;
+    cupW = Math.min(W / (n() + 1.2), H * .42, 190); cupH = cupW * 1.17;
+    ui.style.setProperty('--cw', cupW + 'px'); ui.style.setProperty('--ch', cupH + 'px');
+    slotX = Array.from({ length: n() }, (_, i) => W * (i + 1) / (n() + 1));
+  }
+  function build() {
+    const t = $('cgTable'); t.innerHTML = '';
+    layout();
+    slotX.forEach((x, i) => { const s = document.createElement('div'); s.className = 'shadow'; s.style.left = x + 'px'; t.appendChild(s); const p = document.createElement('div'); p.className = 'pos'; p.style.left = x + 'px'; p.textContent = i + 1; p.setAttribute('aria-hidden', 'true'); t.appendChild(p); });
+    const pz = document.createElement('div'); pz.className = 'prize'; pz.id = 'cgPrize'; t.appendChild(pz);
+    cups = [];
+    for (let k = 0; k < n(); k++) {
+      const c = document.createElement('button'); c.type = 'button'; c.className = 'cup'; c.dataset.k = k;
+      c.innerHTML = `<span class="hl" aria-hidden="true">▼</span>${cupSVG}`;
+      t.appendChild(c);
+      cups.push({ el: c, slot: k });
+    }
+    place();
+  }
+  function place(lift) {
+    cups.forEach((c, k) => {
+      const up = lift && lift.includes(k) ? -cupH * .78 : 0;
+      c.el.style.transform = `translate(${slotX[c.slot] - cupW / 2}px, ${up}px)`;
+      c.el.setAttribute('aria-label', `Cup ${c.slot + 1}`);
+    });
+  }
+  function animateTo(c, x0, x1, dir, ms) {
+    const lift = cupH * (.18 + .1 * Math.random()), dx = x1 - x0;
+    const frames = [
+      { transform: `translate(${x0 - cupW / 2}px, 0px) scale(1)` },
+      { transform: `translate(${x0 + dx / 2 - cupW / 2}px, ${dir * lift}px) scale(${dir < 0 ? .94 : 1.06})` },
+      { transform: `translate(${x1 - cupW / 2}px, 0px) scale(1)` }
+    ];
+    c.el.style.zIndex = dir > 0 ? 3 : 1;
+    if (core.reduceMotion) return Promise.resolve();
+    return c.el.animate(frames, { duration: ms, easing: 'ease-in-out' }).finished.catch(() => {});
+  }
+  async function lift(ks, up, ms) {
+    const anims = cups.map((c, k) => {
+      if (!ks.includes(k)) return null;
+      const x = slotX[c.slot] - cupW / 2, y = -cupH * .78;
+      const fr = up ? [{ transform: `translate(${x}px,0)` }, { transform: `translate(${x}px,${y}px)` }] : [{ transform: `translate(${x}px,${y}px)` }, { transform: `translate(${x}px,0)` }];
+      c.el.style.transform = fr[1].transform;
+      return core.reduceMotion ? null : c.el.animate(fr, { duration: ms, easing: up ? 'cubic-bezier(.3,1.4,.5,1)' : 'ease-in' }).finished.catch(() => {});
+    }).filter(Boolean);
+    await Promise.all(anims);
+  }
+  function showPrizeAt(slot, on, glow) {
+    const pz = $('cgPrize'); pz.style.left = slotX[slot] + 'px'; pz.textContent = '+' + prize;
+    pz.classList.toggle('show', !!on); pz.classList.toggle('glow', !!glow);
+  }
+  function bar(html) { $('cgBar').innerHTML = html; }
+  function chip() { const t = core.cfg.teams[core.game.active]; return `<span style="color:${t.color}">${esc(t.name)}</span>`; }
+  function bigBanner(text, bad) { const b = document.createElement('div'); b.className = 'big' + (bad ? ' bad' : ''); b.innerHTML = `<div>${esc(text)}</div>`; $('cgTable').appendChild(b); setTimeout(() => b.remove(), 2100); }
+
+  function pickPrize() {
+    if (o.pts === 'ten') return 10;
+    const pool = o.pts === 'small' ? [1, 2, 3, 4, 5] : [5, 10, 10, 20];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  async function run() {
+    const g = gen;
+    const sp = SPEED[o.speed] || SPEED.medium;
+    prizeCup = Math.floor(Math.random() * n()); prize = pickPrize();
+    showPrizeAt(cups[prizeCup].slot, true);
+    bar(`<div class="say">Watch the cup with <span style="color:#ffd23f">+${prize}</span> under it!</div>`);
+    swish();
+    await lift([prizeCup], true, 450); if (g !== gen) return;
+    await wait(1600); if (g !== gen) return;
+    await lift([prizeCup], false, 300); if (g !== gen) return;
+    showPrizeAt(cups[prizeCup].slot, false);
+    bar('<div class="say">Shuffling… keep your eyes on it!</div>');
+    await wait(400);
+    for (let i = 0; i < sp.swaps; i++) {
+      if (g !== gen) return;
+      const a = Math.floor(Math.random() * n());
+      let b = Math.floor(Math.random() * (n() - 1)); if (b >= a) b++;
+      const ca = cups[a], cb = cups[b], xa = slotX[ca.slot], xb = slotX[cb.slot];
+      clack();
+      await Promise.all([animateTo(ca, xa, xb, 1, sp.ms), animateTo(cb, xb, xa, -1, sp.ms)]);
+      const t = ca.slot; ca.slot = cb.slot; cb.slot = t;
+      place();
+    }
+    if (g !== gen) return;
+    mode = 'pick'; sel = 0; ui.classList.add('picking'); markKb();
+    bar(`<div class="say">${chip()}, which cup has the +${prize}?<small>Click a cup, or use ← → and press Space to lift it.</small></div>`);
+  }
+  function markKb() { ui.classList.toggle('kbmode', kbUsed); cups.forEach((c) => c.el.classList.toggle('kb', mode === 'pick' && kbUsed && c.slot === sel)); }
+  let kbUsed = false, gen = 0;
+  async function choose(k) {
+    if (mode !== 'pick') return;
+    mode = 'busy'; ui.classList.remove('picking'); markKb();
+    const right = k === prizeCup, c = cups[k];
+    showPrizeAt(cups[prizeCup].slot, right, right);
+    await lift([k], true, 450);
+    if (right) {
+      bigBanner(`Found it! +${prize}`); cheer();
+      bar(`<div class="say">${chip()} found the +${prize}!</div>`);
+      await wait(1400);
+      core.finish({ kind: 'pts', pts: prize, text: `Found it! +${prize}`, label: `Found +${prize}` });
+    } else {
+      buzz(); bigBanner('Empty!', true);
+      bar(`<div class="say">Empty! The +${prize} was under cup ${cups[prizeCup].slot + 1}.</div>`);
+      await wait(900);
+      showPrizeAt(cups[prizeCup].slot, true);
+      await lift([prizeCup], true, 450);
+      await wait(1200);
+      core.finish({ kind: 'miss', text: `Empty cup. It was cup ${cups[prizeCup].slot + 1}.`, label: 'Missed' });
+    }
+  }
+
+  /* ---------- sound ---------- */
+  function clack() { const a = core.audio(); if (!a) return; const t = a.currentTime, s = core.noiseSrc(.05), f = a.createBiquadFilter(), g = a.createGain(); f.type = 'bandpass'; f.frequency.value = 900; g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .05); s.connect(f).connect(g).connect(a.destination); s.start(t); }
+  function swish() { const a = core.audio(); if (a) core.tone(520, a.currentTime, .12, 'triangle', .07); }
+  function cheer() { const a = core.audio(); if (!a) return; const t = a.currentTime; [659, 784, 1046].forEach((f, k) => core.tone(f, t + k * .1, .22, 'triangle', .1)); }
+  function buzz() { const a = core.audio(); if (a) core.tone(140, a.currentTime, .3, 'sawtooth', .07); }
+
+  return {
+    perTurn: [1, 2, 3],
+    defaultPer: 1,
+    simpleBoard: true,
+    defaultOpts: { cups: 3, speed: 'medium', pts: 'mix' },
+    hint: '',
+    renderOptions(el, opts) {
+      el.innerHTML = `<div class="field-row"><span class="label" id="lblCc">Cups</span><div class="seg" id="segCc" role="group" aria-labelledby="lblCc"></div></div>
+        <div class="field-row"><span class="label" id="lblCs">Shuffle speed</span><div class="seg" id="segCs" role="group" aria-labelledby="lblCs"></div></div>
+        <div class="field-row"><span class="label" id="lblCp">Points under the cup</span><div class="seg" id="segCp" role="group" aria-labelledby="lblCp"></div></div>`;
+      const set = (k) => (v) => { opts[k] = v; core.save(); core.renderSetup(); };
+      core.seg(el.querySelector('#segCc'), [{ value: 3, label: '3' }, { value: 4, label: '4' }, { value: 5, label: '5' }], (v) => opts.cups === v, set('cups'));
+      core.seg(el.querySelector('#segCs'), [{ value: 'slow', label: 'Slow' }, { value: 'medium', label: 'Medium' }, { value: 'fast', label: 'Fast' }], (v) => opts.speed === v, set('speed'));
+      core.seg(el.querySelector('#segCp'), [{ value: 'mix', label: '5, 10 or 20' }, { value: 'ten', label: 'Always 10' }, { value: 'small', label: '1 to 5' }], (v) => opts.pts === v, set('pts'));
+    },
+    start(cfg) { o = cfg.opts; ensureUI(); },
+    ready() {
+      timers.forEach(clearTimeout); timers = []; gen++;
+      ensureUI(); mode = 'ready'; kbUsed = false; ui.classList.remove('picking');
+      build(); showPrizeAt(0, false);
+      bar(`<div class="say">${chip()} answered correctly.<small>Watch where the points go, then pick a cup.</small></div><button class="btn" type="button" id="cgGo">Show the points<kbd>Space</kbd></button>`);
+      $('cgGo').onclick = () => core.act();
+    },
+    resize() { if (!ui || !cups.length) return; layout(); place(); },
+    pointer() {},
+    key(k) {
+      if (mode !== 'pick') return false;
+      if (k === 'arrowleft' || k === 'arrowright') { kbUsed = true; sel = (sel + (k === 'arrowleft' ? n() - 1 : 1)) % n(); markKb(); return true; }
+      return false;
+    },
+    act() {
+      if (mode !== 'ready') return false;
+      mode = 'show'; $('cgGo') && ($('cgGo').disabled = true);
+      run();
+      return true;
+    },
+    draw() {}
+  };
+}
+
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = [
+    { c: '#ef5350', n: 'Red Team' }, { c: '#f7913d', n: 'Orange Team' }, { c: '#f6c445', n: 'Gold Team' },
+    { c: '#43b96d', n: 'Green Team' }, { c: '#4a8cf0', n: 'Blue Team' }, { c: '#b07cf0', n: 'Purple Team' }
+  ];
+  const ROUND_OPTS = [3, 5, 8, 10, 0];
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const STORE = 'classgame-' + 'cups';
+
+  let setup = { n: 4, names: COLORS.map((c) => c.n), per: 1, rounds: 5, sound: true, opts: {} };
+  let cfg = null, game = null, history = [], phase = 'ready', pending = [];
+
+  const core = {
+    get cfg() { return cfg; }, get game() { return game; }, get phase() { return phase; },
+    reduceMotion, colors: COLORS, W: 0, H: 0,
+    finish, audio, tone, noiseSrc, seg, save: saveSetup, renderSetup: () => renderSetup(),
+    teamColor: () => cfg.teams[game.active].color,
+    act: () => act(),
+    award: (i, pts, text) => award(i, pts, text)
+  };
+  const G = makeGame(core);
+  if (G.defaultPer) setup.per = G.defaultPer;
+  if (G.defaultRounds !== undefined) setup.rounds = G.defaultRounds;
+  const TC = (i) => (G.teamColors && G.teamColors[i]) || COLORS[i];
+  const TEAM_OPTS = G.teamOptions || [2, 3, 4, 5, 6];
+  if (G.teamColors) setup.names = setup.names.map((n, i) => TC(i).n);
+  try { const s = JSON.parse(localStorage.getItem(STORE) || '{}'); Object.assign(setup, s); if (s.per == null && G.defaultPer) setup.per = G.defaultPer; setup.opts = Object.assign({}, G.defaultOpts, s.opts || {}); } catch (e) { setup.opts = Object.assign({}, G.defaultOpts); }
+  if (!G.perTurn.includes(setup.per)) setup.per = G.perTurn[0];
+  if (!TEAM_OPTS.includes(setup.n)) setup.n = TEAM_OPTS[0];
+
+  function saveSetup() { try { localStorage.setItem(STORE, JSON.stringify(setup)); } catch (e) {} }
+
+  /* ---------- Setup ---------- */
+  function seg(el, opts, isOn, onPick, multi) {
+    el.innerHTML = '';
+    el.classList.toggle('multi', !!multi);
+    opts.forEach((o) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.label; b.setAttribute('aria-pressed', String(isOn(o.value)));
+      b.addEventListener('click', () => onPick(o.value));
+      el.appendChild(b);
+    });
+  }
+  function renderSetup() {
+    const pick = (key) => (v) => { setup[key] = v; saveSetup(); renderSetup(); };
+    seg($('segTeams'), TEAM_OPTS.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.n, pick('n'));
+    seg($('segPer'), G.perTurn.map((v) => ({ value: v, label: String(v) })), (v) => v === setup.per, pick('per'));
+    seg($('segRounds'), ROUND_OPTS.map((v) => ({ value: v, label: v ? String(v) : 'No limit' })), (v) => v === setup.rounds, pick('rounds'));
+    G.renderOptions($('gameOpts'), setup.opts);
+    const box = $('names');
+    const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.i : null;
+    box.innerHTML = '';
+    for (let i = 0; i < setup.n; i++) {
+      const row = document.createElement('label');
+      row.className = 'name-row';
+      row.innerHTML = `<span class="dot" style="background:${TC(i).c}"></span><input id="tn${i}" data-i="${i}" maxlength="22" spellcheck="false" aria-label="Team ${i + 1} name">`;
+      const inp = row.querySelector('input');
+      inp.value = setup.names[i] || TC(i).n;
+      inp.addEventListener('input', () => { setup.names[i] = inp.value; saveSetup(); });
+      box.appendChild(row);
+    }
+    if (focused != null && $('tn' + focused)) $('tn' + focused).focus();
+  }
+
+  function startGame(keepCfg) {
+    if (!keepCfg) {
+      cfg = {
+        n: setup.n, per: setup.per, rounds: setup.rounds, opts: Object.assign({}, setup.opts),
+        teams: Array.from({ length: setup.n }, (_, i) => ({ name: (setup.names[i] || '').trim() || TC(i).n, color: TC(i).c }))
+      };
+    }
+    game = { scores: Array(cfg.n).fill(0), turns: Array(cfg.n).fill(0), last: Array(cfg.n).fill(null), active: 0, used: 0, over: false };
+    history = [];
+    clearPending();
+    $('setup').hidden = true; $('final').hidden = true; $('game').hidden = false; $('toast').hidden = true;
+    G.start(cfg);
+    resize();
+    renderBoard();
+    showBanner(cfg.teams[0].name, 'First up', cfg.teams[0].color);
+    toReady();
+  }
+
+  /* ---------- Scoreboard ---------- */
+  function renderBoard(bumpIdx) {
+    const b = $('board');
+    b.innerHTML = '';
+    cfg.teams.forEach((t, i) => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      const on = i === game.active && !game.over;
+      el.className = 'team' + (on ? ' active' : '');
+      el.style.setProperty('--tc', t.color);
+      const turns = cfg.rounds ? `Turns ${game.turns[i]}/${cfg.rounds}` : `Turns ${game.turns[i]}`;
+      const last = game.last[i] == null ? '' : ` · Last: ${game.last[i]}`;
+      el.innerHTML = `${on ? '<span class="up">Up now</span>' : ''}<span class="dot"></span>
+        <span class="tname"></span><span class="score"><span class="${i === bumpIdx ? 'bump' : ''}">${game.scores[i]}</span></span>
+        <span class="meta"></span>`;
+      el.querySelector('.tname').textContent = t.name;
+      el.querySelector('.meta').textContent = G.simpleBoard ? '' : `${turns}${last} · key ${i + 1}`;
+      if (G.simpleBoard) el.querySelector('.meta').remove();
+      el.setAttribute('aria-label', `${t.name}, ${game.scores[i]} points. Make this team active.`);
+      el.addEventListener('click', () => selectTeam(i));
+      b.appendChild(el);
+    });
+    const t = cfg.teams[game.active];
+    $('whoLbl').textContent = t.name;
+    $('whoLbl').style.color = t.color;
+    $('tokensLbl').innerHTML = cfg.per > 1 ? Array.from({ length: cfg.per }, (_, k) => `<i class="${k < game.used ? 'used' : ''}"></i>`).join('') : '';
+    const minTurns = Math.min(...game.turns);
+    $('roundLbl').textContent = cfg.rounds ? `Round ${Math.min(minTurns + 1, cfg.rounds)} of ${cfg.rounds}` : `Round ${minTurns + 1}`;
+    $('undoBtn').disabled = history.length === 0;
+    $('soundBtn').textContent = 'Sound: ' + (setup.sound ? 'On' : 'Off');
+    $('soundBtn').setAttribute('aria-pressed', String(setup.sound));
+  }
+
+  function setHint(txt) { $('hint').textContent = txt || ''; $('hint').hidden = !txt; }
+  let bannerTimer, toastTimer;
+  function fill(el, kicker, text) {
+    el.innerHTML = '<small></small><span></span>';
+    el.querySelector('small').textContent = kicker || '';
+    el.querySelector('small').hidden = !kicker;
+    el.querySelector('span').textContent = text;
+  }
+  function showBanner(name, kicker, color) {
+    fill($('bannerTxt'), kicker, name);
+    $('banner').style.setProperty('--banner', color);
+    $('banner').hidden = false;
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { $('banner').hidden = true; }, 1500);
+  }
+  function showToast(text, kicker, bg, ink) {
+    $('toast').hidden = true; void $('toast').offsetWidth;
+    fill($('toastTxt'), kicker, text);
+    $('toast').style.setProperty('--toast', bg);
+    $('toast').style.setProperty('--toast-ink', ink || '#1a1a1a');
+    $('toast').hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $('toast').hidden = true; }, 1700);
+  }
+
+  /* ---------- Turn flow ---------- */
+  function snap() { history.push(JSON.stringify(game)); if (history.length > 300) history.shift(); }
+  function clearPending() { pending.forEach(clearTimeout); pending = []; }
+  function later(fn, ms) { pending.push(setTimeout(fn, ms)); }
+
+  function toReady() { phase = 'ready'; G.ready(); setHint(G.hint); }
+  function act() {
+    if (!game || game.over || phase !== 'ready') return;
+    audio();
+    snap();
+    phase = 'busy'; setHint('');
+    $('toast').hidden = true;
+    if (G.act() === false) { history.pop(); phase = 'ready'; setHint(G.hint); }
+    renderBoard();
+  }
+  function selectTeam(i) {
+    if (phase === 'busy' || game.over || i >= cfg.n) return;
+    if (i === game.active && game.used === 0) return;
+    snap();
+    game.active = i; game.used = 0;
+    clearPending(); $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+  function skipTurn() {
+    if (phase === 'busy' || game.over) return;
+    snap(); clearPending(); $('toast').hidden = true;
+    endTurn('Wrong answer');
+  }
+  function endTurn(reason) {
+    game.turns[game.active]++;
+    if (G.isOver && G.isOver()) { gameOver(); return; }
+    const next = findNext();
+    if (next < 0) { gameOver(); return; }
+    game.active = next; game.used = 0;
+    renderBoard();
+    const t = cfg.teams[next];
+    showBanner(t.name, reason ? `${reason} · Next up` : 'Next up', t.color);
+    toReady();
+  }
+  function findNext() {
+    for (let k = 1; k <= cfg.n; k++) {
+      const j = (game.active + k) % cfg.n;
+      if (!cfg.rounds || game.turns[j] < cfg.rounds) return j;
+    }
+    return -1;
+  }
+  function undo() {
+    if (phase === 'busy') return;
+    const last = history.pop();
+    if (!last) return;
+    clearPending();
+    game = JSON.parse(last);
+    $('final').hidden = true; $('banner').hidden = true; $('toast').hidden = true;
+    renderBoard(); toReady();
+  }
+
+  function finish(res) {
+    const i = game.active, me = cfg.teams[i];
+    let text, kicker = me.name, bg = 'var(--accent)', ink = '#1a1a1a';
+    switch (res.kind) {
+      case 'pts':
+        game.scores[i] += res.pts; text = res.text || `+${res.pts}`; ding(res.pts); break;
+      case 'double': {
+        const d = game.scores[i]; game.scores[i] += d;
+        text = d ? `Double! +${d}` : 'Double! 0 × 2 = 0'; bg = '#ffffff'; fanfare(); break;
+      }
+      case 'bankrupt': {
+        const lost = game.scores[i]; game.scores[i] = 0;
+        text = lost ? `Bankrupt! −${lost}` : 'Bankrupt!'; bg = '#14141c'; ink = '#ffffff'; buzz(); break;
+      }
+      case 'steal': {
+        let j = -1;
+        game.scores.forEach((s, k) => { if (k !== i && s > 0 && (j < 0 || s > game.scores[j])) j = k; });
+        if (j < 0) { text = 'Nothing to steal!'; buzz(); }
+        else {
+          const amt = Math.min(res.pts || 50, game.scores[j]);
+          game.scores[j] -= amt; game.scores[i] += amt;
+          text = `Stole ${amt} from ${cfg.teams[j].name}`; fanfare();
+        }
+        bg = '#b07cf0'; ink = '#ffffff'; break;
+      }
+      case 'miss':
+        text = res.text || 'Missed!'; buzz(); bg = '#14141c'; ink = '#ffffff'; break;
+      case 'adjust': {
+        Object.keys(res.deltas || {}).forEach((k) => { game.scores[k] = Math.max(0, game.scores[k] + res.deltas[k]); });
+        text = res.text;
+        if (res.mood === 'good') { bg = '#2bb673'; ink = '#04170c'; fanfare(); }
+        else if (res.mood === 'bad') { bg = '#e2384d'; ink = '#ffffff'; buzz(); }
+        else if (res.mood === 'special') { bg = '#8b5cf6'; ink = '#ffffff'; fanfare(); }
+        else { bg = '#9aa3b2'; ink = '#14141c'; ding(10); }
+        break;
+      }
+      case 'again':
+        text = res.label || 'Go again!'; ding(20); bg = '#43b96d'; ink = '#ffffff'; break;
+    }
+    game.last[i] = res.label;
+    if (res.kind !== 'again') game.used++;
+    if (!res.quiet) showToast(text, kicker, bg, ink);
+    renderBoard(i);
+    phase = 'between';
+    if (G.isOver && G.isOver()) later(() => gameOver(), 1900);
+    else if (game.used >= cfg.per) later(() => endTurn(), 1700);
+    else later(toReady, 1100);
+  }
+
+  function award(i, pts, text) {
+    if (!game || game.over) return;
+    snap();
+    game.scores[i] += pts;
+    showToast(text, cfg.teams[i].name, '#8b5cf6', '#ffffff');
+    fanfare();
+    renderBoard(i);
+  }
+
+  function gameOver() {
+    game.over = true; phase = 'over';
+    renderBoard(); setHint('');
+    const order = cfg.teams.map((t, i) => ({ ...t, s: game.scores[i] })).sort((a, b) => b.s - a.s);
+    const top = order[0].s;
+    const winners = order.filter((o) => o.s === top);
+    $('finalKicker').textContent = winners.length > 1 ? 'Game over · It’s a tie' : 'Game over · Winner';
+    $('finalName').textContent = winners.map((w) => w.name).join(' & ');
+    let rank = 0, prev = null;
+    $('standings').innerHTML = '';
+    order.forEach((o, idx) => {
+      if (o.s !== prev) { rank = idx + 1; prev = o.s; }
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="rank">${rank}</span><span class="dot" style="background:${o.color}"></span><span class="nm"></span><span class="pts">${o.s}</span>`;
+      li.querySelector('.nm').textContent = o.name;
+      $('standings').appendChild(li);
+    });
+    $('final').hidden = false;
+    $('againBtn').focus();
+    victory();
+  }
+
+  /* ---------- Canvas ---------- */
+  const cv = $('play'), ctx = cv.getContext('2d');
+  function resize() {
+    const box = $('playBox').getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.max(1, Math.round(box.width * dpr)); cv.height = Math.max(1, Math.round(box.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    core.W = box.width; core.H = box.height;
+    G.resize(box.width, box.height);
+  }
+  let lastT = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    if (!$('game').hidden && cfg && core.W) { ctx.clearRect(0, 0, core.W, core.H); G.draw(ctx, now, dt); }
+    requestAnimationFrame(loop);
+  }
+  function localXY(e) { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+  /* ---------- Sound ---------- */
+  let ac;
+  function audio() {
+    if (!setup.sound) return null;
+    try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; } catch (e) { return null; }
+  }
+  function noiseSrc(dur) { const a = ac, n = Math.max(1, Math.floor(a.sampleRate * dur)), b = a.createBuffer(1, n, a.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; const s = a.createBufferSource(); s.buffer = b; return s; }
+  function tone(f, s, d, type, vol) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, s); g.gain.linearRampToValueAtTime(vol || .12, s + .01); g.gain.exponentialRampToValueAtTime(.001, s + d);
+    o.connect(g).connect(a.destination); o.start(s); o.stop(s + d + .02);
+  }
+  function ding(pts) {
+    const a = audio(); if (!a) return; const t = a.currentTime;
+    const steps = Math.max(1, Math.min(6, Math.round(pts / 20) + 1));
+    const scale = [523, 659, 784, 1047, 1319, 1568];
+    for (let i = 0; i < steps; i++) tone(scale[i], t + i * .08, .14, 'square', .08);
+  }
+  function buzz() { const a = audio(); if (!a) return; const t = a.currentTime; tone(150, t, .4, 'sawtooth', .08); tone(105, t + .18, .45, 'sawtooth', .08); }
+  function fanfare() { const a = audio(); if (!a) return; const t = a.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + i * .09, i === 3 ? .4 : .12, 'triangle', .14)); }
+  function victory() { const a = audio(); if (!a) return; const t = a.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, t + i * .14, i === 5 ? .7 : .16, 'triangle', .14)); }
+
+  /* ---------- Wiring ---------- */
+  function armed(btn, label, armedLabel, fn) {
+    let timer;
+    btn.addEventListener('click', () => {
+      if (!btn.classList.contains('armed')) {
+        btn.classList.add('armed'); btn.textContent = armedLabel;
+        timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 3500);
+        return;
+      }
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; fn();
+    });
+  }
+  $('startBtn').addEventListener('click', () => { audio(); startGame(false); });
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); const [x, y] = localXY(e); G.pointer && G.pointer('move', x, y); act(); });
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && G.pointer) { const [x, y] = localXY(e); G.pointer('move', x, y); } });
+  cv.addEventListener('pointerleave', () => { G.pointer && G.pointer('leave'); });
+  $('skipBtn').addEventListener('click', skipTurn);
+  $('undoBtn').addEventListener('click', undo);
+  $('finalUndo').addEventListener('click', undo);
+  $('soundBtn').addEventListener('click', () => { setup.sound = !setup.sound; saveSetup(); renderBoard(); });
+  $('fullBtn').addEventListener('click', () => {
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  });
+  armed($('endBtn'), 'End game', 'Click again to end', () => { if (phase === 'busy') return; clearPending(); gameOver(); });
+  $('againBtn').addEventListener('click', () => startGame(true));
+  $('setupBtn').addEventListener('click', () => { $('final').hidden = true; $('game').hidden = true; $('setup').hidden = false; renderSetup(); });
+  document.addEventListener('keydown', (e) => {
+    if ($('game').hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    const k = e.key.toLowerCase();
+    if ((k === ' ' || k === 'enter') && tag !== 'BUTTON') { e.preventDefault(); act(); }
+    else if (k === 's') skipTurn();
+    else if (k === 'u') undo();
+    else if (/^[1-6]$/.test(k)) selectTeam(+k - 1);
+    else if (G.key && G.key(k, e)) e.preventDefault();
+  });
+  new ResizeObserver(() => { if (!$('game').hidden) resize(); }).observe($('playBox'));
+
+  function boot(data) {
+    renderSetup();
+    const s = data && data.saved;
+    if (s && s.cfg && s.game) {
+      cfg = s.cfg; game = s.game; history = s.history || [];
+      $('setup').hidden = true; $('game').hidden = false;
+      G.start(cfg); resize(); renderBoard();
+      if (game.over) gameOver(); else toReady();
+    }
+    window.claude?.hot?.snapshot?.(() => ({ saved: cfg && !$('game').hidden ? { cfg, game, history } : null }));
+    requestAnimationFrame(loop);
+  }
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+
+</body>
+</html>
