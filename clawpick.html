@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Claw Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: top bar (title, entries left, buttons), then the claw machine (canvas) beside the Picked list.
+     Each grabbed ball opens in a big card that stays until the teacher moves on. */
+  :root {
+    --bg: #1b0f33; --panel: #2a1747; --panel-2: #3a2160; --ink: #fff7fc; --ink-2: #cbb8e6; --line: #54357f;
+    --pink: #ff4f9a; --yellow: #ffd23f; --good: #22b35e; --good-deep: #148043; --btn: #4f8df5; --btn-deep: #2c5fc0;
+    --display: "Fredoka", "Andika", system-ui, sans-serif; --text: "Andika", "Fredoka", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: radial-gradient(ellipse at top, #3a1d6e, var(--bg) 70%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--yellow); outline-offset: 3px; }
+  kbd { font-family: var(--text); font-size: .72em; border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; opacity: .75; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; padding: 10px 14px 10px; }
+  header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .title { font-weight: 700; font-size: 1.4rem; white-space: nowrap; }
+  .title span { color: var(--yellow); }
+  .left { background: var(--panel); border: 2px solid var(--line); border-radius: 999px; padding: 4px 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+  .left b { color: var(--yellow); font-family: var(--text); }
+  .grow { flex: 1; }
+  .tb { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 7px 13px; font-weight: 600; font-size: .95rem; white-space: nowrap; }
+  .tb:hover { background: var(--panel-2); }
+  .tb.hot { background: var(--pink); border-color: var(--pink); color: #fff; }
+  .tb:disabled { opacity: .45; cursor: default; }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 290px); gap: 12px; min-height: 0; }
+  .main.nolist { grid-template-columns: minmax(0, 1fr); }
+  .main.nolist aside { display: none; }
+  .wrap { position: relative; min-height: 0; }
+  canvas#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  aside { background: var(--panel); border: 2px solid var(--line); border-radius: 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; overflow: hidden; }
+  aside h2 { margin: 0; padding: 10px 14px 6px; font-size: 1.05rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+  aside ol { margin: 0; padding: 0 10px 8px; list-style: none; overflow: auto; display: grid; gap: 6px; align-content: start; counter-reset: none; }
+  aside li { display: grid; grid-template-columns: 2.2em 1fr; gap: 6px; align-items: start; background: var(--panel-2); border-radius: 10px; padding: 6px 8px; font-family: var(--text); font-size: 1.02rem; line-height: 1.25; overflow-wrap: anywhere; }
+  aside li i { font-style: normal; color: var(--ink-2); font-size: .85em; font-weight: 700; text-align: right; padding-top: .1em; }
+  aside li.new { animation: slide .5s ease-out; }
+  @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
+  aside .empty { color: var(--ink-2); padding: 8px 14px; font-size: .95rem; }
+  aside .foot { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 2px solid var(--line); }
+  aside .foot .tb { flex: 1; padding: 6px 8px; font-size: .88rem; }
+  .hint { text-align: center; color: var(--ink-2); font-weight: 600; font-size: clamp(.9rem, 2.2vh, 1.15rem); min-height: 1.3em; }
+
+  /* reveal card */
+  .reveal { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; background: rgba(15,6,32,.72); padding: 16px; }
+  .rcard { position: relative; width: min(900px, 100%); max-height: 100%; background: #fff8fc; color: #2a1145; border-radius: 30px; border: 8px solid var(--c, var(--pink)); padding: clamp(18px, 4vh, 40px) clamp(18px, 4vw, 48px) clamp(16px, 3vh, 28px); display: grid; gap: clamp(10px, 2.4vh, 22px); justify-items: center; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.5); animation: rin .55s cubic-bezier(.3,1.5,.5,1); }
+  @keyframes rin { 0% { transform: scale(.3) rotate(-8deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  .rcard .num { font-weight: 700; color: #7a5a9a; font-size: clamp(1rem, 2.6vh, 1.4rem); letter-spacing: .05em; }
+  .rcard .txt { font-family: var(--text); font-weight: 700; line-height: 1.12; overflow-wrap: break-word; word-break: break-word; max-width: 100%; min-height: 1.2em; display: grid; place-items: center; }
+  .rcard .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .big { border: 0; border-radius: 16px; background: var(--good); color: #fff; font-weight: 700; font-size: clamp(1.2rem, 3.6vh, 1.8rem); padding: 10px 28px; box-shadow: 0 6px 0 var(--good-deep); }
+  .big.alt { background: #efe6f7; color: #3b1d6e; box-shadow: 0 6px 0 #c9b8dd; }
+  .big:active { transform: translateY(4px); box-shadow: none; }
+  .halves { position: absolute; left: 50%; top: 0; width: 120px; height: 60px; transform: translate(-50%, -62%); pointer-events: none; }
+  .halves div { position: absolute; width: 120px; height: 60px; }
+  .halves .t { top: 0; border-radius: 60px 60px 0 0; background: var(--c, var(--pink)); animation: popT .8s ease-out forwards; }
+  .halves .b { top: 60px; border-radius: 0 0 60px 60px; background: #fff; box-shadow: inset 0 -6px 0 #e7dff0; animation: popB .8s ease-out forwards; }
+  @keyframes popT { 0% { transform: translateY(30px); } 60% { transform: translate(-70px, -30px) rotate(-40deg); opacity: 1; } 100% { transform: translate(-140px, -10px) rotate(-70deg); opacity: 0; } }
+  @keyframes popB { 0% { transform: translateY(-30px); } 60% { transform: translate(70px, -30px) rotate(40deg); opacity: 1; } 100% { transform: translate(140px, -10px) rotate(70deg); opacity: 0; } }
+  .done { color: #2a1145; }
+  .done .txt { font-size: clamp(2rem, 7vh, 4rem); }
+
+  /* settings */
+  .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(10,4,22,.7); display: grid; place-items: center; padding: 12px; }
+  .panel { background: #fffdf8; color: #24314a; border-radius: 22px; width: min(860px, 100%); max-height: 100%; overflow: auto; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.4); color-scheme: light; }
+  .panel h2 { margin: 0 0 4px; font-size: 1.6rem; }
+  .panel h3 { margin: 16px 0 6px; font-size: 1.12rem; color: #c2266f; border-top: 2px solid #efe6d5; padding-top: 12px; }
+  .panel .lbl { display: block; font-weight: 600; margin: 10px 0 5px; color: #5b6780; font-size: .95rem; }
+  .panel textarea { width: 100%; min-height: 220px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 10px 12px; font-family: var(--text); font-size: 1.05rem; line-height: 1.35; background: #fff; color: #24314a; resize: vertical; }
+  .panel input[type=text], .panel select { border: 2px solid #e2d8c4; border-radius: 12px; padding: 7px 10px; background: #fff; color: #24314a; font-size: 1rem; min-width: 0; }
+  .note { margin: 6px 0 0; color: #5b6780; font-size: .9rem; line-height: 1.35; }
+  .note.warn { color: #b3261e; font-weight: 600; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .pb { border: 2px solid #e2d8c4; background: #fff; color: #24314a; border-radius: 12px; padding: 6px 12px; font-weight: 600; font-size: .95rem; }
+  .seg button[aria-pressed="true"] { background: #c2266f; border-color: #c2266f; color: #fff; }
+  .lists { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .go { display: block; margin: 18px auto 0; border: 0; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 12px 40px; border-radius: 16px; box-shadow: 0 6px 0 var(--good-deep); }
+  .go:disabled { background: #c8ced9; box-shadow: 0 6px 0 #a9b0bd; cursor: default; }
+
+  @media (max-width: 760px) {
+    .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 34%); }
+    .main.nolist { grid-template-rows: minmax(0, 1fr); }
+    .title { display: none; }
+    .tb { padding: 6px 9px; font-size: .85rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .rcard, aside li.new, .halves div { animation: none !important; } .halves { display: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="title">Claw <span>Picker</span></div>
+    <div class="left" id="left" aria-live="polite"></div>
+    <div class="grow"></div>
+    <button class="tb hot" id="autoBtn" type="button">Pick for me <kbd>A</kbd></button>
+    <button class="tb" id="undoBtn" type="button">Undo <kbd>U</kbd></button>
+    <button class="tb" id="listBtn" type="button" aria-pressed="true">Picked list</button>
+    <button class="tb" id="fullBtn" type="button">Full screen</button>
+    <button class="tb" id="gearBtn" type="button">Settings</button>
+  </header>
+  <div class="main" id="main">
+    <div class="wrap" id="wrap"><canvas id="cv" aria-label="Claw machine. Move the claw, then click or press Space to drop it."></canvas></div>
+    <aside aria-label="Picked so far">
+      <h2 id="pickH">Picked</h2>
+      <ol id="picked"></ol>
+      <div class="foot"><button class="tb" id="copyBtn" type="button">Copy list</button><button class="tb" id="resetBtn" type="button">Start over</button></div>
+    </aside>
+  </div>
+  <div class="hint" id="hint">Move the claw, then click or press <b>Space</b> to drop it.</div>
+</div>
+
+<div class="reveal" id="reveal" hidden>
+  <div class="rcard" id="rcard" role="dialog" aria-modal="true" aria-labelledby="rTxt">
+    <div class="halves" aria-hidden="true"><div class="t"></div><div class="b"></div></div>
+    <div class="num" id="rNum"></div>
+    <div class="txt" id="rTxt" aria-live="assertive"></div>
+    <div class="row"><button class="big" id="rNext" type="button">Next <kbd>Space</kbd></button><button class="big alt" id="rBack" type="button">Put it back</button></div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Claw Picker settings</h2>
+    <p class="note">Type or paste your entries, one per line, or upload a file: names, answers, numbers, vocabulary words, questions, anything.</p>
+
+    <h3>Your entries</h3>
+    <textarea id="entries" aria-label="Entries, one per line" spellcheck="false" placeholder="Maria&#10;Jayden&#10;Ava&#10;..."></textarea>
+    <p class="note" id="eNote"></p>
+    <p class="note" id="fNote">Upload a text file (.txt), a spreadsheet (.csv or Excel .xlsx, using the first column) or a Word document (.docx, one entry per line). You can also drag a file onto the box, or copy a column from a spreadsheet and paste it.</p>
+    <div class="lists" style="margin-top:8px">
+      <label class="pb" style="cursor:pointer">Upload a file…<input type="file" id="fileIn" accept=".txt,.csv,.tsv,.xlsx,.docx,text/plain,text/csv" hidden></label>
+      <button class="pb" type="button" id="numBtn">Fill with numbers…</button>
+      <button class="pb" type="button" id="clearBtn">Clear</button>
+    </div>
+
+    <h3>Saved lists</h3>
+    <div class="lists">
+      <input type="text" id="lname" placeholder="List name, like Class roster" aria-label="List name" maxlength="40">
+      <button class="pb" type="button" id="saveBtn">Save this list</button>
+      <select id="lsel" aria-label="Saved lists"></select>
+      <button class="pb" type="button" id="loadBtn">Use it</button>
+      <button class="pb" type="button" id="delBtn">Delete</button>
+    </div>
+    <p class="note" id="lNote">Saved lists stay on this computer.</p>
+
+    <h3>Options</h3>
+    <span class="lbl" id="lRep">After an entry is picked</span><div class="seg" id="sRep" role="group" aria-labelledby="lRep"></div>
+    <span class="lbl" id="lGrip">The claw</span><div class="seg" id="sGrip" role="group" aria-labelledby="lGrip"></div>
+    <span class="lbl" id="lSize">Text size on the card</span><div class="seg" id="sSize" role="group" aria-labelledby="lSize"></div>
+
+    <p class="note" id="err"></p>
+    <button class="go" id="goBtn" type="button">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const TAU = Math.PI * 2, MAX = 1000;
+  const STORE = 'claw-picker-v1';
+  const COLORS = ['#ff4f9a', '#4cc9f0', '#ffd23f', '#7bd389', '#b57ce8', '#ff8a3d', '#5aa9ff', '#ff6b6b'];
+
+  /* ---------- saved state: settings, the current list, what's left, what's been picked ---------- */
+  let S = { entries: '', rep: 'remove', grip: 'always', size: 'big', lists: {}, bag: null, picked: [] };
+  let stored = false;
+  try { const raw = localStorage.getItem(STORE); if (raw) { Object.assign(S, JSON.parse(raw)); stored = true; } } catch (e) {}
+  if (!S.lists || typeof S.lists !== 'object') S.lists = {};
+  if (!Array.isArray(S.picked)) S.picked = [];
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+  const parse = (t) => String(t).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, MAX);
+  let E = parse(S.entries);
+  function validBag() { return Array.isArray(S.bag) && S.bag.every((i) => Number.isInteger(i) && i >= 0 && i < E.length); }
+  function fullBag() { S.bag = E.map((_, i) => i); }
+  if (!validBag()) fullBag();
+  const leftCount = () => (S.rep === 'remove' ? S.bag.length : E.length);
+
+  /* ---------- machine geometry ---------- */
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, M = {};
+  let claw = { x: 0, y: 0, open: 1, vx: 0 }, mouseX = null, goX = null, sweepT0 = performance.now();
+  let pile = [], seq = null, held = null, falling = [], sparkles = [], phase = 'ready', pending = null;
+  function layout() {
+    const y0 = 4, mh = H - 8, mw = Math.min(W - 8, mh * 1.45), x0 = (W - mw) / 2;
+    const glassTop = y0 + mh * .13, floor = y0 + mh * .86, chuteW = mw * .19;
+    const r = Math.max(14, Math.min(mw * .042, (floor - glassTop) * .085));
+    M = { x0, y0, mw, mh, glassTop, floor, chuteW, r, gx0: x0 + mw * .04, gx1: x0 + mw * .96, chuteX: x0 + mw * .04 + chuteW / 2, pitX0: x0 + mw * .04 + chuteW + 10, home: glassTop + mh * .06 };
+    claw.y = M.home; if (!claw.x || claw.x < M.pitX0 || claw.x > M.gx1) claw.x = (M.pitX0 + M.gx1) / 2;
+  }
+  function slots() {
+    const { r, pitX0, gx1, floor } = M, out = [];
+    const cols = Math.max(3, Math.floor((gx1 - pitX0 - r * .4) / (r * 2.05)));
+    const dx = (gx1 - pitX0 - r * 2.2) / Math.max(1, cols - 1);
+    for (let row = 0; row < 5; row++) {
+      const n = cols - (row % 2);
+      for (let k = 0; k < n; k++) out.push({ x: pitX0 + r * 1.1 + (k + (row % 2) * .5) * dx, y: floor - r * (1 + row * 1.72), row });
+    }
+    return out;
+  }
+  function fillPile(animate) {
+    const want = Math.min(leftCount(), slots().length);
+    const sl = slots();
+    const used = new Set(pile.map((p) => p.slot));
+    let i = 0;
+    while (pile.length + falling.filter((f) => f.refill).length < want && i < sl.length) {
+      if (!used.has(i) && (sl[i].row === 0 || sl.some((s, j) => used.has(j) && s.row === sl[i].row - 1 && Math.abs(s.x - sl[i].x) < M.r * 1.6))) {
+        used.add(i);
+        const b = { slot: i, x: sl[i].x + (Math.random() - .5) * M.r * .15, y: sl[i].y, row: sl[i].row, c: COLORS[(Math.random() * COLORS.length) | 0], tilt: (Math.random() - .5) * .6, born: performance.now() + (animate ? 0 : Math.random() * 500) };
+        if (animate) falling.push({ p: b, vy: 0, x: b.x, y: M.glassTop + M.r, toY: b.y, refill: true }); else pile.push(b);
+        i = 0; continue;
+      }
+      i++;
+    }
+    while (pile.length > want) { pile.sort((a, b) => b.row - a.row); pile.shift(); }
+  }
+  function under(x, wide) {
+    let best = null;
+    for (const p of pile) { const d = Math.abs(p.x - x); if (d < M.r * (wide ? 1.6 : 1.05) && (!best || p.y < best.y - 1 || (Math.abs(p.y - best.y) <= 1 && d < Math.abs(best.x - x)))) best = p; }
+    return best;
+  }
+  function topBalls() { return pile.filter((p) => !pile.some((q) => q !== p && Math.abs(q.x - p.x) < M.r * 1.2 && q.y < p.y - 1)); }
+
+  /* ---------- the grab ---------- */
+  function drop() {
+    if (phase !== 'ready' || seq || !E.length) return;
+    if (!leftCount()) { allDone(); return; }
+    let target = under(claw.x, S.grip === 'always');
+    if (S.grip === 'always' && !target) { const tb = topBalls(); target = tb.sort((a, b) => Math.abs(a.x - claw.x) - Math.abs(b.x - claw.x))[0]; if (target) { goX = target.x; dropAfterMove = true; return; } }
+    phase = 'busy'; mouseX = null; goX = null;
+    const bottom = target ? target.y - M.r * .5 : M.floor - M.r * .5;
+    const dDur = 380 + (bottom - M.home) / (H * .9) * 1000;
+    let grabbed = null, slipAt = -1;
+    if (target) {
+      if (S.grip === 'always') { grabbed = target; claw.x = target.x; }
+      else { const off = Math.abs(target.x - claw.x) / M.r; const p = off <= .45 ? .92 : off <= 1 ? .55 : 0; if (Math.random() < p) { grabbed = target; if (Math.random() < .14) slipAt = .3 + Math.random() * .5; } }
+    }
+    seq = { steps: [], i: 0, t0: performance.now(), target, grabbed, slipAt };
+    const s = seq.steps;
+    s.push({ k: 'drop', dur: dDur, from: M.home, to: bottom });
+    s.push({ k: 'close', dur: 420 });
+    s.push({ k: 'lift', dur: dDur * 1.05, from: bottom, to: M.home });
+    if (grabbed && slipAt < 0) { s.push({ k: 'move', dur: 500 + Math.abs(claw.x - M.chuteX) / W * 1500, from: claw.x, to: M.chuteX }); s.push({ k: 'release', dur: 420 }); s.push({ k: 'wait', dur: 380 }); }
+    else s.push({ k: 'open', dur: 330 });
+    $('hint').textContent = '';
+  }
+  let dropAfterMove = false;
+  function stepSeq(now) {
+    const st = seq.steps[seq.i], t = Math.min(1, (now - seq.t0) / st.dur);
+    const ease = (x) => (x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+    if (st.k === 'drop' || st.k === 'lift') claw.y = st.from + (st.to - st.from) * ease(t);
+    if (st.k === 'close') { claw.open = 1 - t * (seq.grabbed ? .6 : 1); if (t >= 1 && seq.grabbed && !held) { held = seq.grabbed; pile.splice(pile.indexOf(held), 1); } }
+    if (st.k === 'lift' && held && seq.slipAt >= 0 && t >= seq.slipAt) { falling.push({ p: held, vy: 0, x: held.x, y: claw.y + M.r * .6, toY: held.y }); held = null; seq.slipped = true; }
+    if (st.k === 'move') claw.x = st.from + (st.to - st.from) * ease(t);
+    if (st.k === 'release' || st.k === 'open') {
+      claw.open = Math.min(1, (seq.grabbed ? .4 : 0) + t);
+      if (st.k === 'release' && held && t > .3) { falling.push({ p: held, vy: 0, x: claw.x, y: claw.y + M.r * .6, toY: M.floor + M.r * 2, chute: true }); held = null; }
+    }
+    if (t >= 1) {
+      seq.i++; seq.t0 = now;
+      if (seq.i >= seq.steps.length) {
+        const d = seq; seq = null;
+        if (d.grabbed && !d.slipped) reveal(d.grabbed.c);
+        else { phase = 'ready'; sweepT0 = now; $('hint').textContent = d.slipped ? 'It slipped! Try again.' : 'So close! Try again.'; }
+      }
+    }
+  }
+
+  /* ---------- picking an entry and showing it ---------- */
+  let last = -1;
+  function reveal(color) {
+    let idx;
+    if (S.rep === 'remove') { const k = (Math.random() * S.bag.length) | 0; idx = S.bag.splice(k, 1)[0]; }
+    else { do { idx = (Math.random() * E.length) | 0; } while (E.length > 1 && idx === last); }
+    last = idx;
+    S.picked.push({ i: idx, t: E[idx] }); save();
+    pending = { idx, color };
+    phase = 'reveal';
+    renderList(true); renderLeft();
+    const rc = $('rcard'); rc.classList.remove('done'); rc.style.setProperty('--c', color);
+    $('rNum').textContent = `Pick #${S.picked.length}`;
+    $('rTxt').textContent = E[idx];
+    $('rBack').hidden = S.rep !== 'remove';
+    $('rNext').innerHTML = 'Next <kbd>Space</kbd>';
+    const halves = rc.querySelector('.halves'); const nh = halves.cloneNode(true); halves.replaceWith(nh);
+    $('reveal').hidden = false; void rc.offsetWidth; rc.style.animation = 'none'; void rc.offsetWidth; rc.style.animation = '';
+    fitText();
+    confetti(70);
+    $('rNext').focus({ preventScroll: true });
+  }
+  function fitText() {
+    const el = $('rTxt'), card = $('rcard');
+    const maxH = Math.max(120, innerHeight * .62 - 150), base = { big: 1, medium: .75, small: .55 }[S.size] || 1;
+    let fs = Math.min(innerHeight * .26, innerWidth * .16) * base;
+    el.style.fontSize = fs + 'px';
+    let n = 0;
+    while ((el.scrollHeight > maxH || el.scrollWidth > card.clientWidth - 20) && fs > 16 && n++ < 60) { fs *= .92; el.style.fontSize = fs + 'px'; }
+  }
+  function closeReveal(putBack) {
+    if (phase !== 'reveal') return;
+    if (putBack && S.rep === 'remove' && pending) { const p = S.picked.pop(); if (p) S.bag.push(p.i); save(); renderList(); renderLeft(); }
+    $('reveal').hidden = true; pending = null; phase = 'ready'; sweepT0 = performance.now();
+    $('hint').innerHTML = 'Move the claw, then click or press <b>Space</b> to drop it.';
+    fillPile(true);
+    if (!leftCount()) allDone();
+  }
+  function allDone() {
+    phase = 'reveal'; pending = null;
+    const rc = $('rcard'); rc.classList.add('done'); rc.style.setProperty('--c', '#ffd23f');
+    $('rNum').textContent = '';
+    $('rTxt').textContent = E.length ? `All ${E.length} picked!` : 'Add some entries in Settings.';
+    $('rTxt').style.fontSize = '';
+    $('rBack').hidden = true;
+    $('rNext').textContent = E.length ? 'Start over' : 'Open Settings';
+    $('reveal').hidden = false; $('rNext').focus({ preventScroll: true });
+    if (E.length) confetti(200);
+  }
+  $('rNext').onclick = () => {
+    if ($('rcard').classList.contains('done')) { $('reveal').hidden = true; phase = 'ready'; if (E.length) startOver(); else openSheet(); return; }
+    closeReveal(false);
+  };
+  $('rBack').onclick = () => closeReveal(true);
+
+  function startOver() { fullBag(); S.picked = []; last = -1; save(); pile = []; falling = []; fillPile(false); renderList(); renderLeft(); }
+  function undo() {
+    if (phase !== 'ready' || !S.picked.length) return;
+    const p = S.picked.pop(); if (S.rep === 'remove' && E[p.i] === p.t && !S.bag.includes(p.i)) S.bag.push(p.i);
+    save(); renderList(); renderLeft(); fillPile(true);
+  }
+  function auto() {
+    if (phase !== 'ready' || seq) return;
+    if (!leftCount()) { allDone(); return; }
+    const tb = topBalls(); if (!tb.length) return;
+    const t = tb[(Math.random() * tb.length) | 0]; goX = t.x; dropAfterMove = true; mouseX = null;
+  }
+
+  /* ---------- side list and counter ---------- */
+  function renderLeft() {
+    $('left').innerHTML = !E.length ? 'No entries yet' : S.rep === 'remove' ? `<b>${S.bag.length}</b> of ${E.length} left` : `${E.length} entries · <b>${S.picked.length}</b> picked`;
+    $('undoBtn').disabled = !S.picked.length;
+  }
+  function renderList(fresh) {
+    const ol = $('picked');
+    $('pickH').textContent = `Picked (${S.picked.length})`;
+    if (!S.picked.length) { ol.innerHTML = '<li class="empty" style="display:block;background:none">Nothing picked yet.</li>'; return; }
+    ol.innerHTML = S.picked.map((p, k) => ({ p, k })).reverse().map(({ p, k }, j) => `<li class="${fresh && j === 0 ? 'new' : ''}"><i>${k + 1}.</i><span>${esc(p.t)}</span></li>`).join('');
+    ol.scrollTop = 0;
+  }
+  $('undoBtn').onclick = undo;
+  $('autoBtn').onclick = auto;
+  $('resetBtn').onclick = () => { if (!S.picked.length || confirm('Start over? Every entry goes back into the machine and the Picked list is cleared.')) startOver(); };
+  $('copyBtn').onclick = async () => {
+    const txt = S.picked.map((p, k) => `${k + 1}. ${p.t}`).join('\n');
+    try { await navigator.clipboard.writeText(txt); $('copyBtn').textContent = 'Copied!'; } catch (e) { $('copyBtn').textContent = 'Could not copy'; }
+    setTimeout(() => { $('copyBtn').textContent = 'Copy list'; }, 1500);
+  };
+  $('listBtn').onclick = () => { const on = $('main').classList.toggle('nolist'); $('listBtn').setAttribute('aria-pressed', String(!on)); setTimeout(resize, 30); };
+  $('fullBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); };
+
+  /* ---------- drawing ---------- */
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function circle(x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = fill; ctx.fill(); }
+  function ball(b, x, y, r, rot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0);
+    ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, 0); ctx.closePath(); ctx.fillStyle = b.c; ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI); ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(-r, -r * .07, r * 2, r * .14);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.lineWidth = Math.max(1.5, r * .07); ctx.strokeStyle = 'rgba(30,10,50,.35)'; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-r * .38, -r * .45, r * .22, r * .13, -.6, 0, TAU); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
+    ctx.fillStyle = 'rgba(42,17,69,.55)'; ctx.font = `700 ${Math.round(r * .78)}px Fredoka, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('?', 0, r * .46);
+    ctx.restore();
+  }
+  function drawClaw() {
+    const { r } = M, x = claw.x, y = claw.y, R = r * 1.25;
+    ctx.strokeStyle = '#c9ccd6'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x, M.glassTop + 4); ctx.lineTo(x, y - R * .5); ctx.stroke();
+    const hg = ctx.createLinearGradient(x - R * .5, 0, x + R * .5, 0); hg.addColorStop(0, '#d7dbe4'); hg.addColorStop(.5, '#ffffff'); hg.addColorStop(1, '#9aa1b0');
+    rr(x - R * .45, y - R * .6, R * .9, R * .5, R * .12); ctx.fillStyle = hg; ctx.fill();
+    ctx.fillStyle = '#ff4f9a'; ctx.fillRect(x - R * .45, y - R * .32, R * .9, R * .08);
+    const spread = .25 + claw.open * .75;
+    ctx.strokeStyle = '#c3c8d3'; ctx.lineWidth = Math.max(3, R * .13); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    [-1, 1].forEach((s) => { ctx.beginPath(); ctx.moveTo(x + s * R * .3, y - R * .12); ctx.lineTo(x + s * R * (.35 + spread * .5), y + R * .45); ctx.lineTo(x + s * R * (.12 + spread * .32), y + R * .95); ctx.stroke(); });
+    ctx.globalAlpha = .55; ctx.beginPath(); ctx.moveTo(x, y - R * .12); ctx.lineTo(x, y + R * .8); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function drawMachine(now) {
+    const { x0, y0, mw, mh, glassTop, floor, gx0, gx1, chuteW } = M;
+    rr(x0, y0, mw, mh, 22);
+    const cg = ctx.createLinearGradient(x0, 0, x0 + mw, 0); cg.addColorStop(0, '#e83f8a'); cg.addColorStop(.5, '#ff6fae'); cg.addColorStop(1, '#d42f78'); ctx.fillStyle = cg; ctx.fill();
+    rr(x0 + mw * .06, y0 + mh * .015, mw * .88, mh * .09, 14); ctx.fillStyle = '#2a1145'; ctx.fill();
+    const nb = 20, chase = Math.floor(now / 200);
+    for (let i = 0; i < nb; i++) { const bx = x0 + mw * .08 + (mw * .84) * i / (nb - 1), lit = reduce ? i % 2 === 0 : (i + chase) % 2 === 0; circle(bx, y0 + mh * .027, 3.5, lit ? '#fff3a8' : '#7a5a8a'); circle(bx, y0 + mh * .093, 3.5, !lit ? '#fff3a8' : '#7a5a8a'); }
+    ctx.fillStyle = '#ffe14d'; ctx.font = `700 ${Math.round(mh * .05)}px Fredoka, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('★ CLAW PICKER ★', x0 + mw / 2, y0 + mh * .061);
+    const ig = ctx.createLinearGradient(0, glassTop, 0, floor); ig.addColorStop(0, '#3b1d6e'); ig.addColorStop(1, '#5a2d8f'); ctx.fillStyle = ig; ctx.fillRect(gx0, glassTop, gx1 - gx0, floor - glassTop);
+    ctx.fillStyle = 'rgba(255,255,255,.04)';
+    for (let yy = glassTop + 20; yy < floor; yy += 40) for (let xx = gx0 + ((yy / 40) % 2) * 20; xx < gx1; xx += 40) { ctx.beginPath(); ctx.arc(xx, yy, 5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#9aa1b0'; ctx.fillRect(gx0, glassTop, gx1 - gx0, 6);
+    ctx.fillStyle = '#d7dbe4'; rr(claw.x - 22, glassTop - 2, 44, 12, 4); ctx.fill();
+    const ch = (floor - glassTop) * .3;
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(gx0, floor - ch, chuteW, ch);
+    ctx.fillStyle = '#1a0b2e'; ctx.fillRect(gx0 + 8, floor - 10, chuteW - 16, 10);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(gx0 + chuteW, floor); ctx.lineTo(gx0 + chuteW, floor - ch); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = `700 ${Math.max(10, Math.round(chuteW * .12))}px Fredoka, sans-serif`; ctx.fillText('DROP', gx0 + chuteW / 2, floor - ch - 14);
+    ctx.fillStyle = '#2a1145'; ctx.fillRect(gx0, floor, gx1 - gx0, 8);
+    const py = floor + 10, ph = y0 + mh - py - 14;
+    rr(x0 + mw * .06, py + 4, chuteW * 1.05, ph, 10); ctx.fillStyle = '#2a1145'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = `700 ${Math.max(9, Math.round(mh * .024))}px Fredoka, sans-serif`; ctx.fillText('PRIZE', x0 + mw * .06 + chuteW * .525, py + 4 + ph / 2);
+    const jx = x0 + mw * .7, jy = py + 4 + ph / 2;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(jx, jy + 6); ctx.lineTo(jx + claw.vx * 6, jy - 10); ctx.stroke();
+    circle(jx + claw.vx * 6, jy - 12, 7, '#ff3b3b'); circle(jx + 40, jy, 10, '#ffd23f'); circle(jx + 40, jy, 6, '#ffef9a');
+    if (E.length && mw > 560) { ctx.fillStyle = '#fff3a8'; ctx.font = `700 ${Math.max(11, Math.round(mh * .03))}px Andika, sans-serif`; ctx.textAlign = 'right'; ctx.fillText(`${leftCount()} inside`, x0 + mw * .93, jy); ctx.textAlign = 'center'; }
+  }
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(.05, (now - lastT) / 1000); lastT = now;
+    if (W && H) {
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+      if (phase === 'ready' && !seq) {
+        const lo = M.pitX0 + M.r * .3, hi = M.gx1 - M.r * .6;
+        let target;
+        if (goX != null) target = Math.max(lo, Math.min(hi, goX));
+        else if (mouseX != null) target = Math.max(lo, Math.min(hi, mouseX));
+        else { const tt = ((now - sweepT0) / 1000 / 6) % 1, tri = tt < .5 ? tt * 2 : 2 - tt * 2; target = lo + (hi - lo) * tri; }
+        const maxV = W * .5 * dt, d = target - claw.x, step = Math.max(-maxV, Math.min(maxV, d));
+        claw.x += step; claw.vx = step / (maxV || 1); claw.y = M.home; claw.open = 1;
+        if (goX != null && Math.abs(target - claw.x) < 1) { claw.x = target; const fire = dropAfterMove; goX = null; dropAfterMove = false; if (fire) drop(); }
+      } else claw.vx *= .8;
+      if (phase !== 'busy' && !seq && claw.x < M.pitX0) claw.x += Math.min(W * .3 * dt, M.pitX0 + M.r - claw.x);
+      if (seq) stepSeq(now);
+      drawMachine(now);
+      if (phase === 'ready' && !seq && E.length) { ctx.save(); ctx.setLineDash([6, 8]); ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(claw.x, claw.y + M.r); ctx.lineTo(claw.x, M.floor); ctx.stroke(); ctx.restore(); }
+      pile.slice().sort((a, b) => a.row - b.row).forEach((p) => { const g = Math.max(0, Math.min(1, (now - p.born) / 350)); if (g > 0) ball(p, p.x, p.y, M.r * g, p.tilt); });
+      falling = falling.filter((f) => {
+        f.vy += H * 2.2 * dt; f.y += f.vy * dt;
+        if (f.chute) { if (f.y > M.floor - M.r * .4) { for (let k = 0; k < 16; k++) sparkles.push({ x: f.x + (Math.random() - .5) * M.r, y: M.floor - M.r, vx: (Math.random() - .5) * 220, vy: -Math.random() * 280, t0: now }); return false; } }
+        else if (f.y >= f.toY) { f.p.y = f.toY; f.p.born = 0; pile.push(f.p); return false; }
+        ball(f.p, f.x, f.y, M.r, f.p.tilt + Math.min(.6, f.vy * .0006));
+        return true;
+      });
+      if (held) ball(held, claw.x, claw.y + M.r * 1.0, M.r, held.tilt * .3);
+      drawClaw();
+      ctx.fillStyle = 'rgba(255,255,255,.06)';
+      ctx.beginPath(); ctx.moveTo(M.gx0 + 20, M.glassTop); ctx.lineTo(M.gx0 + 70, M.glassTop); ctx.lineTo(M.gx0 + 10, M.floor); ctx.lineTo(M.gx0 - 10, M.floor); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#ffd1e6'; ctx.lineWidth = 4; ctx.strokeRect(M.gx0, M.glassTop, M.gx1 - M.gx0, M.floor - M.glassTop);
+      sparkles = sparkles.filter((s) => now - s.t0 < 700);
+      sparkles.forEach((s) => { s.vy += 500 * dt; s.x += s.vx * dt; s.y += s.vy * dt; ctx.globalAlpha = 1 - (now - s.t0) / 700; circle(s.x, s.y, 3, '#fff3a8'); ctx.globalAlpha = 1; });
+      if (!E.length) { ctx.fillStyle = 'rgba(15,6,32,.6)'; ctx.fillRect(M.gx0, M.glassTop, M.gx1 - M.gx0, M.floor - M.glassTop); ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(M.mh * .05)}px Fredoka, sans-serif`; ctx.fillText('Add your entries in Settings', (M.gx0 + M.gx1) / 2, (M.glassTop + M.floor) / 2); }
+    }
+    requestAnimationFrame(frame);
+  }
+  function resize() {
+    const r = $('wrap').getBoundingClientRect(); DPR = Math.min(2, devicePixelRatio || 1);
+    const ow = W, oldM = M; W = Math.max(1, r.width); H = Math.max(1, r.height);
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    layout();
+    if (ow && oldM.mw) { const sl = slots(); pile.forEach((p) => { const s = sl[p.slot]; if (s) { p.x = s.x; p.y = s.y; p.row = s.row; } }); pile = pile.filter((p) => sl[p.slot]); falling = []; held = null; }
+    fillPile(false);
+  }
+  new ResizeObserver(() => resize()).observe($('wrap'));
+
+  /* ---------- input ---------- */
+  const localX = (e) => e.clientX - cv.getBoundingClientRect().left;
+  cv.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && phase === 'ready' && goX == null) mouseX = localX(e); });
+  cv.addEventListener('pointerleave', () => { mouseX = null; sweepT0 = performance.now(); });
+  cv.addEventListener('pointerdown', (e) => { if (phase !== 'ready' || seq) return; e.preventDefault(); const x = localX(e); if (x < M.pitX0 - M.r) return; goX = x; dropAfterMove = true; mouseX = null; });
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden) { if (e.key === 'Escape') closeSheet(); return; }
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (phase === 'reveal') { if (k === ' ' || k === 'Enter' || k === 'Escape') { e.preventDefault(); $('rNext').click(); } return; }
+    if (phase !== 'ready' || seq) return;
+    if (k === ' ' || k === 'Enter') { if (tg === 'BUTTON' && k === 'Enter') return; e.preventDefault(); goX = null; drop(); }
+    else if (k === 'ArrowLeft' || k === 'ArrowRight') { e.preventDefault(); goX = Math.max(M.pitX0, Math.min(M.gx1 - M.r, (goX ?? claw.x) + (k === 'ArrowLeft' ? -M.r * 1.5 : M.r * 1.5))); dropAfterMove = false; }
+    else if (k === 'a' || k === 'A') { e.preventDefault(); auto(); }
+    else if (k === 'u' || k === 'U') { e.preventDefault(); undo(); }
+  });
+  addEventListener('resize', () => { if (!$('reveal').hidden && pending) fitText(); });
+
+  /* ---------- confetti ---------- */
+  const fx = document.createElement('canvas'); fx.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30'; fx.setAttribute('aria-hidden', 'true'); document.body.appendChild(fx);
+  const fc = fx.getContext('2d'); let bits = [], raf = 0;
+  function confetti(n) {
+    if (reduce) return; fx.width = innerWidth; fx.height = innerHeight;
+    for (let i = 0; i < n; i++) bits.push({ x: innerWidth / 2 + (Math.random() - .5) * 300, y: innerHeight * .4, vx: (Math.random() - .5) * 18, vy: -Math.random() * 16 - 4, r: Math.random() * 6.28, s: 6 + Math.random() * 7, c: COLORS[(Math.random() * COLORS.length) | 0], t: 0 });
+    if (!raf) raf = requestAnimationFrame(fxTick);
+  }
+  function fxTick() {
+    fc.clearRect(0, 0, fx.width, fx.height);
+    bits.forEach((p) => { p.t++; p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += .2; fc.save(); fc.translate(p.x, p.y); fc.rotate(p.r); fc.fillStyle = p.c; fc.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); fc.restore(); });
+    bits = bits.filter((p) => p.y < fx.height + 20 && p.t < 170);
+    raf = bits.length ? requestAnimationFrame(fxTick) : (fc.clearRect(0, 0, fx.width, fx.height), 0);
+  }
+
+  /* ---------- settings ---------- */
+  function seg(el, opts, isOn, fn) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { fn(v); renderSheet(); }; el.appendChild(b); });
+  }
+  let draft = null;
+  function renderSheet() {
+    seg($('sRep'), [['remove', 'Take it out (no repeats until all are picked)'], ['back', 'Put it back (it can come up again)']], (v) => draft.rep === v, (v) => { draft.rep = v; });
+    seg($('sGrip'), [['always', 'Always grabs a ball'], ['slip', 'Sometimes misses or slips, like a real arcade']], (v) => draft.grip === v, (v) => { draft.grip = v; });
+    seg($('sSize'), [['big', 'Big'], ['medium', 'Medium'], ['small', 'Small (for long sentences)']], (v) => draft.size === v, (v) => { draft.size = v; });
+    const names = Object.keys(S.lists).sort((a, b) => a.localeCompare(b));
+    $('lsel').innerHTML = names.length ? names.map((n) => `<option value="${esc(n)}">${esc(n)} (${parse(S.lists[n]).length})</option>`).join('') : '<option value="">No saved lists yet</option>';
+    $('lsel').disabled = $('loadBtn').disabled = $('delBtn').disabled = !names.length;
+    check();
+  }
+  function check() {
+    const all = String($('entries').value).split(/\r?\n/).map((s) => s.trim()).filter(Boolean), n = Math.min(all.length, MAX);
+    const dup = n - new Set(all.slice(0, MAX).map((s) => s.toLowerCase())).size;
+    $('eNote').className = 'note' + (all.length > MAX ? ' warn' : '');
+    $('eNote').textContent = !n ? 'Type at least one entry.' : `${n} entr${n === 1 ? 'y' : 'ies'}${dup ? `, ${dup} repeated (that's fine if you want them)` : ''}.${all.length > MAX ? ` Only the first ${MAX} are used.` : ''}`;
+    $('goBtn').disabled = !n;
+    $('err').textContent = '';
+    return n > 0;
+  }
+  $('entries').addEventListener('input', check);
+  $('numBtn').onclick = () => {
+    const a = prompt('Numbers from:', '1'); if (a === null) return; const b = prompt('to:', '100'); if (b === null) return;
+    const x = parseInt(a, 10), y = parseInt(b, 10);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || y < x || y - x + 1 > MAX) { $('err').className = 'note warn'; $('err').textContent = `Use whole numbers, with at most ${MAX} numbers.`; return; }
+    $('entries').value = Array.from({ length: y - x + 1 }, (_, i) => x + i).join('\n'); check();
+  };
+  /* ---------- uploading a list: .txt, .csv/.tsv (first column), .xlsx (first column of the first sheet), .docx (each paragraph) ---------- */
+  async function unzip(buf) {
+    const dv = new DataView(buf), u8 = new Uint8Array(buf), files = {};
+    let e = -1; for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('zip');
+    let p = dv.getUint32(e + 16, true); const n = dv.getUint16(e + 10, true);
+    for (let k = 0; k < n; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+      files[name] = { method, csize, off };
+      p += 46 + nl + xl + cl;
+    }
+    return async (name) => {
+      const f = files[name]; if (!f) return null;
+      const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(start, start + f.csize);
+      if (f.method === 0) return new TextDecoder().decode(data);
+      const ds = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new TextDecoder().decode(await new Response(ds).arrayBuffer());
+    };
+  }
+  const xml = (t) => new DOMParser().parseFromString(t, 'application/xml');
+  function csvFirst(text, delim) {
+    const out = []; let cell = '', q = false, col = 0;
+    const push = () => { if (col === 0) out.push(cell); };
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === delim) { push(); cell = ''; col++; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; push(); cell = ''; col = 0; }
+      else cell += c;
+    }
+    push();
+    return out;
+  }
+  async function readList(file) {
+    const name = file.name.toLowerCase();
+    if (/\.xlsx$/.test(name)) {
+      const get = await unzip(await file.arrayBuffer());
+      const ss = await get('xl/sharedStrings.xml'), shared = ss ? [...xml(ss).getElementsByTagName('si')].map((si) => [...si.getElementsByTagName('t')].map((t) => t.textContent).join('')) : [];
+      let sheet = await get('xl/worksheets/sheet1.xml');
+      if (!sheet) throw new Error('sheet');
+      const rows = new Map();
+      [...xml(sheet).getElementsByTagName('c')].forEach((c) => {
+        const ref = c.getAttribute('r') || '', m = ref.match(/^([A-Z]+)(\d+)$/); if (!m) return;
+        const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
+        const txt = t === 's' && v ? shared[+v.textContent] : t === 'inlineStr' && is ? is.textContent : v ? v.textContent : '';
+        const r = +m[2]; if (!rows.has(r) || m[1] < rows.get(r).col) rows.set(r, { col: m[1], txt });
+      });
+      return [...rows.keys()].sort((a, b) => a - b).map((r) => rows.get(r).txt);
+    }
+    if (/\.docx$/.test(name)) {
+      const get = await unzip(await file.arrayBuffer()), doc = await get('word/document.xml');
+      if (!doc) throw new Error('doc');
+      return [...xml(doc).getElementsByTagNameNS('*', 'p')].map((p) => [...p.getElementsByTagNameNS('*', 't')].map((t) => t.textContent).join(''));
+    }
+    if (/\.(xls|doc|pdf|pages|numbers)$/.test(name)) throw new Error('type');
+    const text = (await file.text()).replace(/^﻿/, '');
+    if (/\.csv$/.test(name)) return csvFirst(text, text.split('\n')[0].includes(';') && !text.split('\n')[0].includes(',') ? ';' : ',');
+    if (/\.tsv$/.test(name) || /\t/.test(text.split('\n')[0])) return csvFirst(text, '\t');
+    return text.split(/\r?\n/);
+  }
+  async function useFile(file) {
+    const fn = $('fNote');
+    if (!file) return;
+    if (file.size > 20e6) { fn.className = 'note warn'; fn.textContent = 'That file is too big. Try a smaller list.'; return; }
+    try {
+      const items = (await readList(file)).map((s) => String(s).replace(/\s+/g, ' ').trim()).filter(Boolean);
+      if (!items.length) { fn.className = 'note warn'; fn.textContent = `No entries found in ${file.name}.`; return; }
+      const cur = $('entries').value.trim();
+      const add = cur && !confirm(`Replace the list in the box with the ${items.length} entries from ${file.name}?\n\nOK = replace. Cancel = add them to the end.`);
+      $('entries').value = (add ? cur + '\n' : '') + items.join('\n');
+      check();
+      fn.className = 'note'; fn.textContent = `${add ? 'Added' : 'Loaded'} ${items.length} entr${items.length === 1 ? 'y' : 'ies'} from ${file.name}. Check the list above, and delete a heading line like "Name" if there is one.`;
+    } catch (e) {
+      fn.className = 'note warn';
+      fn.textContent = /type/.test(e.message) ? 'That kind of file can\'t be read here. Save it as .txt, .csv, .xlsx or .docx, or copy the list and paste it into the box.' : `Could not read ${file.name}. Try saving it as a .txt or .csv file, or copy the list and paste it into the box.`;
+    }
+  }
+  $('fileIn').addEventListener('change', (e) => { useFile(e.target.files[0]); e.target.value = ''; });
+  $('entries').addEventListener('dragover', (e) => { if ([...(e.dataTransfer.items || [])].some((i) => i.kind === 'file')) { e.preventDefault(); $('entries').style.borderColor = '#c2266f'; } });
+  $('entries').addEventListener('dragleave', () => { $('entries').style.borderColor = ''; });
+  $('entries').addEventListener('drop', (e) => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; $('entries').style.borderColor = ''; if (f) { e.preventDefault(); useFile(f); } });
+  $('clearBtn').onclick = () => { $('entries').value = ''; check(); $('entries').focus(); };
+  $('saveBtn').onclick = () => {
+    const nm = $('lname').value.trim(), t = $('entries').value.trim();
+    if (!nm) { $('lNote').className = 'note warn'; $('lNote').textContent = 'Type a name for the list first.'; $('lname').focus(); return; }
+    if (!t) { $('lNote').className = 'note warn'; $('lNote').textContent = 'Type some entries first.'; return; }
+    S.lists[nm] = parse(t).join('\n'); save(); renderSheet(); $('lsel').value = nm;
+    $('lNote').className = 'note'; $('lNote').textContent = `Saved “${nm}” on this computer.`;
+  };
+  $('loadBtn').onclick = () => { const nm = $('lsel').value; if (!S.lists[nm]) return; $('entries').value = S.lists[nm]; $('lname').value = nm; check(); $('lNote').className = 'note'; $('lNote').textContent = `Loaded “${nm}”. Click Start to use it.`; };
+  $('delBtn').onclick = () => { const nm = $('lsel').value; if (!S.lists[nm] || !confirm(`Delete the saved list “${nm}”?`)) return; delete S.lists[nm]; save(); renderSheet(); $('lNote').className = 'note'; $('lNote').textContent = `Deleted “${nm}”.`; };
+  function openSheet() {
+    if (phase === 'busy') return;
+    draft = { rep: S.rep, grip: S.grip, size: S.size };
+    $('entries').value = S.entries; $('lNote').className = 'note'; $('lNote').textContent = 'Saved lists stay on this computer.';
+    $('sheet').hidden = false; renderSheet(); $('entries').focus({ preventScroll: true });
+  }
+  function closeSheet() {
+    if (!check()) return;
+    const newE = parse($('entries').value), changed = newE.join('\n') !== E.join('\n') || draft.rep !== S.rep;
+    S.entries = newE.join('\n'); Object.assign(S, draft); E = newE;
+    if (changed) { fullBag(); S.picked = []; last = -1; pile = []; falling = []; }
+    save(); $('sheet').hidden = true; phase = 'ready';
+    fillPile(false); renderList(); renderLeft();
+  }
+  $('goBtn').onclick = closeSheet;
+  $('gearBtn').onclick = openSheet;
+
+  window.__cp = { S: () => S, E: () => E, phase: () => phase, pile: () => pile.length };
+  renderLeft(); renderList();
+  requestAnimationFrame(frame);
+  if (!stored || !E.length) openSheet();
+})();
+</script>
+
+</body>
+</html>
