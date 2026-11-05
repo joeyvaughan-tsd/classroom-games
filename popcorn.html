@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Popcorn Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: top bar (title, entries left, buttons), then the popcorn machine (canvas) beside the Picked list.
+     A drawn ball pops out, grows, and turns around to show the entry; it stays until the teacher moves on. */
+  :root {
+    --bg: #2a0b10; --panel: #3d1219; --panel-2: #561c26; --ink: #fff7f2; --ink-2: #f1c9b8; --line: #74303b;
+    --pink: #ff4f9a; --yellow: #ffd23f; --good: #22b35e; --good-deep: #148043; --btn: #4f8df5; --btn-deep: #2c5fc0;
+    --display: "Fredoka", "Andika", system-ui, sans-serif; --text: "Andika", "Fredoka", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: radial-gradient(ellipse at top, #6a1822, var(--bg) 70%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--yellow); outline-offset: 3px; }
+  kbd { font-family: var(--text); font-size: .72em; border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; opacity: .75; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; padding: 10px 14px 10px; }
+  header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .title { font-weight: 700; font-size: 1.4rem; white-space: nowrap; }
+  .title span { color: var(--yellow); }
+  .left { background: var(--panel); border: 2px solid var(--line); border-radius: 999px; padding: 4px 14px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+  .left b { color: var(--yellow); font-family: var(--text); }
+  .grow { flex: 1; }
+  .tb { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 7px 13px; font-weight: 600; font-size: .95rem; white-space: nowrap; }
+  .tb:hover { background: var(--panel-2); }
+  .tb.hot { background: var(--pink); border-color: var(--pink); color: #fff; }
+  .tb:disabled { opacity: .45; cursor: default; }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 290px); gap: 12px; min-height: 0; }
+  .main.nolist { grid-template-columns: minmax(0, 1fr); }
+  .main.nolist aside { display: none; }
+  .wrap { position: relative; min-height: 0; }
+  canvas#cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+  aside { background: var(--panel); border: 2px solid var(--line); border-radius: 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; overflow: hidden; }
+  aside h2 { margin: 0; padding: 10px 14px 6px; font-size: 1.05rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+  aside ol { margin: 0; padding: 0 10px 8px; list-style: none; overflow: auto; display: grid; gap: 6px; align-content: start; counter-reset: none; }
+  aside li { display: grid; grid-template-columns: 2.2em 1fr; gap: 6px; align-items: start; background: var(--panel-2); border-radius: 10px; padding: 6px 8px; font-family: var(--text); font-size: 1.02rem; line-height: 1.25; overflow-wrap: anywhere; }
+  aside li i { font-style: normal; color: var(--ink-2); font-size: .85em; font-weight: 700; text-align: right; padding-top: .1em; }
+  aside li.new { animation: slide .5s ease-out; }
+  @keyframes slide { from { transform: translateX(30px); opacity: 0; } }
+  aside .empty { color: var(--ink-2); padding: 8px 14px; font-size: .95rem; }
+  aside .foot { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 2px solid var(--line); }
+  aside .foot .tb { flex: 1; padding: 6px 8px; font-size: .88rem; }
+  .hint { text-align: center; color: var(--ink-2); font-weight: 600; font-size: clamp(.9rem, 2.2vh, 1.15rem); min-height: 1.3em; }
+
+  /* the drawn ball: grows from the machine, then turns around to show the entry */
+  .reveal { position: fixed; inset: 0; z-index: 15; background: rgba(30,6,10,.72); }
+  .fwrap { position: absolute; perspective: 1600px; transform-origin: 50% 50%; will-change: transform; }
+  .fball { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .9s cubic-bezier(.3,1.25,.5,1); }
+  .fball.flip { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; border-radius: 50%; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: grid; place-items: center; align-content: center; text-align: center; }
+  .front { background: radial-gradient(circle at 34% 30%, rgba(255,255,255,.95), rgba(255,255,255,0) 32%), radial-gradient(circle at 50% 50%, var(--c), color-mix(in srgb, var(--c) 65%, #000)); color: #fff; font-weight: 700; font-size: min(30vh, 30vw); text-shadow: 0 6px 18px rgba(0,0,0,.25); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .back { transform: rotateY(180deg); background: radial-gradient(circle at 34% 28%, #ffffff, #fffaf2 45%, #f1e6d6); border: clamp(8px, 1.6vmin, 16px) solid var(--c); color: #2a1145; box-shadow: 0 30px 80px rgba(0,0,0,.5); gap: 2%; padding: 10%; }
+  .back .num { font-weight: 700; color: #8a6a6a; font-size: clamp(.9rem, 2.4vh, 1.3rem); letter-spacing: .05em; }
+  .back .txt { font-family: var(--text); font-weight: 700; line-height: 1.1; overflow-wrap: break-word; word-break: break-word; }
+  .row { position: absolute; left: 0; right: 0; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .big { border: 0; border-radius: 16px; background: var(--good); color: #fff; font-weight: 700; font-size: clamp(1.2rem, 3.6vh, 1.8rem); padding: 10px 28px; box-shadow: 0 6px 0 var(--good-deep); }
+  .big.alt { background: #fff4e6; color: #5a1a22; box-shadow: 0 6px 0 #d9bfa8; }
+  .big:active { transform: translateY(4px); box-shadow: none; }
+
+  /* settings */
+  .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(10,4,22,.7); display: grid; place-items: center; padding: 12px; }
+  .panel { background: #fffdf8; color: #24314a; border-radius: 22px; width: min(860px, 100%); max-height: 100%; overflow: auto; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.4); color-scheme: light; }
+  .panel h2 { margin: 0 0 4px; font-size: 1.6rem; }
+  .panel h3 { margin: 16px 0 6px; font-size: 1.12rem; color: #c2266f; border-top: 2px solid #efe6d5; padding-top: 12px; }
+  .panel .lbl { display: block; font-weight: 600; margin: 10px 0 5px; color: #5b6780; font-size: .95rem; }
+  .panel textarea { width: 100%; min-height: 220px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 10px 12px; font-family: var(--text); font-size: 1.05rem; line-height: 1.35; background: #fff; color: #24314a; resize: vertical; }
+  .panel input[type=text], .panel select { border: 2px solid #e2d8c4; border-radius: 12px; padding: 7px 10px; background: #fff; color: #24314a; font-size: 1rem; min-width: 0; }
+  .note { margin: 6px 0 0; color: #5b6780; font-size: .9rem; line-height: 1.35; }
+  .note.warn { color: #b3261e; font-weight: 600; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button, .pb { border: 2px solid #e2d8c4; background: #fff; color: #24314a; border-radius: 12px; padding: 6px 12px; font-weight: 600; font-size: .95rem; }
+  .seg button[aria-pressed="true"] { background: #c2266f; border-color: #c2266f; color: #fff; }
+  .lists { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .go { display: block; margin: 18px auto 0; border: 0; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 12px 40px; border-radius: 16px; box-shadow: 0 6px 0 var(--good-deep); }
+  .go:disabled { background: #c8ced9; box-shadow: 0 6px 0 #a9b0bd; cursor: default; }
+
+  @media (max-width: 760px) {
+    .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 34%); }
+    .main.nolist { grid-template-rows: minmax(0, 1fr); }
+    .title { display: none; }
+    .tb { padding: 6px 9px; font-size: .85rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { aside li.new { animation: none !important; } .fball, .fwrap { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="title">Popcorn <span>Picker</span></div>
+    <div class="left" id="left" aria-live="polite"></div>
+    <div class="grow"></div>
+    <button class="tb hot" id="autoBtn" type="button">Draw a ball <kbd>Space</kbd></button>
+    <button class="tb" id="undoBtn" type="button">Undo <kbd>U</kbd></button>
+    <button class="tb" id="listBtn" type="button" aria-pressed="true">Picked list</button>
+    <button class="tb" id="fullBtn" type="button">Full screen</button>
+    <button class="tb" id="gearBtn" type="button">Settings</button>
+  </header>
+  <div class="main" id="main">
+    <div class="wrap" id="wrap"><canvas id="cv" aria-label="Popcorn machine full of bouncing balls. Click it or press Space to draw a ball."></canvas></div>
+    <aside aria-label="Picked so far">
+      <h2 id="pickH">Picked</h2>
+      <ol id="picked"></ol>
+      <div class="foot"><button class="tb" id="copyBtn" type="button">Copy list</button><button class="tb" id="resetBtn" type="button">Start over</button></div>
+    </aside>
+  </div>
+  <div class="hint" id="hint">Press <b>Draw a ball</b>, <b>Space</b>, or click the machine.</div>
+</div>
+
+<div class="reveal" id="reveal" hidden>
+  <div class="fwrap" id="fwrap" role="dialog" aria-modal="true" aria-labelledby="rTxt">
+    <div class="fball" id="fball">
+      <div class="face front" id="fFront" aria-hidden="true">?</div>
+      <div class="face back"><div class="num" id="rNum"></div><div class="txt" id="rTxt" aria-live="assertive"></div></div>
+    </div>
+  </div>
+  <div class="row" id="rRow"><button class="big" id="rNext" type="button">Next <kbd>Space</kbd></button><button class="big alt" id="rBack" type="button">Put it back</button></div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Popcorn Picker settings</h2>
+    <p class="note">Type or paste your entries, one per line, or upload a file: names, answers, numbers, vocabulary words, questions, anything.</p>
+
+    <h3>Your entries</h3>
+    <textarea id="entries" aria-label="Entries, one per line" spellcheck="false" placeholder="Maria&#10;Jayden&#10;Ava&#10;..."></textarea>
+    <p class="note" id="eNote"></p>
+    <p class="note" id="fNote">Upload a text file (.txt), a spreadsheet (.csv or Excel .xlsx, using the first column) or a Word document (.docx, one entry per line). You can also drag a file onto the box, or copy a column from a spreadsheet and paste it.</p>
+    <div class="lists" style="margin-top:8px">
+      <label class="pb" style="cursor:pointer">Upload a file…<input type="file" id="fileIn" accept=".txt,.csv,.tsv,.xlsx,.docx,text/plain,text/csv" hidden></label>
+      <button class="pb" type="button" id="numBtn">Fill with numbers…</button>
+      <button class="pb" type="button" id="clearBtn">Clear</button>
+    </div>
+
+    <h3>Saved lists</h3>
+    <div class="lists">
+      <input type="text" id="lname" placeholder="List name, like Class roster" aria-label="List name" maxlength="40">
+      <button class="pb" type="button" id="saveBtn">Save this list</button>
+      <select id="lsel" aria-label="Saved lists"></select>
+      <button class="pb" type="button" id="loadBtn">Use it</button>
+      <button class="pb" type="button" id="delBtn">Delete</button>
+    </div>
+    <p class="note" id="lNote">Saved lists stay on this computer.</p>
+
+    <h3>Options</h3>
+    <span class="lbl" id="lRep">After an entry is picked</span><div class="seg" id="sRep" role="group" aria-labelledby="lRep"></div>
+    <span class="lbl" id="lGrip">How hard the balls pop</span><div class="seg" id="sGrip" role="group" aria-labelledby="lGrip"></div>
+    <span class="lbl" id="lSize">Text size on the ball</span><div class="seg" id="sSize" role="group" aria-labelledby="lSize"></div>
+
+    <p class="note" id="err"></p>
+    <button class="go" id="goBtn" type="button">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const TAU = Math.PI * 2, MAX = 1000;
+  const STORE = 'popcorn-picker-v1';
+  const COLORS = ['#ff4f5e', '#ffb627', '#3ec1d3', '#7bd389', '#b57ce8', '#ff8a3d', '#5aa9ff', '#ff6fae'];
+
+  /* ---------- saved state: settings, the current list, what's left, what's been picked ---------- */
+  let S = { entries: '', rep: 'remove', speed: 'lively', size: 'big', lists: {}, bag: null, picked: [] };
+  let stored = false;
+  try { const raw = localStorage.getItem(STORE); if (raw) { Object.assign(S, JSON.parse(raw)); stored = true; } } catch (e) {}
+  if (!S.lists || typeof S.lists !== 'object') S.lists = {};
+  try { const cp = JSON.parse(localStorage.getItem('claw-picker-v1') || 'null'); if (cp && cp.lists && typeof cp.lists === 'object') Object.keys(cp.lists).forEach((k) => { if (!(k in S.lists) && typeof cp.lists[k] === 'string') S.lists[k] = cp.lists[k]; }); } catch (e) {}
+  if (!Array.isArray(S.picked)) S.picked = [];
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+  const parse = (t) => String(t).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, MAX);
+  let E = parse(S.entries);
+  function validBag() { return Array.isArray(S.bag) && S.bag.every((i) => Number.isInteger(i) && i >= 0 && i < E.length); }
+  function fullBag() { S.bag = E.map((_, i) => i); }
+  if (!validBag()) fullBag();
+  const leftCount = () => (S.rep === 'remove' ? S.bag.length : E.length);
+
+  /* ---------- machine geometry ---------- */
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1, M = {}, balls = [], phase = 'ready', pending = null, boost = 0, flying = null, popAcc = 0;
+  const SPEED = { gentle: { kick: .7, rate: 5 }, lively: { kick: .95, rate: 11 }, wild: { kick: 1.2, rate: 22 } };
+  const COL = ['#ff4f5e', '#ffb627', '#3ec1d3', '#7bd389', '#b57ce8', '#ff8a3d', '#5aa9ff', '#ff6fae', '#ffd23f'];
+  const shownCount = () => Math.min(leftCount(), 70);
+  function layout() {
+    const y0 = 4, mh = H - 8, mw = Math.min(W - 8, mh * 1.05), x0 = (W - mw) / 2;
+    M = { x0, y0, mw, mh, gx0: x0 + mw * .08, gx1: x0 + mw * .92, gy0: y0 + mh * .2, gy1: y0 + mh * .8 };
+    M.chuteX = (M.gx0 + M.gx1) / 2; M.chuteW = mw * .16;
+    sizeBalls();
+  }
+  function sizeBalls() {
+    const area = (M.gx1 - M.gx0) * (M.gy1 - M.gy0), n = Math.max(1, shownCount());
+    M.r = clamp(Math.sqrt(area * .26 / (n * Math.PI)), 11, Math.min(M.mw * .075, 54));
+  }
+  function addBall() {
+    const r = M.r;
+    balls.push({ x: M.gx0 + r + Math.random() * (M.gx1 - M.gx0 - 2 * r), y: M.gy1 - r - Math.random() * (M.gy1 - M.gy0) * .35, vx: (Math.random() - .5) * 200, vy: -Math.random() * 300, c: COL[(Math.random() * COL.length) | 0], rot: Math.random() * TAU, born: performance.now() });
+  }
+  function syncBalls() {
+    if (!M.mw) return;
+    sizeBalls();
+    const want = shownCount();
+    while (balls.length < want) addBall();
+    while (balls.length > want) balls.splice((Math.random() * balls.length) | 0, 1);
+  }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  /* ---------- physics: gravity, walls, ball-to-ball bumps, and the popping kettle under the floor ---------- */
+  function physics(dt) {
+    const r = M.r, g = H * 2.0, sp = SPEED[S.speed] || SPEED.lively, h = M.gy1 - M.gy0;
+    popAcc += dt * sp.rate * (1 + boost * 5) * Math.max(1, balls.length / 12);
+    while (popAcc >= 1) {
+      popAcc -= 1;
+      const low = balls.filter((b) => b.y > M.gy1 - r * 3.2 && b !== flying?.b);
+      const b = low.length ? low[(Math.random() * low.length) | 0] : null;
+      if (b) { const hh = h * (.35 + Math.random() * .6) * sp.kick * (1 + boost * .25); b.vy = -Math.sqrt(2 * g * Math.min(hh, h * 1.05)); b.vx += (Math.random() - .5) * 420; }
+    }
+    const steps = 3, s = dt / steps;
+    for (let k = 0; k < steps; k++) {
+      for (const b of balls) {
+        if (flying && flying.b === b) continue;
+        b.vy += g * s; b.vx *= .999; b.x += b.vx * s; b.y += b.vy * s;
+        if (b.x < M.gx0 + r) { b.x = M.gx0 + r; b.vx = Math.abs(b.vx) * .8; }
+        if (b.x > M.gx1 - r) { b.x = M.gx1 - r; b.vx = -Math.abs(b.vx) * .8; }
+        if (b.y < M.gy0 + r) { b.y = M.gy0 + r; b.vy = Math.abs(b.vy) * .6; }
+        if (b.y > M.gy1 - r) { b.y = M.gy1 - r; b.vy = -Math.abs(b.vy) * .35; b.vx *= .92; if (Math.abs(b.vy) < 40) b.vy = 0; }
+        b.rot += b.vx * s / r;
+      }
+      for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
+        const a = balls[i], c = balls[j]; if (flying && (flying.b === a || flying.b === c)) continue;
+        const dx = c.x - a.x, dy = c.y - a.y, d2 = dx * dx + dy * dy, m = 2 * r;
+        if (d2 >= m * m || d2 === 0) continue;
+        const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, o = (m - d) / 2;
+        a.x -= nx * o; a.y -= ny * o; c.x += nx * o; c.y += ny * o;
+        const rv = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
+        if (rv < 0) { const imp = -rv * .9; a.vx -= imp * nx; a.vy -= imp * ny; c.vx += imp * nx; c.vy += imp * ny; }
+      }
+    }
+  }
+
+  /* ---------- drawing a ball ---------- */
+  function drawBall() {
+    if (phase !== 'ready') return;
+    if (!E.length) { openSheet(); return; }
+    if (!leftCount()) { allDone(); return; }
+    if (!balls.length) syncBalls();
+    phase = 'busy'; $('hint').textContent = 'Popping…';
+    boost = 1;
+    const go = () => {
+      boost = 0;
+      const pool = balls.slice().sort((a, b) => a.y - b.y).slice(0, Math.max(1, Math.ceil(balls.length / 2)));
+      const b = pool[(Math.random() * pool.length) | 0];
+      flying = { b, t0: performance.now(), x0: b.x, y0: b.y, dur: reduce ? 1 : 650 };
+    };
+    if (reduce) go(); else setTimeout(go, 1200);
+  }
+  function stepFly(now) {
+    const f = flying, t = clamp((now - f.t0) / f.dur, 0, 1), e = 1 - Math.pow(1 - t, 3);
+    const tx = M.chuteX, ty = M.y0 + M.mh * .06;
+    f.b.x = f.x0 + (tx - f.x0) * e; f.b.y = f.y0 + (ty - f.y0) * e - Math.sin(Math.PI * t) * M.mh * .08; f.b.rot += .3;
+    if (t >= 1) {
+      const b = f.b; flying = null; balls.splice(balls.indexOf(b), 1);
+      const rc = cv.getBoundingClientRect();
+      reveal(b.c, rc.left + b.x, rc.top + b.y, M.r);
+    }
+  }
+
+  /* ---------- picking an entry and showing it on the flipping ball ---------- */
+  let last = -1;
+  function bigSize() { return Math.min(innerWidth * .86, (innerHeight - 110) * .92, 660); }
+  function placeBall(D) { const fw = $('fwrap'); fw.style.width = fw.style.height = D + 'px'; fw.style.left = (innerWidth - D) / 2 + 'px'; fw.style.top = Math.max(8, (innerHeight - D - 90) / 2) + 'px'; $('rRow').style.top = (Math.max(8, (innerHeight - D - 90) / 2) + D + 14) + 'px'; }
+  function reveal(color, px, py, r) {
+    let idx;
+    if (S.rep === 'remove') { const k = (Math.random() * S.bag.length) | 0; idx = S.bag.splice(k, 1)[0]; }
+    else { do { idx = (Math.random() * E.length) | 0; } while (E.length > 1 && idx === last); }
+    last = idx;
+    S.picked.push({ i: idx, t: E[idx] }); save();
+    pending = { idx, color };
+    renderList(true); renderLeft();
+    showBall({ color, num: `Pick #${S.picked.length}`, text: E[idx], from: [px, py, r], back: S.rep === 'remove', next: 'Next <kbd>Space</kbd>' });
+  }
+  function showBall(o) {
+    phase = 'flipping';
+    const D = bigSize(), fw = $('fwrap'), fb = $('fball');
+    placeBall(D);
+    fw.style.setProperty('--c', o.color);
+    $('fFront').textContent = '?';
+    $('rNum').textContent = o.num || '';
+    $('rTxt').textContent = o.text;
+    $('rBack').hidden = !o.back; $('rNext').innerHTML = o.next;
+    $('rRow').style.visibility = 'hidden';
+    fb.classList.remove('flip'); fb.style.transition = 'none';
+    $('reveal').hidden = false;
+    fitText();
+    const done = () => { phase = 'reveal'; $('rRow').style.visibility = 'visible'; $('rNext').focus({ preventScroll: true }); if (o.party !== false) confetti(o.big ? 200 : 80); };
+    if (reduce || !o.from) { fw.style.transition = 'none'; fw.style.transform = 'none'; fb.classList.add('flip'); done(); return; }
+    const [px, py, r] = o.from, cx = parseFloat(fw.style.left) + D / 2, cy = parseFloat(fw.style.top) + D / 2;
+    fw.style.transition = 'none'; fw.style.transform = `translate(${px - cx}px, ${py - cy}px) scale(${(2 * r) / D})`;
+    void fw.offsetWidth;
+    fw.style.transition = 'transform .8s cubic-bezier(.25,1.2,.45,1)'; fw.style.transform = 'none';
+    setTimeout(() => { fb.style.transition = ''; fb.classList.add('flip'); }, 900);
+    setTimeout(done, 1800);
+  }
+  function fitText() {
+    const el = $('rTxt'), D = parseFloat($('fwrap').style.width) || bigSize();
+    const maxW = D * .7, maxH = D * .5, base = { big: 1, medium: .75, small: .55 }[S.size] || 1;
+    el.style.maxWidth = maxW + 'px';
+    let fs = D * .22 * base; el.style.fontSize = fs + 'px';
+    let n = 0;
+    while ((el.scrollHeight > maxH || el.scrollWidth > maxW + 2) && fs > 14 && n++ < 70) { fs *= .92; el.style.fontSize = fs + 'px'; }
+  }
+  function closeReveal(putBack) {
+    if (phase !== 'reveal') return;
+    if (putBack && S.rep === 'remove' && pending) { const p = S.picked.pop(); if (p) S.bag.push(p.i); save(); renderList(); renderLeft(); }
+    $('reveal').hidden = true; pending = null; phase = 'ready';
+    $('hint').innerHTML = 'Press <b>Draw a ball</b>, <b>Space</b>, or click the machine.';
+    syncBalls();
+    if (!leftCount()) allDone();
+  }
+  function allDone() {
+    $('fwrap').classList.add('done');
+    showBall({ color: '#ffd23f', num: '', text: E.length ? `All ${E.length} picked!` : 'Add some entries in Settings.', back: false, next: E.length ? 'Start over' : 'Open Settings', big: true, party: !!E.length });
+  }
+  $('rNext').onclick = () => {
+    if (phase !== 'reveal') return;
+    if ($('fwrap').classList.contains('done')) { $('fwrap').classList.remove('done'); $('reveal').hidden = true; phase = 'ready'; if (E.length) startOver(); else openSheet(); return; }
+    closeReveal(false);
+  };
+  $('rBack').onclick = () => closeReveal(true);
+
+  function startOver() { fullBag(); S.picked = []; last = -1; save(); balls = []; syncBalls(); renderList(); renderLeft(); }
+  function undo() {
+    if (phase !== 'ready' || !S.picked.length) return;
+    const p = S.picked.pop(); if (S.rep === 'remove' && E[p.i] === p.t && !S.bag.includes(p.i)) S.bag.push(p.i);
+    save(); renderList(); renderLeft(); syncBalls();
+  }
+  const auto = drawBall;
+
+  /* ---------- side list and counter ---------- */
+  function renderLeft() {
+    $('left').innerHTML = !E.length ? 'No entries yet' : S.rep === 'remove' ? `<b>${S.bag.length}</b> of ${E.length} left` : `${E.length} entries · <b>${S.picked.length}</b> picked`;
+    $('undoBtn').disabled = !S.picked.length;
+  }
+  function renderList(fresh) {
+    const ol = $('picked');
+    $('pickH').textContent = `Picked (${S.picked.length})`;
+    if (!S.picked.length) { ol.innerHTML = '<li class="empty" style="display:block;background:none">Nothing picked yet.</li>'; return; }
+    ol.innerHTML = S.picked.map((p, k) => ({ p, k })).reverse().map(({ p, k }, j) => `<li class="${fresh && j === 0 ? 'new' : ''}"><i>${k + 1}.</i><span>${esc(p.t)}</span></li>`).join('');
+    ol.scrollTop = 0;
+  }
+  $('undoBtn').onclick = undo;
+  $('autoBtn').onclick = auto;
+  $('resetBtn').onclick = () => { if (!S.picked.length || confirm('Start over? Every entry goes back into the popcorn machine and the Picked list is cleared.')) startOver(); };
+  $('copyBtn').onclick = async () => {
+    const txt = S.picked.map((p, k) => `${k + 1}. ${p.t}`).join('\n');
+    try { await navigator.clipboard.writeText(txt); $('copyBtn').textContent = 'Copied!'; } catch (e) { $('copyBtn').textContent = 'Could not copy'; }
+    setTimeout(() => { $('copyBtn').textContent = 'Copy list'; }, 1500);
+  };
+  $('listBtn').onclick = () => { const on = $('main').classList.toggle('nolist'); $('listBtn').setAttribute('aria-pressed', String(!on)); };
+  $('fullBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); };
+
+  /* ---------- drawing ---------- */
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function circle(x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fillStyle = fill; ctx.fill(); }
+  function ball(b, r) {
+    ctx.save(); ctx.translate(b.x, b.y);
+    const g = ctx.createRadialGradient(-r * .35, -r * .4, r * .1, 0, 0, r);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(.28, b.c); g.addColorStop(1, shade(b.c, -.35));
+    circle(0, 0, r, g);
+    ctx.rotate(Math.sin(b.rot) * .5);
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.font = `700 ${Math.round(r * 1.05)}px Fredoka, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('?', 0, r * .06);
+    ctx.restore();
+  }
+  function shade(hex, amt) { const n = parseInt(hex.slice(1), 16); const f = (v) => Math.round(amt < 0 ? v * (1 + amt) : v + (255 - v) * amt); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; }
+  function drawMachine(now) {
+    const { x0, y0, mw, mh, gx0, gx1, gy0, gy1 } = M;
+    // cart base and wheels
+    rr(x0 + mw * .03, gy1, mw * .94, y0 + mh - gy1 - mh * .04, 14);
+    const bg = ctx.createLinearGradient(0, gy1, 0, y0 + mh); bg.addColorStop(0, '#d62839'); bg.addColorStop(1, '#8f1424'); ctx.fillStyle = bg; ctx.fill();
+    ctx.fillStyle = '#ffd23f'; ctx.font = `700 ${Math.round(mh * .055)}px Fredoka, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('★ FRESH PICKS ★', x0 + mw / 2, gy1 + (y0 + mh - gy1 - mh * .04) / 2);
+    [x0 + mw * .14, x0 + mw * .86].forEach((wx) => { circle(wx, y0 + mh - mh * .035, mh * .032, '#2b2b2b'); circle(wx, y0 + mh - mh * .035, mh * .012, '#bbb'); });
+    // glass case
+    const gg = ctx.createLinearGradient(0, gy0, 0, gy1); gg.addColorStop(0, 'rgba(255,244,214,.18)'); gg.addColorStop(1, 'rgba(255,214,140,.32)');
+    ctx.fillStyle = gg; ctx.fillRect(gx0, gy0, gx1 - gx0, gy1 - gy0);
+    // floor glow (the hot plate)
+    const hg = ctx.createLinearGradient(0, gy1 - mh * .05, 0, gy1); hg.addColorStop(0, 'rgba(255,140,0,0)'); hg.addColorStop(1, `rgba(255,120,0,${.35 + .25 * Math.sin(now / 180) * (boost ? 1 : .4)})`);
+    ctx.fillStyle = hg; ctx.fillRect(gx0, gy1 - mh * .05, gx1 - gx0, mh * .05);
+    // roof
+    const ry = y0, rh = gy0 - y0;
+    rr(x0, ry + rh * .1, mw, rh * .62, 16); ctx.fillStyle = '#c1121f'; ctx.fill();
+    const stripes = 10;
+    for (let i = 0; i < stripes; i++) { ctx.fillStyle = i % 2 ? '#fff4e0' : '#e63946'; ctx.beginPath(); const sx = x0 + mw * i / stripes, ex = x0 + mw * (i + 1) / stripes; ctx.moveTo(sx, ry + rh * .7); ctx.lineTo(ex, ry + rh * .7); ctx.lineTo(ex, ry + rh * .85); ctx.arc((sx + ex) / 2, ry + rh * .85, (ex - sx) / 2, 0, Math.PI); ctx.closePath(); ctx.fill(); }
+    rr(x0 + mw * .12, ry + rh * .18, mw * .76, rh * .42, 12); ctx.fillStyle = '#3a0a10'; ctx.fill();
+    const nb = 16, chase = Math.floor(now / 180);
+    for (let i = 0; i < nb; i++) { const bx = x0 + mw * .14 + (mw * .72) * i / (nb - 1), lit = reduce ? i % 2 === 0 : (i + chase) % 2 === 0; circle(bx, ry + rh * .22, 3, lit ? '#fff3a8' : '#7a3a3a'); circle(bx, ry + rh * .56, 3, !lit ? '#fff3a8' : '#7a3a3a'); }
+    ctx.fillStyle = '#ffd23f'; ctx.font = `700 ${Math.round(rh * .2)}px Fredoka, sans-serif`; ctx.fillText('POPCORN PICKER', x0 + mw / 2, ry + rh * .39);
+    // chute opening where the chosen ball pops out
+    ctx.fillStyle = '#2a0a0e'; rr(M.chuteX - M.chuteW / 2, gy0 - 6, M.chuteW, 12, 6); ctx.fill();
+    // kettle hanging from the roof
+    const kx = M.chuteX, ky = gy0 + mh * .06, kw = mw * .18, tilt = boost ? Math.sin(now / 90) * .12 : Math.sin(now / 900) * .04;
+    ctx.save(); ctx.translate(kx, ky); ctx.rotate(tilt);
+    ctx.strokeStyle = '#9aa1b0'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -mh * .06); ctx.lineTo(0, -kw * .25); ctx.stroke();
+    const kg = ctx.createLinearGradient(-kw / 2, 0, kw / 2, 0); kg.addColorStop(0, '#9aa1b0'); kg.addColorStop(.45, '#f4f6fa'); kg.addColorStop(1, '#7c8394');
+    ctx.fillStyle = kg; ctx.beginPath(); ctx.moveTo(-kw / 2, -kw * .2); ctx.lineTo(kw / 2, -kw * .2); ctx.quadraticCurveTo(kw * .48, kw * .32, 0, kw * .32); ctx.quadraticCurveTo(-kw * .48, kw * .32, -kw / 2, -kw * .2); ctx.fill();
+    ctx.fillStyle = '#5c6270'; ctx.fillRect(-kw * .55, -kw * .26, kw * 1.1, kw * .09);
+    ctx.restore();
+    // frame posts
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(gx0 - 8, gy0, 8, gy1 - gy0); ctx.fillRect(gx1, gy0, 8, gy1 - gy0);
+  }
+  function drawGlassFront() {
+    const { gx0, gx1, gy0, gy1 } = M;
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    ctx.beginPath(); ctx.moveTo(gx0 + 20, gy0); ctx.lineTo(gx0 + 70, gy0); ctx.lineTo(gx0 + 10, gy1); ctx.lineTo(gx0 - 10 + 10, gy1); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,240,210,.7)'; ctx.lineWidth = 3; ctx.strokeRect(gx0, gy0, gx1 - gx0, gy1 - gy0);
+  }
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(.033, (now - lastT) / 1000); lastT = now;
+    if (W && H && M.mw) {
+      if (!reduce || phase !== 'ready') physics(dt); else if (balls.some((b) => b.vy)) physics(dt);
+      if (flying) stepFly(now);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.clearRect(0, 0, W, H);
+      drawMachine(now);
+      const r = M.r;
+      for (const b of balls) { if (flying && flying.b === b) continue; const g = clamp((now - b.born) / 300, 0, 1); ball(b, r * g); }
+      drawGlassFront();
+      if (flying) ball(flying.b, r * 1.15);
+      if (!E.length) { ctx.fillStyle = 'rgba(30,6,10,.6)'; ctx.fillRect(M.gx0, M.gy0, M.gx1 - M.gx0, M.gy1 - M.gy0); ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(M.mh * .05)}px Fredoka, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('Add your entries in Settings', (M.gx0 + M.gx1) / 2, (M.gy0 + M.gy1) / 2); }
+    }
+    requestAnimationFrame(frame);
+  }
+  function resize() {
+    const r = $('wrap').getBoundingClientRect(); DPR = Math.min(2, devicePixelRatio || 1);
+    const old = { ...M }; W = Math.max(1, r.width); H = Math.max(1, r.height);
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    layout();
+    if (old.mw) balls.forEach((b) => { b.x = M.gx0 + (b.x - old.gx0) * (M.gx1 - M.gx0) / (old.gx1 - old.gx0); b.y = M.gy0 + (b.y - old.gy0) * (M.gy1 - M.gy0) / (old.gy1 - old.gy0); });
+    syncBalls();
+  }
+  new ResizeObserver(() => resize()).observe($('wrap'));
+
+  /* ---------- input ---------- */
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); drawBall(); });
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden) { if (e.key === 'Escape') closeSheet(); return; }
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (phase === 'reveal') { if (k === ' ' || k === 'Enter' || k === 'Escape') { e.preventDefault(); $('rNext').click(); } return; }
+    if (phase !== 'ready') { if (k === ' ' || k === 'Enter') e.preventDefault(); return; }
+    if (k === ' ' || k === 'Enter') { e.preventDefault(); drawBall(); }
+    else if (k === 'u' || k === 'U') { e.preventDefault(); undo(); }
+  });
+  addEventListener('resize', () => { if (!$('reveal').hidden) { placeBall(bigSize()); fitText(); } });
+
+  /* ---------- confetti ---------- */
+  const fx = document.createElement('canvas'); fx.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30'; fx.setAttribute('aria-hidden', 'true'); document.body.appendChild(fx);
+  const fc = fx.getContext('2d'); let bits = [], raf = 0;
+  function confetti(n) {
+    if (reduce) return; fx.width = innerWidth; fx.height = innerHeight;
+    for (let i = 0; i < n; i++) bits.push({ x: innerWidth / 2 + (Math.random() - .5) * 300, y: innerHeight * .4, vx: (Math.random() - .5) * 18, vy: -Math.random() * 16 - 4, r: Math.random() * 6.28, s: 6 + Math.random() * 7, c: COLORS[(Math.random() * COLORS.length) | 0], t: 0 });
+    if (!raf) raf = requestAnimationFrame(fxTick);
+  }
+  function fxTick() {
+    fc.clearRect(0, 0, fx.width, fx.height);
+    bits.forEach((p) => { p.t++; p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += .2; fc.save(); fc.translate(p.x, p.y); fc.rotate(p.r); fc.fillStyle = p.c; fc.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); fc.restore(); });
+    bits = bits.filter((p) => p.y < fx.height + 20 && p.t < 170);
+    raf = bits.length ? requestAnimationFrame(fxTick) : (fc.clearRect(0, 0, fx.width, fx.height), 0);
+  }
+
+  /* ---------- settings ---------- */
+  function seg(el, opts, isOn, fn) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { fn(v); renderSheet(); }; el.appendChild(b); });
+  }
+  let draft = null;
+  function renderSheet() {
+    seg($('sRep'), [['remove', 'Take it out (no repeats until all are picked)'], ['back', 'Put it back (it can come up again)']], (v) => draft.rep === v, (v) => { draft.rep = v; });
+    seg($('sGrip'), [['gentle', 'Gentle'], ['lively', 'Lively'], ['wild', 'Wild']], (v) => draft.speed === v, (v) => { draft.speed = v; });
+    seg($('sSize'), [['big', 'Big'], ['medium', 'Medium'], ['small', 'Small (for long entries)']], (v) => draft.size === v, (v) => { draft.size = v; });
+    const names = Object.keys(S.lists).sort((a, b) => a.localeCompare(b));
+    $('lsel').innerHTML = names.length ? names.map((n) => `<option value="${esc(n)}">${esc(n)} (${parse(S.lists[n]).length})</option>`).join('') : '<option value="">No saved lists yet</option>';
+    $('lsel').disabled = $('loadBtn').disabled = $('delBtn').disabled = !names.length;
+    check();
+  }
+  function check() {
+    const all = String($('entries').value).split(/\r?\n/).map((s) => s.trim()).filter(Boolean), n = Math.min(all.length, MAX);
+    const dup = n - new Set(all.slice(0, MAX).map((s) => s.toLowerCase())).size;
+    $('eNote').className = 'note' + (all.length > MAX ? ' warn' : '');
+    $('eNote').textContent = !n ? 'Type at least one entry.' : `${n} entr${n === 1 ? 'y' : 'ies'}${dup ? `, ${dup} repeated (that's fine if you want them)` : ''}.${all.length > MAX ? ` Only the first ${MAX} are used.` : ''}`;
+    $('goBtn').disabled = !n;
+    $('err').textContent = '';
+    return n > 0;
+  }
+  $('entries').addEventListener('input', check);
+  $('numBtn').onclick = () => {
+    const a = prompt('Numbers from:', '1'); if (a === null) return; const b = prompt('to:', '100'); if (b === null) return;
+    const x = parseInt(a, 10), y = parseInt(b, 10);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || y < x || y - x + 1 > MAX) { $('err').className = 'note warn'; $('err').textContent = `Use whole numbers, with at most ${MAX} numbers.`; return; }
+    $('entries').value = Array.from({ length: y - x + 1 }, (_, i) => x + i).join('\n'); check();
+  };
+  /* ---------- uploading a list: .txt, .csv/.tsv (first column), .xlsx (first column of the first sheet), .docx (each paragraph) ---------- */
+  async function unzip(buf) {
+    const dv = new DataView(buf), u8 = new Uint8Array(buf), files = {};
+    let e = -1; for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) throw new Error('zip');
+    let p = dv.getUint32(e + 16, true); const n = dv.getUint16(e + 10, true);
+    for (let k = 0; k < n; k++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+      files[name] = { method, csize, off };
+      p += 46 + nl + xl + cl;
+    }
+    return async (name) => {
+      const f = files[name]; if (!f) return null;
+      const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(start, start + f.csize);
+      if (f.method === 0) return new TextDecoder().decode(data);
+      const ds = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new TextDecoder().decode(await new Response(ds).arrayBuffer());
+    };
+  }
+  const xml = (t) => new DOMParser().parseFromString(t, 'application/xml');
+  function csvFirst(text, delim) {
+    const out = []; let cell = '', q = false, col = 0;
+    const push = () => { if (col === 0) out.push(cell); };
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === delim) { push(); cell = ''; col++; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; push(); cell = ''; col = 0; }
+      else cell += c;
+    }
+    push();
+    return out;
+  }
+  async function readList(file) {
+    const name = file.name.toLowerCase();
+    if (/\.xlsx$/.test(name)) {
+      const get = await unzip(await file.arrayBuffer());
+      const ss = await get('xl/sharedStrings.xml'), shared = ss ? [...xml(ss).getElementsByTagName('si')].map((si) => [...si.getElementsByTagName('t')].map((t) => t.textContent).join('')) : [];
+      let sheet = await get('xl/worksheets/sheet1.xml');
+      if (!sheet) throw new Error('sheet');
+      const rows = new Map();
+      [...xml(sheet).getElementsByTagName('c')].forEach((c) => {
+        const ref = c.getAttribute('r') || '', m = ref.match(/^([A-Z]+)(\d+)$/); if (!m) return;
+        const t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0], is = c.getElementsByTagName('is')[0];
+        const txt = t === 's' && v ? shared[+v.textContent] : t === 'inlineStr' && is ? is.textContent : v ? v.textContent : '';
+        const r = +m[2]; if (!rows.has(r) || m[1] < rows.get(r).col) rows.set(r, { col: m[1], txt });
+      });
+      return [...rows.keys()].sort((a, b) => a - b).map((r) => rows.get(r).txt);
+    }
+    if (/\.docx$/.test(name)) {
+      const get = await unzip(await file.arrayBuffer()), doc = await get('word/document.xml');
+      if (!doc) throw new Error('doc');
+      return [...xml(doc).getElementsByTagNameNS('*', 'p')].map((p) => [...p.getElementsByTagNameNS('*', 't')].map((t) => t.textContent).join(''));
+    }
+    if (/\.(xls|doc|pdf|pages|numbers)$/.test(name)) throw new Error('type');
+    const text = (await file.text()).replace(/^﻿/, '');
+    if (/\.csv$/.test(name)) return csvFirst(text, text.split('\n')[0].includes(';') && !text.split('\n')[0].includes(',') ? ';' : ',');
+    if (/\.tsv$/.test(name) || /\t/.test(text.split('\n')[0])) return csvFirst(text, '\t');
+    return text.split(/\r?\n/);
+  }
+  async function useFile(file) {
+    const fn = $('fNote');
+    if (!file) return;
+    if (file.size > 20e6) { fn.className = 'note warn'; fn.textContent = 'That file is too big. Try a smaller list.'; return; }
+    try {
+      const items = (await readList(file)).map((s) => String(s).replace(/\s+/g, ' ').trim()).filter(Boolean);
+      if (!items.length) { fn.className = 'note warn'; fn.textContent = `No entries found in ${file.name}.`; return; }
+      const cur = $('entries').value.trim();
+      const add = cur && !confirm(`Replace the list in the box with the ${items.length} entries from ${file.name}?\n\nOK = replace. Cancel = add them to the end.`);
+      $('entries').value = (add ? cur + '\n' : '') + items.join('\n');
+      check();
+      fn.className = 'note'; fn.textContent = `${add ? 'Added' : 'Loaded'} ${items.length} entr${items.length === 1 ? 'y' : 'ies'} from ${file.name}. Check the list above, and delete a heading line like "Name" if there is one.`;
+    } catch (e) {
+      fn.className = 'note warn';
+      fn.textContent = /type/.test(e.message) ? 'That kind of file can\'t be read here. Save it as .txt, .csv, .xlsx or .docx, or copy the list and paste it into the box.' : `Could not read ${file.name}. Try saving it as a .txt or .csv file, or copy the list and paste it into the box.`;
+    }
+  }
+  $('fileIn').addEventListener('change', (e) => { useFile(e.target.files[0]); e.target.value = ''; });
+  $('entries').addEventListener('dragover', (e) => { if ([...(e.dataTransfer.items || [])].some((i) => i.kind === 'file')) { e.preventDefault(); $('entries').style.borderColor = '#c2266f'; } });
+  $('entries').addEventListener('dragleave', () => { $('entries').style.borderColor = ''; });
+  $('entries').addEventListener('drop', (e) => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; $('entries').style.borderColor = ''; if (f) { e.preventDefault(); useFile(f); } });
+  $('clearBtn').onclick = () => { $('entries').value = ''; check(); $('entries').focus(); };
+  $('saveBtn').onclick = () => {
+    const nm = $('lname').value.trim(), t = $('entries').value.trim();
+    if (!nm) { $('lNote').className = 'note warn'; $('lNote').textContent = 'Type a name for the list first.'; $('lname').focus(); return; }
+    if (!t) { $('lNote').className = 'note warn'; $('lNote').textContent = 'Type some entries first.'; return; }
+    S.lists[nm] = parse(t).join('\n'); save(); renderSheet(); $('lsel').value = nm;
+    $('lNote').className = 'note'; $('lNote').textContent = `Saved “${nm}” on this computer.`;
+  };
+  $('loadBtn').onclick = () => { const nm = $('lsel').value; if (!S.lists[nm]) return; $('entries').value = S.lists[nm]; $('lname').value = nm; check(); $('lNote').className = 'note'; $('lNote').textContent = `Loaded “${nm}”. Click Start to use it.`; };
+  $('delBtn').onclick = () => { const nm = $('lsel').value; if (!S.lists[nm] || !confirm(`Delete the saved list “${nm}”?`)) return; delete S.lists[nm]; save(); renderSheet(); $('lNote').className = 'note'; $('lNote').textContent = `Deleted “${nm}”.`; };
+  function openSheet() {
+    if (phase !== 'ready') return;
+    draft = { rep: S.rep, speed: S.speed, size: S.size };
+    $('entries').value = S.entries; $('lNote').className = 'note'; $('lNote').textContent = 'Saved lists stay on this computer.';
+    $('sheet').hidden = false; renderSheet(); $('entries').focus({ preventScroll: true });
+  }
+  function closeSheet() {
+    if (!check()) return;
+    const newE = parse($('entries').value), changed = newE.join('\n') !== E.join('\n') || draft.rep !== S.rep;
+    S.entries = newE.join('\n'); Object.assign(S, draft); E = newE;
+    if (changed) { fullBag(); S.picked = []; last = -1; balls = []; }
+    save(); $('sheet').hidden = true; phase = 'ready';
+    syncBalls(); renderList(); renderLeft();
+  }
+  $('goBtn').onclick = closeSheet;
+  $('gearBtn').onclick = openSheet;
+
+  window.__pp = { S: () => S, E: () => E, phase: () => phase, balls: () => balls.length };
+  renderLeft(); renderList();
+  requestAnimationFrame(frame);
+  if (!stored || !E.length) openSheet();
+})();
+</script>
+
+</body>
+</html>
