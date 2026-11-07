@@ -64,12 +64,13 @@
   .wordcard .hideph:hover, .wordcard .hideph:focus-visible { opacity: 1; }
   .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
   .ph { background: var(--panel); border-radius: 14px; padding: 8px; display: grid; gap: 6px; align-content: start; border: 2px solid transparent; }
-  .ph .im { height: 120px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; color: #5b6780; font-size: .8rem; font-weight: 700; text-align: center; padding: 4px; }
+  .ph .im { cursor: pointer; height: 120px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; color: #5b6780; font-size: .8rem; font-weight: 700; text-align: center; padding: 4px; }
   .ph .im img { width: 100%; height: 100%; object-fit: contain; }
   .ph.off { border-color: #ff8a8a; }
   .ph.off .im img { opacity: .2; }
   .ph .wd { font-family: var(--word); font-weight: 700; font-size: 1.1rem; }
   .ph .c { font-size: .66rem; opacity: .7; line-height: 1.25; overflow-wrap: anywhere; }
+  .ph .up { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 5px 10px; font-weight: 600; font-size: .85rem; cursor: pointer; }
   .ph button:disabled { opacity: .4; cursor: default; }
   .ph button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 5px 10px; font-weight: 600; font-size: .85rem; cursor: pointer; color: inherit; }
   @media (max-width: 620px) { .row { grid-template-columns: 70px minmax(0, 1fr); } .row .pic { width: 70px; height: 70px; } .row .acts { grid-column: 1 / -1; justify-content: flex-start; } }
@@ -317,7 +318,8 @@ const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", 
   let SHARED = {};
   fetch('guess-photos.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
     if (!j || typeof j !== 'object' || typeof j.photos !== 'object') return;
-    const out = {}; Object.keys(j.photos).forEach((k) => { const x = j.photos[k]; if (okSrc(x)) out[keyOf(k)] = { src: x.src, credit: String(x.credit || '').slice(0, 120), page: /^https:\/\//.test(x.page || '') ? x.page : '' }; });
+    const okShared = (x) => x && typeof x.src === 'string' && x.src.length < 600000 && (/^https:\/\//.test(x.src) || /^data:image\/(jpeg|png|webp|gif);base64,/.test(x.src));
+    const out = {}; Object.keys(j.photos).forEach((k) => { const x = j.photos[k]; if (okShared(x)) out[keyOf(k)] = { src: x.src, credit: String(x.credit || '').slice(0, 120), page: /^https:\/\//.test(x.page || '') ? x.page : '', mine: !!x.mine }; });
     SHARED = out; photoChanged();
   }).catch(() => {});
   const approved = (k) => (set.hidden_ph[k] ? null : set.photo_ok[k] || SHARED[k] || null);
@@ -331,6 +333,7 @@ const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", 
   }
   function creditFor(w) {
     const ph = set.pics ? photoFor(w) : null; if (!ph) return '';
+    if (ph.mine) return '';
     return `<button class="hideph" type="button" data-hide="${esc(keyOf(w))}" title="Reject this photo so it never shows again">Hide photo</button><div class="cr">Photo: ${esc(ph.credit || 'Wikimedia Commons')}${ph.page ? ` · <a href="${esc(ph.page)}" target="_blank" rel="noopener">source</a>` : ''}</div>`;
   }
   function cardHTML(w, extra, lv) {
@@ -361,40 +364,95 @@ const PHOTO = {"peacock": "Indian peafowl", "sloth": "Sloth", "otter": "Otter", 
     n.textContent = !set.builtin ? 'Words without your own picture show the word only.'
       : `Only photos a teacher has approved are shown to students (${nOk} approved so far). Click Review photos to look at each one and approve or reject it. Photos need the internet and only load on the website version of the hub, not inside Claude.`;
   }
-  function previewWords() { return (set.src === 'own' ? parseOwn() : set.cats.flatMap((c) => catWords(c))).filter((w) => photoTitle(keyOf(w))); }
-  function statusOf(k) { return set.hidden_ph[k] ? 'no' : set.photo_ok[k] || SHARED[k] ? 'ok' : 'new'; }
+  function previewWords() { return (set.src === 'own' ? parseOwn() : set.cats.flatMap((c) => catWords(c))).filter((w) => { const k = keyOf(w); return photoTitle(k) || SHARED[k] || (set.own_pics && set.own_pics[k]); }); }
+  function statusOf(k) { return set.own_pics && set.own_pics[k] ? 'mine' : set.hidden_ph[k] ? 'no' : set.photo_ok[k] || SHARED[k] ? 'ok' : 'new'; }
+  let phFilter = 'all';
+  function phNote(t, warn) { const n = $('phMsg'); if (n) { n.textContent = t; n.style.color = warn ? '#ff8a8a' : ''; } }
+  function putPic(k, src) {
+    set.own_pics[k] = src; delete set.hidden_ph[k];
+    let msg = `New picture saved for “${k}”.`, bad = false;
+    try { localStorage.setItem(STORE, JSON.stringify(set)); }
+    catch (e) { if (/quota/i.test(e && (e.name + e.message))) { msg = 'This computer is out of room for more pictures. Remove some of your pictures, or use web links instead.'; bad = true; } }
+    renderPh(); photoNote(); phNote(msg, bad); if ((phase === 'play' || phase === 'clue') && word && keyOf(word) === k) repaintCard();
+  }
+  function shrinkTo(blob, k) {
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => { const f = Math.min(1, 320 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(im.width * f)); c.height = Math.max(1, Math.round(im.height * f)); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url); putPic(k, c.toDataURL('image/jpeg', .82)); };
+    im.onerror = () => { URL.revokeObjectURL(url); phNote('That file is not a picture the browser can open. Try a JPG or PNG.', true); };
+    im.src = url;
+  }
+  function linkTo(link, k) {
+    link = String(link || '').trim();
+    if (!/^https:\/\//i.test(link)) { phNote('Paste a picture\'s web address that starts with https://', true); return; }
+    const im = new Image(); im.referrerPolicy = 'no-referrer';
+    im.onload = () => putPic(k, link);
+    im.onerror = () => phNote('That picture could not be loaded here. Instead, right-click the picture on the web page, choose Copy image, click the photo box here, and press Ctrl+V.', true);
+    im.src = link;
+  }
   function renderPh() {
     const ws = previewWords(), g = $('phGrid');
-    const counts = { ok: 0, no: 0, new: 0 }; ws.forEach((w) => counts[statusOf(keyOf(w))]++);
+    const counts = { ok: 0, no: 0, new: 0, mine: 0 }; ws.forEach((w) => counts[statusOf(keyOf(w))]++);
     $('phH').textContent = 'Review photos';
     $('phIntro').innerHTML = photoState === 'blocked' ? 'Photos can\'t load right now. They need the internet, and they are blocked inside Claude. Open the website version of the hub to review them.'
       : !ws.length ? 'None of these words has an automatic photo. Add your own pictures instead.'
-      : `Students only see photos you approve. Look at each photo, then click <b>Approve</b> or <b>Reject</b>. <b>${counts.ok}</b> approved, <b>${counts.no}</b> rejected, <b>${counts.new}</b> not reviewed yet.`
+      : `Students only see photos you approve or pictures you add. <b>${counts.ok}</b> approved, <b>${counts.mine}</b> replaced with your picture, <b>${counts.no}</b> rejected, <b>${counts.new}</b> not reviewed yet.`
+        + `<span style="display:block;margin-top:6px"><b>To replace a photo:</b> find a better picture online (one item, plain background), right-click it and choose <b>Copy image</b>, then click that word's photo box here and press <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>⌘</kbd>+<kbd>V</kbd> on a Mac). You can also drag a picture onto the box, click <b>Upload</b>, or paste a <b>Web link</b>.</span>`
+        + `<span class="seg" id="phF" style="margin-top:8px"></span>`
         + `<span style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" class="tb" id="phAll">Approve every photo I can see…</button><button type="button" class="tb" id="phSave">Download approved list for the website</button></span>`
-        + `<span style="display:block;margin-top:6px;font-size:.88rem">To share your approvals with every teacher, download the list and upload <b>guess-photos.json</b> to your GitHub repo next to guess.html.</span>`;
-    g.innerHTML = ws.map((w) => {
-      const k = keyOf(w), st = statusOf(k), cand = set.photo_ok[k] || SHARED[k] || PH[k], mine = set.own_pics && set.own_pics[k];
-      const im = mine ? '<span>Uses your own picture</span>' : cand ? `<img src="${esc(cand.src)}" alt="Photo for ${esc(w)}" loading="lazy" referrerpolicy="no-referrer">` : PH[k] === null ? '<span>No photo found</span>' : photoState === 'blocked' ? '<span>Can\'t load here</span>' : '<span>Loading…</span>';
-      const tag = mine ? '' : st === 'ok' ? '<span style="color:#148043;font-weight:700">✓ Approved</span>' : st === 'no' ? '<span style="color:#b3261e;font-weight:700">✕ Rejected</span>' : '<span style="font-weight:700;opacity:.75">Not reviewed</span>';
-      return `<div class="ph${st === 'no' ? ' off' : ''}"><div class="im">${im}</div><div class="wd">${esc(w)}</div>${tag}${cand && !mine ? `<div class="c">${esc(cand.credit || 'Wikimedia Commons')}</div><button type="button" data-ok="${esc(k)}"${st === 'ok' ? ' disabled' : ''}>Approve</button><button type="button" data-no="${esc(k)}"${st === 'no' ? ' disabled' : ''}>Reject</button>` : ''}</div>`;
-    }).join('');
+        + `<span style="display:block;margin-top:6px;font-size:.88rem">To share your approvals and pictures with every teacher, download the list and upload <b>guess-photos.json</b> to your GitHub repo next to guess.html (replace the old one).</span>`
+        + `<span id="phMsg" style="display:block;margin-top:6px;font-weight:700" aria-live="polite"></span>`;
+    const F = $('phF');
+    if (F) [['all', `All (${ws.length})`], ['new', `Not reviewed (${counts.new})`], ['ok', `Approved (${counts.ok})`], ['mine', `Your pictures (${counts.mine})`], ['no', `Rejected (${counts.no})`]].forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(phFilter === v)); b.onclick = () => { phFilter = v; renderPh(); }; F.appendChild(b); });
+    g.innerHTML = ws.filter((w) => phFilter === 'all' || statusOf(keyOf(w)) === phFilter).map((w) => {
+      const k = keyOf(w), st = statusOf(k), mine = set.own_pics && set.own_pics[k], cand = mine ? null : set.photo_ok[k] || SHARED[k] || PH[k];
+      const src = mine || (cand && cand.src);
+      const im = src ? `<img src="${esc(src)}" alt="Picture for ${esc(w)}" loading="lazy" referrerpolicy="no-referrer">` : PH[k] === null ? '<span>No photo found. Paste or drop one here.</span>' : photoState === 'blocked' ? '<span>Can\'t load here</span>' : '<span>Loading…</span>';
+      const tag = st === 'mine' ? '<span style="color:#7aa7ff;font-weight:700">★ Your picture</span>' : st === 'ok' ? '<span style="color:#22b35e;font-weight:700">✓ Approved</span>' : st === 'no' ? '<span style="color:#ff8a8a;font-weight:700">✕ Rejected</span>' : '<span style="font-weight:700;opacity:.75">Not reviewed</span>';
+      const ar = st === 'mine' ? '' : cand ? `<button type="button" data-ok="${esc(k)}"${st === 'ok' ? ' disabled' : ''}>Approve</button><button type="button" data-no="${esc(k)}"${st === 'no' ? ' disabled' : ''}>Reject</button>` : '';
+      return `<div class="ph${st === 'no' ? ' off' : ''}" data-w="${esc(k)}"><div class="im" tabindex="0" role="button" aria-label="Photo box for ${esc(w)}. Press Ctrl+V to paste a copied picture.">${im}</div><div class="wd">${esc(w)}</div>${tag}${cand && st !== 'mine' ? `<div class="c">${esc(cand.credit || 'Wikimedia Commons')}</div>` : ''}${ar}<span style="display:flex;gap:4px;flex-wrap:wrap"><label class="up" style="flex:1;text-align:center">Upload<input type="file" accept="image/*" hidden data-up="${esc(k)}"></label><button type="button" data-link="${esc(k)}" style="flex:1">Web link</button></span>${st === 'mine' ? `<button type="button" data-revert="${esc(k)}">Remove my picture</button>` : ''}</div>`;
+    }).join('') || '<p class="note">Nothing here.</p>';
     const all = $('phAll'); if (all) all.onclick = () => {
-      const list = ws.map(keyOf).filter((k) => statusOf(k) === 'new' && PH[k] && !(set.own_pics && set.own_pics[k]));
+      const list = ws.map(keyOf).filter((k) => statusOf(k) === 'new' && PH[k]);
       if (!list.length) return;
-      if (!confirm(`Approve ${list.length} photo${list.length === 1 ? '' : 's'} that you haven't reviewed yet?\n\nOnly do this after scrolling through and looking at every photo. Reject any you don't want first.`)) return;
+      if (!confirm(`Approve ${list.length} photo${list.length === 1 ? '' : 's'} that you haven't reviewed yet?\n\nOnly do this after scrolling through and looking at every photo. Reject or replace any you don't want first.`)) return;
       list.forEach((k) => { const x = PH[k]; set.photo_ok[k] = { src: x.src, credit: x.credit, page: x.page }; });
       save(); renderPh(); photoNote();
     };
     const sv = $('phSave'); if (sv) sv.onclick = () => {
-      const photos = {}; Object.keys(SHARED).forEach((k) => { if (!set.hidden_ph[k]) photos[k] = SHARED[k]; }); Object.keys(set.photo_ok).forEach((k) => { if (!set.hidden_ph[k]) photos[k] = set.photo_ok[k]; });
-      const blob = new Blob([JSON.stringify({ about: 'Teacher-approved photos for Guess the Word', saved: new Date().toISOString().slice(0, 10), photos }, null, 1)], { type: 'application/json' });
+      const photos = {};
+      Object.keys(SHARED).forEach((k) => { if (!set.hidden_ph[k]) photos[k] = SHARED[k]; });
+      Object.keys(set.photo_ok).forEach((k) => { if (!set.hidden_ph[k]) photos[k] = set.photo_ok[k]; });
+      Object.keys(set.own_pics || {}).forEach((k) => { photos[k] = { src: set.own_pics[k], credit: 'Teacher picture', mine: true }; });
+      const blob = new Blob([JSON.stringify({ about: 'Teacher-approved photos for Guess the Word', saved: new Date().toISOString().slice(0, 10), photos })], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'guess-photos.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+      phNote(`Downloaded guess-photos.json with ${Object.keys(photos).length} pictures. Upload it to your GitHub repo next to guess.html.`);
     };
   }
+  const tileKey = (e) => { const t = e.target.closest && e.target.closest('.ph[data-w]'); return t ? t.dataset.w : null; };
   $('phGrid').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
+    const b = e.target.closest('button');
+    if (!b) { const im = e.target.closest('.ph .im'); if (im) { im.focus(); phNote(`Now press Ctrl+V (or ⌘+V) to paste a picture you copied for “${tileKey(e)}”, or drag one onto the box.`); } return; }
     if (b.dataset.ok) { const k = b.dataset.ok, x = PH[k] || set.photo_ok[k] || SHARED[k]; if (!x) return; set.photo_ok[k] = { src: x.src, credit: x.credit, page: x.page }; delete set.hidden_ph[k]; save(); renderPh(); photoNote(); }
     if (b.dataset.no) { const k = b.dataset.no; set.hidden_ph[k] = true; delete set.photo_ok[k]; save(); renderPh(); photoNote(); }
+    if (b.dataset.link) { const u = prompt(`Paste the web address of a picture for “${b.dataset.link}”:`); if (u) linkTo(u, b.dataset.link); }
+    if (b.dataset.revert) { delete set.own_pics[b.dataset.revert]; save(); renderPh(); photoNote(); }
+  });
+  $('phGrid').addEventListener('change', (e) => { const inp = e.target.closest('input[data-up]'); if (!inp) return; const f = inp.files[0]; if (f) shrinkTo(f, inp.dataset.up); inp.value = ''; });
+  $('phGrid').addEventListener('paste', (e) => {
+    const k = tileKey(e); if (!k) return;
+    const it = [...((e.clipboardData && e.clipboardData.items) || [])].find((x) => x.type.startsWith('image/'));
+    if (it) { e.preventDefault(); shrinkTo(it.getAsFile(), k); return; }
+    const t = e.clipboardData && e.clipboardData.getData('text'); if (t && /^https:\/\//i.test(t.trim())) { e.preventDefault(); linkTo(t, k); }
+  });
+  $('phGrid').addEventListener('dragover', (e) => { const t = e.target.closest('.ph[data-w]'); if (t) { e.preventDefault(); t.style.borderColor = '#7aa7ff'; } });
+  $('phGrid').addEventListener('dragleave', (e) => { const t = e.target.closest('.ph[data-w]'); if (t) t.style.borderColor = ''; });
+  $('phGrid').addEventListener('drop', (e) => {
+    const t = e.target.closest('.ph[data-w]'); if (!t) return; e.preventDefault(); t.style.borderColor = '';
+    const k = t.dataset.w, f = [...(e.dataTransfer.files || [])].find((x) => x.type.startsWith('image/'));
+    if (f) { shrinkTo(f, k); return; }
+    const html = e.dataTransfer.getData('text/html'), m = html && html.match(/<img[^>]+src="([^"]+)"/i);
+    const link = (m && m[1]) || e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    if (link) linkTo(link.split('\n')[0], k);
   });
   $('prevBtn').onclick = () => { renderPh(); $('phEd').hidden = false; $('phDone').focus(); loadPhotos(previewWords()); };
   $('phDone').onclick = () => { $('phEd').hidden = true; };
