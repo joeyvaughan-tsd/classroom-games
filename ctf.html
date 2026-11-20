@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Capture the Flag</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: top bar, the flag field (where uncaptured flags wait), then one zone per team.
+     The teacher drags a flag (or taps a flag, then a team) to move it. "Count the points" reveals the totals. */
+  :root {
+    --bg: #12301f; --grass: #1f5c36; --grass-2: #2a7445; --panel: rgba(8,24,15,.55); --ink: #f6fff8; --ink-2: #bfe3c9; --line: rgba(255,255,255,.18);
+    --good: #22b35e; --good-deep: #148043; --yellow: #ffd23f;
+    --display: "Fredoka", "Andika", system-ui, sans-serif; --num: "Andika", "Fredoka", system-ui, sans-serif;
+    --fs: 56px;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: repeating-linear-gradient(90deg, var(--grass) 0 80px, var(--grass-2) 80px 160px); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--yellow); outline-offset: 3px; }
+  kbd { font-family: var(--num); font-size: .72em; border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; opacity: .75; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 10px 14px 10px; }
+  header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .title { font-weight: 700; font-size: 1.45rem; white-space: nowrap; text-shadow: 0 2px 0 rgba(0,0,0,.3); }
+  .title span { color: var(--yellow); }
+  .grow { flex: 1; }
+  .tb { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 7px 13px; font-weight: 600; font-size: .95rem; white-space: nowrap; }
+  .tb:hover { background: rgba(8,24,15,.75); }
+  .tb.hot { background: var(--yellow); border-color: var(--yellow); color: #3b2a00; }
+  .tb:disabled { opacity: .45; cursor: default; }
+
+  .zone { min-width: 0; background: var(--panel); border: 3px solid var(--line); border-radius: 18px; display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; position: relative; transition: border-color .15s, background .15s; }
+  .zone.over { border-color: var(--yellow); background: rgba(255,210,63,.16); }
+  .zone.target { cursor: pointer; }
+  .zone.target:hover { border-color: rgba(255,210,63,.7); }
+  .zone h2 { margin: 0; display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: clamp(1rem, 2.4vh, 1.35rem); border-radius: 15px 15px 0 0; }
+  .zone h2 .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zone h2 .key { font-family: var(--num); font-size: .75em; border: 1px solid currentColor; border-radius: 6px; padding: 0 6px; opacity: .8; }
+  .zone h2 .cnt { font-family: var(--num); font-weight: 700; font-size: .85em; opacity: .9; white-space: nowrap; }
+  .zone h2 .pts { font-family: var(--num); font-weight: 700; background: rgba(0,0,0,.25); border-radius: 999px; padding: 0 10px; white-space: nowrap; }
+  .zone h2 .pts.bump { animation: bump .6s cubic-bezier(.3,1.8,.5,1); }
+  @keyframes bump { 40% { transform: scale(1.4); } }
+  .flags { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; padding: 8px; overflow: auto; min-height: calc(var(--fs) + 16px); }
+  .field { min-height: 0; }
+  .field h2 { background: rgba(255,255,255,.08); }
+  .field .flags { justify-content: center; }
+  .teams { display: grid; gap: 10px; min-height: 0; overflow: auto; }
+  .team h2 { background: var(--tc); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .team { border-color: color-mix(in srgb, var(--tc) 70%, transparent); }
+  .team.win { box-shadow: 0 0 0 5px var(--yellow), 0 0 40px rgba(255,210,63,.6); }
+  .team .crown { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); font-size: 2.2rem; animation: drop .6s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes drop { from { transform: translate(-50%, -30px); opacity: 0; } }
+
+  .flag { position: relative; width: var(--fs); height: var(--fs); border: 0; background: none; padding: 0; touch-action: none; cursor: grab; flex: none; border-radius: 10px; perspective: 400px; }
+  .flag svg { width: 100%; height: 100%; display: block; overflow: visible; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+  .flag .cloth { transform-origin: 30% 40%; animation: wave 2.4s ease-in-out infinite; animation-delay: var(--dl, 0s); }
+  @keyframes wave { 50% { transform: skewY(4deg) scaleX(.96); } }
+  .flag.sel { background: rgba(255,210,63,.35); box-shadow: 0 0 0 3px var(--yellow); }
+  .flag.dragging { opacity: .25; }
+  .flag .val { position: absolute; left: 42%; top: 22%; transform: translate(-50%, -50%); font-family: var(--num); font-weight: 700; font-size: calc(var(--fs) * .27); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; white-space: nowrap; }
+  .flag .val.q { opacity: .85; }
+  .flag.flip .val { animation: flipv .5s ease-out; }
+  @keyframes flipv { 0% { transform: translate(-50%, -50%) rotateY(90deg); } 100% { transform: translate(-50%, -50%) rotateY(0); } }
+  .ghost { position: fixed; pointer-events: none; z-index: 40; width: var(--fs); height: var(--fs); transform: translate(-50%, -60%) scale(1.25); }
+  .ghost svg { width: 100%; height: 100%; filter: drop-shadow(0 8px 10px rgba(0,0,0,.45)); }
+
+  .hint { text-align: center; color: var(--ink-2); font-weight: 600; font-size: clamp(.85rem, 2vh, 1.1rem); min-height: 1.3em; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+  .result { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 30; background: #fffdf5; color: #1d3b26; border-radius: 26px; padding: 22px 30px; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.5); border: 6px solid var(--yellow); min-width: min(520px, 92vw); max-width: 94vw; max-height: 90vh; overflow: auto; animation: pop .5s cubic-bezier(.3,1.5,.5,1); }
+  @keyframes pop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } }
+  .result h2 { margin: 0 0 6px; font-size: clamp(1.6rem, 5vh, 2.6rem); }
+  .result table { margin: 10px auto; border-collapse: collapse; font-family: var(--num); font-size: clamp(1rem, 2.6vh, 1.3rem); }
+  .result td, .result th { padding: 4px 10px; text-align: center; }
+  .result th { font-family: var(--display); }
+  .result td.n { text-align: left; font-weight: 700; }
+  .result tr.w td { background: #fff3c4; }
+  .result .dot { display: inline-block; width: .9em; height: .9em; border-radius: 3px; vertical-align: -.1em; }
+  .result .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+  .big { border: 0; border-radius: 16px; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 10px 26px; box-shadow: 0 6px 0 var(--good-deep); }
+  .big.alt { background: #eef3ef; color: #1d3b26; box-shadow: 0 6px 0 #c5d3c8; }
+
+  /* settings */
+  .sheet { position: fixed; inset: 0; z-index: 50; background: rgba(4,14,8,.7); display: grid; place-items: center; padding: 12px; }
+  .panel { background: #fffdf8; color: #24314a; border-radius: 22px; width: min(900px, 100%); max-height: 100%; overflow: auto; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.4); color-scheme: light; }
+  .panel h2 { margin: 0 0 4px; font-size: 1.6rem; }
+  .panel h3 { margin: 16px 0 6px; font-size: 1.12rem; color: #1f7a45; border-top: 2px solid #efe6d5; padding-top: 12px; }
+  .panel .lbl { display: block; font-weight: 600; margin: 10px 0 5px; color: #5b6780; font-size: .95rem; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { border: 2px solid #e2d8c4; background: #fff; color: #24314a; border-radius: 12px; padding: 6px 12px; font-weight: 600; font-size: .95rem; display: inline-flex; align-items: center; gap: 6px; }
+  .seg button[aria-pressed="true"] { background: #1f7a45; border-color: #1f7a45; color: #fff; }
+  .seg .sw { width: 18px; height: 18px; border-radius: 5px; border: 2px solid rgba(0,0,0,.15); }
+  .panel textarea { width: 100%; min-height: 96px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 8px 10px; font-family: var(--num); font-size: 1.05rem; background: #fff; color: #24314a; resize: vertical; }
+  .vals { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .vals label { display: flex; align-items: center; gap: 8px; font-weight: 600; background: #f5f1e8; border-radius: 12px; padding: 6px 10px; }
+  .vals input { width: 70px; border: 2px solid #e2d8c4; border-radius: 10px; padding: 4px 6px; font-family: var(--num); font-weight: 700; font-size: 1.1rem; text-align: center; }
+  .note { margin: 6px 0 0; color: #5b6780; font-size: .9rem; line-height: 1.35; }
+  .note.warn { color: #b3261e; font-weight: 600; }
+  .go { display: block; margin: 18px auto 0; border: 0; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 12px 40px; border-radius: 16px; box-shadow: 0 6px 0 var(--good-deep); }
+  .go:disabled { background: #c8ced9; box-shadow: 0 6px 0 #a9b0bd; cursor: default; }
+
+  @media (max-width: 700px) { .title { display: none; } .tb { padding: 6px 9px; font-size: .85rem; } .team h2 .key, .team h2 .cnt { display: none; } .zone h2 { padding: 5px 8px; font-size: .95rem; } }
+  @media (prefers-reduced-motion: reduce) { .flag .cloth, .flag.flip .val, .zone h2 .pts.bump, .result, .team .crown { animation: none !important; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="title">Capture the <span>Flag</span></div>
+    <div class="grow"></div>
+    <button class="tb" id="undoBtn" type="button">Undo <kbd>U</kbd></button>
+    <button class="tb hot" id="countBtn" type="button">Count the points</button>
+    <button class="tb" id="fullBtn" type="button">Full screen</button>
+    <button class="tb" id="gearBtn" type="button">Settings</button>
+  </header>
+  <section class="zone field" id="field" data-z="-1" aria-label="Flag field: flags nobody has captured">
+    <h2><span class="nm">⛳ Flag field</span><span class="cnt" id="fieldCnt"></span><span class="key">0</span></h2>
+    <div class="flags" id="fieldFlags"></div>
+  </section>
+  <div class="teams" id="teams"></div>
+  <div class="hint" id="hint"></div>
+</div>
+<div class="result" id="result" hidden role="dialog" aria-modal="true" aria-labelledby="resH"></div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Capture the Flag settings</h2>
+    <p class="note">Set up the teams and flags. During the game, drag a flag to the team that captured it, or tap a flag and then tap a team.</p>
+
+    <h3>Teams</h3>
+    <span class="lbl" id="lNT">Number of teams</span><div class="seg" id="sNT" role="group" aria-labelledby="lNT"></div>
+    <span class="lbl" id="lTN">Team names (one per line)</span>
+    <textarea id="tnames" aria-labelledby="lTN" spellcheck="false"></textarea>
+
+    <h3>Flags</h3>
+    <span class="lbl" id="lNC">Number of flag colors</span><div class="seg" id="sNC" role="group" aria-labelledby="lNC"></div>
+    <span class="lbl" id="lPer">Flags of each color</span><div class="seg" id="sPer" role="group" aria-labelledby="lPer"></div>
+    <span class="lbl" id="lStart">At the start</span><div class="seg" id="sStart" role="group" aria-labelledby="lStart"></div>
+
+    <h3>Points</h3>
+    <span class="lbl" id="lMode">How flags are scored</span><div class="seg" id="sMode" role="group" aria-labelledby="lMode"></div>
+    <div id="fixedOpt">
+      <span class="lbl">Points for each color</span>
+      <div class="vals" id="vals"></div>
+      <span class="lbl" id="lShow">Show the team scores during the game</span><div class="seg" id="sShow" role="group" aria-labelledby="lShow"></div>
+    </div>
+    <div id="randOpt">
+      <span class="lbl" id="lRange">Hidden values (each flag gets one at random; revealed when you count the points)</span><div class="seg" id="sRange" role="group" aria-labelledby="lRange"></div>
+    </div>
+
+    <p class="note" id="err"></p>
+    <button class="go" id="goBtn" type="button">Start a new game</button>
+    <p class="note" style="text-align:center" id="keepNote"></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const STORE = 'capture-flag-v1';
+  const FLAGC = [['red', 'Red', '#e63946'], ['blue', 'Blue', '#2f80ed'], ['green', 'Green', '#27ae60'], ['purple', 'Purple', '#8e44ad'], ['orange', 'Orange', '#f2862e'], ['yellow', 'Yellow', '#f2c230'], ['pink', 'Pink', '#ff5fa2'], ['white', 'White', '#f4f4f4']];
+  const TEAMC = ['#c62828', '#1d4ed8', '#15803d', '#7e22ce', '#c2410c', '#0e7490'];
+  const RANGES = { r5: { label: '1 to 5', vals: [1, 2, 3, 4, 5] }, r10: { label: '1 to 10', vals: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }, r25: { label: '5, 10, 15, 20, 25', vals: [5, 10, 15, 20, 25] }, rbig: { label: '10, 25, 50, 100', vals: [10, 25, 50, 100] }, r100: { label: '10 to 100 (by tens)', vals: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] } };
+  const DEF = { nt: 2, names: 'Red Team\nBlue Team\nGreen Team\nPurple Team\nOrange Team\nTeal Team', nc: 4, per: 3, start: 'field', mode: 'fixed', vals: { red: 5, blue: 10, green: 15, purple: 20, orange: 25, yellow: 30, pink: 35, white: 40 }, show: true, range: 'r10' };
+  let S = JSON.parse(JSON.stringify(DEF)), G = null, stored = false;
+  try { const raw = localStorage.getItem(STORE); if (raw) { const j = JSON.parse(raw); if (j.S) Object.assign(S, j.S); if (j.G && Array.isArray(j.G.flags)) G = j.G; stored = true; } } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify({ S, G })); } catch (e) {} };
+  let hist = [], sel = null, revealed = false;
+
+  /* ---------- the game: every flag has a color, a home zone (-1 = field, 0.. = team), and a value ---------- */
+  function newGame() {
+    const names = S.names.split('\n').map((s) => s.trim()).filter(Boolean);
+    const teams = Array.from({ length: S.nt }, (_, i) => names[i] || `Team ${i + 1}`);
+    const colors = FLAGC.slice(0, S.nc).map((c) => c[0]);
+    const flags = []; let id = 0;
+    colors.forEach((c) => { for (let k = 0; k < S.per; k++) flags.push({ id: id++, c, z: -1, v: S.mode === 'fixed' ? +S.vals[c] || 0 : pick(RANGES[S.range].vals) }); });
+    if (S.start === 'split') { const sh = flags.slice().sort(() => Math.random() - .5); sh.forEach((f, i) => { f.z = i % S.nt; }); }
+    G = { teams, flags, mode: S.mode, show: S.show };
+    hist = []; sel = null; revealed = false; save();
+  }
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const colorOf = (c) => (FLAGC.find((x) => x[0] === c) || FLAGC[0]);
+  const scoreOf = (t) => G.flags.filter((f) => f.z === t).reduce((s, f) => s + f.v, 0);
+
+  /* ---------- drawing ---------- */
+  function flagSVG(hex) {
+    const dark = hex === '#f4f4f4' ? '#9aa1b0' : 'rgba(0,0,0,.25)';
+    return `<svg viewBox="0 0 60 60" aria-hidden="true"><rect x="10" y="4" width="4" height="54" rx="2" fill="#d9c7a0" stroke="#8b6f3e" stroke-width="1"/><circle cx="12" cy="4.5" r="3.4" fill="#ffd23f" stroke="#b08900" stroke-width="1"/><g class="cloth"><path d="M14 7 C26 3 34 12 50 7 L50 33 C34 38 26 29 14 33 Z" fill="${hex}" stroke="${dark}" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 7 C26 3 34 12 50 7 L50 12 C34 17 26 8 14 12 Z" fill="rgba(255,255,255,.25)"/></g></svg>`;
+  }
+  function flagHTML(f, i) {
+    const [, name, hex] = colorOf(f.c);
+    const showV = G.mode === 'fixed' ? G.show || revealed : revealed;
+    const v = showV ? `<span class="val">${f.v}</span>` : G.mode === 'random' ? '<span class="val q">?</span>' : '';
+    return `<button type="button" class="flag${sel === f.id ? ' sel' : ''}" data-id="${f.id}" style="--dl:${((i * 0.37) % 2.4).toFixed(2)}s" aria-label="${name} flag${showV ? `, ${f.v} points` : ''}" aria-pressed="${sel === f.id}">${flagSVG(hex)}${v}</button>`;
+  }
+  function counts(z) {
+    const by = {}; G.flags.forEach((f) => { if (f.z === z) by[f.c] = (by[f.c] || 0) + 1; });
+    return by;
+  }
+  function render(bumpT) {
+    if (!G) return;
+    const first = {}; document.querySelectorAll('.flag[data-id]').forEach((el) => { first[el.dataset.id] = el.getBoundingClientRect(); });
+    const nT = G.teams.length;
+    const tz = $('teams');
+    const cols = innerWidth < 640 ? Math.min(nT, 2) : nT <= 3 ? nT : Math.ceil(nT / 2);
+    tz.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    tz.innerHTML = G.teams.map((t, i) => {
+      const n = G.flags.filter((f) => f.z === i).length;
+      const showPts = (G.mode === 'fixed' && G.show) || revealed;
+      return `<section class="zone team${sel != null ? ' target' : ''}" data-z="${i}" style="--tc:${TEAMC[i]}" aria-label="${esc(t)}"><h2><span class="key">${i + 1}</span><span class="nm">${esc(t)}</span><span class="cnt">⚑ ${n}</span>${showPts ? `<span class="pts${bumpT === i ? ' bump' : ''}">${scoreOf(i)} pts</span>` : ''}</h2><div class="flags">${G.flags.map((f, k) => (f.z === i ? flagHTML(f, k) : '')).join('')}</div></section>`;
+    }).join('');
+    $('field').classList.toggle('target', sel != null);
+    const fl = G.flags.filter((f) => f.z === -1);
+    $('fieldFlags').innerHTML = fl.length ? G.flags.map((f, k) => (f.z === -1 ? flagHTML(f, k) : '')).join('') : '<span style="color:var(--ink-2);font-weight:600;padding:6px">All flags have been captured!</span>';
+    $('fieldCnt').textContent = `⚑ ${fl.length}`;
+    // flag size: shrink when there are lots of flags
+    const total = G.flags.length, h = innerHeight, w = innerWidth;
+    const fs = Math.max(26, Math.min(70, Math.sqrt((w * h * .45) / Math.max(1, total)) * .55));
+    document.documentElement.style.setProperty('--fs', fs + 'px');
+    const rows = Math.max(1, Math.ceil(fl.length / Math.max(1, Math.floor((w - 60) / (fs + 4)))));
+    $('field').style.maxHeight = Math.min(h * .34, rows * (fs + 4) + 70) + 'px';
+    $('undoBtn').disabled = !hist.length;
+    $('countBtn').textContent = revealed ? 'Hide the points' : 'Count the points';
+    $('hint').innerHTML = sel != null ? 'Now tap the team that captured it (or press <kbd>1</kbd>–<kbd>' + nT + '</kbd>, or <kbd>0</kbd> for the field).' : 'Drag a flag to the team that captured it, or tap a flag and then tap a team.';
+    // slide flags from where they were (FLIP)
+    if (!reduce) document.querySelectorAll('.flag[data-id]').forEach((el) => {
+      const a = first[el.dataset.id]; if (!a) return; const b = el.getBoundingClientRect();
+      const dx = a.left - b.left, dy = a.top - b.top; if (!dx && !dy) return;
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.3,1.2,.5,1)' });
+    });
+  }
+
+  /* ---------- moving flags ---------- */
+  function move(id, z) {
+    const f = G.flags.find((x) => x.id === id); if (!f || f.z === z) { sel = null; render(); return; }
+    hist.push({ id, from: f.z }); if (hist.length > 300) hist.shift();
+    f.z = z; sel = null; save(); render(z >= 0 ? z : undefined);
+    if (z >= 0) burst(z);
+  }
+  function undo() { const h = hist.pop(); if (!h) return; const f = G.flags.find((x) => x.id === h.id); if (f) f.z = h.from; sel = null; save(); render(); }
+  $('undoBtn').onclick = undo;
+
+  let drag = null;
+  document.addEventListener('pointerdown', (e) => {
+    const fe = e.target.closest('.flag[data-id]'); if (!fe || !$('sheet').hidden || !$('result').hidden) return;
+    e.preventDefault();
+    const id = +fe.dataset.id, f = G.flags.find((x) => x.id === id);
+    drag = { id, x0: e.clientX, y0: e.clientY, moved: false, el: fe, ghost: null, pid: e.pointerId };
+    try { fe.setPointerCapture(e.pointerId); } catch (x) {}
+    void f;
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) {
+      drag.moved = true; drag.el.classList.add('dragging');
+      const g = document.createElement('div'); g.className = 'ghost'; g.innerHTML = flagSVG(colorOf(G.flags.find((x) => x.id === drag.id).c)[2]); document.body.appendChild(g); drag.ghost = g;
+    }
+    if (drag.moved) {
+      drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
+      const z = zoneAt(e.clientX, e.clientY);
+      document.querySelectorAll('.zone').forEach((el) => el.classList.toggle('over', el === z));
+    }
+  });
+  function endDrag(e) {
+    if (!drag || (e && e.pointerId !== drag.pid)) return;
+    const d = drag; drag = null;
+    document.querySelectorAll('.zone.over').forEach((el) => el.classList.remove('over'));
+    if (d.ghost) d.ghost.remove();
+    d.el.classList.remove('dragging');
+    if (d.moved && e) { const z = zoneAt(e.clientX, e.clientY); if (z) move(d.id, +z.dataset.z); else render(); }
+    else if (!d.moved) { sel = sel === d.id ? null : d.id; render(); }
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', () => endDrag(null));
+  function zoneAt(x, y) { const els = document.elementsFromPoint(x, y); for (const el of els) { const z = el.closest && el.closest('.zone'); if (z) return z; } return null; }
+  document.addEventListener('click', (e) => {
+    if (sel == null || e.target.closest('.flag') || e.target.closest('header')) return;
+    const z = e.target.closest('.zone'); if (z) move(sel, +z.dataset.z);
+  });
+
+  /* ---------- counting up ---------- */
+  function showResult() {
+    revealed = true; sel = null; render();
+    if (G.mode === 'random' && !reduce) document.querySelectorAll('.flag[data-id]').forEach((el, i) => { setTimeout(() => el.classList.add('flip'), i * 25); });
+    const scores = G.teams.map((_, i) => scoreOf(i)), best = Math.max(...scores);
+    const winners = G.teams.map((t, i) => (scores[i] === best ? i : -1)).filter((i) => i >= 0);
+    const colors = [...new Set(G.flags.map((f) => f.c))];
+    const rows = G.teams.map((t, i) => {
+      const cells = colors.map((c) => { const fs = G.flags.filter((f) => f.z === i && f.c === c); return `<td>${fs.length ? (G.mode === 'fixed' ? `${fs.length} × ${G.flags.find((f) => f.c === c).v}` : fs.map((f) => f.v).join(' + ')) : '–'}</td>`; }).join('');
+      return `<tr class="${winners.includes(i) && best > 0 ? 'w' : ''}"><td class="n" style="color:${TEAMC[i]}">${esc(t)}</td>${cells}<td><b>${scores[i]}</b></td></tr>`;
+    }).join('');
+    const head = colors.map((c) => { const [, n, hex] = colorOf(c); return `<th><span class="dot" style="background:${hex}"></span> ${n}</th>`; }).join('');
+    const title = best <= 0 ? 'No points yet' : winners.length > 1 ? `It's a tie! ${winners.map((i) => esc(G.teams[i])).join(' and ')}` : `${esc(G.teams[winners[0]])} wins!`;
+    const r = $('result');
+    r.innerHTML = `<h2 id="resH">🏆 ${title}</h2><table><tr><th></th>${head}<th>Total</th></tr>${rows}</table><div class="row"><button class="big alt" type="button" id="resBack">Back to the game</button><button class="big" type="button" id="resNew">New game</button></div>`;
+    r.hidden = false;
+    document.querySelectorAll('.team').forEach((el) => { const i = +el.dataset.z; if (winners.includes(i) && best > 0) { el.classList.add('win'); el.insertAdjacentHTML('beforeend', '<span class="crown" aria-hidden="true">👑</span>'); } });
+    $('resBack').onclick = () => { r.hidden = true; };
+    $('resNew').onclick = () => { r.hidden = true; newGame(); render(); };
+    $('resBack').focus({ preventScroll: true });
+    if (best > 0) confetti();
+  }
+  $('countBtn').onclick = () => { if (revealed) { revealed = false; $('result').hidden = true; render(); } else showResult(); };
+
+  /* ---------- keyboard ---------- */
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden) { if (e.key === 'Escape' && G) closeSheet(false); return; }
+    if (!$('result').hidden) { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); $('result').hidden = true; } return; }
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (k === 'u' || k === 'U') { e.preventDefault(); undo(); return; }
+    if (k === 'Escape') { sel = null; render(); return; }
+    if (sel != null && /^[0-9]$/.test(k)) { const z = k === '0' ? -1 : +k - 1; if (z < G.teams.length) { e.preventDefault(); move(sel, z); } }
+  });
+  addEventListener('resize', () => render());
+
+  /* ---------- little celebrations ---------- */
+  function burst(z) {
+    if (reduce) return;
+    const el = document.querySelector(`.team[data-z="${z}"] h2`); if (!el) return;
+    const r = el.getBoundingClientRect(); confetti(28, r.left + r.width / 2, r.top + r.height / 2);
+  }
+  const fx = document.createElement('canvas'); fx.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:45'; fx.setAttribute('aria-hidden', 'true'); document.body.appendChild(fx);
+  const fc = fx.getContext('2d'); let bits = [], raf = 0;
+  function confetti(n, x, y) {
+    if (reduce) return; fx.width = innerWidth; fx.height = innerHeight;
+    const cols = FLAGC.map((c) => c[2]);
+    for (let i = 0; i < (n || 160); i++) bits.push({ x: (x ?? innerWidth / 2) + (Math.random() - .5) * (x ? 40 : 300), y: y ?? innerHeight * .4, vx: (Math.random() - .5) * (x ? 10 : 18), vy: -Math.random() * (x ? 9 : 16) - 3, r: Math.random() * 6.28, s: 6 + Math.random() * 7, c: pick(cols), t: 0 });
+    if (!raf) raf = requestAnimationFrame(tick);
+  }
+  function tick() {
+    fc.clearRect(0, 0, fx.width, fx.height);
+    bits.forEach((p) => { p.t++; p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += .2; fc.save(); fc.translate(p.x, p.y); fc.rotate(p.r); fc.fillStyle = p.c; fc.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); fc.restore(); });
+    bits = bits.filter((p) => p.y < fx.height + 20 && p.t < 160);
+    raf = bits.length ? requestAnimationFrame(tick) : (fc.clearRect(0, 0, fx.width, fx.height), 0);
+  }
+  $('fullBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); };
+
+  /* ---------- settings ---------- */
+  function seg(el, opts, isOn, fn) {
+    el.innerHTML = '';
+    opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { fn(v); renderSheet(); }; el.appendChild(b); });
+  }
+  function renderSheet() {
+    seg($('sNT'), [2, 3, 4, 5, 6].map((n) => [n, String(n)]), (v) => S.nt === v, (v) => { S.nt = v; });
+    seg($('sNC'), FLAGC.map((c, i) => [i + 1, `${i + 1} <span class="sw" style="background:${c[2]}"></span>`]), (v) => S.nc === v, (v) => { S.nc = v; });
+    seg($('sPer'), [1, 2, 3, 4, 5, 6, 8, 10].map((n) => [n, String(n)]), (v) => S.per === v, (v) => { S.per = v; });
+    seg($('sStart'), [['field', 'All flags start in the flag field'], ['split', 'Each team starts with an equal share']], (v) => S.start === v, (v) => { S.start = v; });
+    seg($('sMode'), [['fixed', 'Each color has its own point value'], ['random', 'Random hidden values, revealed at the end']], (v) => S.mode === v, (v) => { S.mode = v; });
+    $('fixedOpt').hidden = S.mode !== 'fixed'; $('randOpt').hidden = S.mode !== 'random';
+    $('vals').innerHTML = FLAGC.slice(0, S.nc).map(([k, n, hex]) => `<label><span class="sw" style="display:inline-block;width:20px;height:20px;border-radius:5px;background:${hex};border:2px solid rgba(0,0,0,.15)"></span>${n}<input type="number" min="0" max="1000" step="1" inputmode="numeric" data-c="${k}" value="${esc(S.vals[k] ?? 0)}" aria-label="${n} flag points"></label>`).join('');
+    $('vals').querySelectorAll('input').forEach((inp) => inp.addEventListener('input', () => { S.vals[inp.dataset.c] = Math.max(0, Math.min(1000, parseInt(inp.value, 10) || 0)); check(); }));
+    seg($('sShow'), [[true, 'Yes, show them'], [false, 'No, keep them secret until the end']], (v) => S.show === v, (v) => { S.show = v; });
+    seg($('sRange'), Object.entries(RANGES).map(([k, r]) => [k, r.label]), (v) => S.range === v, (v) => { S.range = v; });
+    $('tnames').value = S.names;
+    check();
+  }
+  function check() {
+    const names = S.names.split('\n').map((s) => s.trim()).filter(Boolean);
+    const total = S.nc * S.per;
+    $('err').className = 'note';
+    $('err').textContent = `${S.nt} teams: ${Array.from({ length: S.nt }, (_, i) => names[i] || `Team ${i + 1}`).join(', ')}. ${total} flags in all.${S.start === 'split' && total % S.nt ? ' Some teams start with one extra flag.' : ''}`;
+    $('keepNote').textContent = G ? 'Starting a new game puts every flag back where it starts. Press Escape to go back to the current game.' : '';
+    return true;
+  }
+  $('tnames').addEventListener('input', () => { S.names = $('tnames').value; check(); });
+  function openSheet() { $('result').hidden = true; $('sheet').hidden = false; renderSheet(); $('goBtn').focus({ preventScroll: true }); }
+  function closeSheet(start) { if (start) newGame(); else save(); $('sheet').hidden = true; render(); }
+  $('goBtn').onclick = () => closeSheet(true);
+  $('gearBtn').onclick = openSheet;
+
+  window.__ctf = { G: () => G, sel: () => sel };
+  if (stored && G) render(); else openSheet();
+})();
+</script>
+
+</body>
+</html>
