@@ -43,6 +43,10 @@
   h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1; letter-spacing: -.02em; text-wrap: balance; }
   .intro { margin: 0; color: var(--ink-2); max-width: 66ch; font-size: 1.05rem; }
 
+  .hublink { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--card); border: 2px solid var(--accent); border-radius: 16px; padding: 12px 16px; max-width: 760px; }
+  .hublink b { font-family: var(--display); font-size: 1.1rem; }
+  .hublink span { color: var(--ink-2); flex: 1; min-width: 200px; }
+  .hublink a { background: var(--accent); color: var(--accent-ink); text-decoration: none; font-weight: 700; padding: 8px 14px; border-radius: 10px; white-space: nowrap; }
   .search { display: flex; align-items: center; gap: 10px; background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 4px 14px; margin: 0 0 14px; max-width: 720px; }
   .search:focus-within { border-color: var(--ink); }
   .search svg { width: 22px; height: 22px; flex: none; color: var(--ink-2); }
@@ -122,8 +126,9 @@
     <h1>Classroom Games and Activities Hub</h1>
     <p class="intro">Projectable review games you can use with any set of questions. You ask the questions however you like, and the game handles the turns, points and excitement. Click <b>Play</b> to open a game in a new tab, or <b>Directions</b> for step-by-step instructions.</p>
   </header>
+  <div class="hublink"><div><b>Language Arts and Math</b></div><span>Vocabulary, word, counting and math fact games and activities are on their own hub.</span><a href="https://joeyvaughan-tsd.github.io/Content-Specific-Games-and-Activities-Hub/">Content-Specific Hub →</a></div>
 
-  <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><input type="search" id="q" placeholder="Search games and activities, like “vocabulary”, “sports” or “2 teams”" aria-label="Search games and activities" autocomplete="off"><span id="count" aria-live="polite"></span></div>
+  <div class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 L21 21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><input type="search" id="q" placeholder="Search games and activities, like “sports”, “luck” or “2 teams”" aria-label="Search games and activities" autocomplete="off"><span id="count" aria-live="polite"></span></div>
   <div class="filters" role="group" aria-label="Filter games and activities">
     <span>Show:</span>
     <button type="button" data-f="all" aria-pressed="true">All resources</button>
@@ -133,8 +138,6 @@
     <button type="button" data-f="two">2 teams</button>
     <button type="button" data-f="many">3 or more teams</button>
     <button type="button" data-f="class">Whole class</button>
-    <button type="button" data-f="ela" class="subj">Language Arts</button>
-    <button type="button" data-f="math" class="subj">Math</button>
   </div>
   <p class="empty" id="empty" hidden>Nothing matches that search. Try another word, or click <b>All resources</b>.</p>
 
@@ -277,14 +280,6 @@
         <div><h3>Controls</h3>${TEAM_TURN}</div>`
     },
     {
-      id: 'vocab', name: 'Word Pop', tag: 'Vocabulary balloon pop', color: '#1b4ea3', icon: 'balloon', url: 'vocab.html',
-      blurb: 'Type in your vocabulary list. Students pop a balloon to reveal a word, read it, and earn a point when you confirm they read it correctly.',
-      facts: ['2–6 teams', 'Your word list', 'Reading practice'], f: ['two', 'many', 'ela'], k: 'vocabulary reading words sight words spelling phonics',
-      dir: `<div><h3>Set up</h3><ol><li>Choose the number of teams (2 to 6) and type team names.</li><li>Type or paste your vocabulary words, one per line or separated by commas. A sample list is filled in so you can try the game; replace it with your own.</li><li>Choose the points for each word read correctly (1, 2, 5 or 10) and the words per turn.</li><li>Choose how students pop a balloon: tap or click one directly, or throw a dart with a wobbling aim (Easy, Normal or Hard).</li><li>Choose what happens to a word read incorrectly: it comes back later for another try, or goes to the bottom of the list.</li></ol></div>
-        <div><h3>Play</h3><ol><li>The team that is up sends a student to pop a balloon.</li><li>A word appears in large, easy-to-read letters. The student reads it aloud or signs it.</li><li>Click <b>Read it correctly</b> (or <kbd>C</kbd>) to award the points, or <b>Not yet</b> (or <kbd>X</kbd>).</li><li>The popped spot shows the word with a green (correct) or red (not yet) border. The counter at the top shows how many words have been read.</li><li>When every word has been read correctly, the list starts over.</li></ol></div>
-        <div><h3>Controls</h3>${TEAM_TURN}</div>`
-    },
-    {
       id: 'claw', name: 'Prize Claw', tag: 'Grab a prize', color: '#c2266f', icon: 'claw', url: 'claw.html',
       blurb: 'Steer an arcade claw over a pile of plush animals and prizes. Each one reveals a hidden point value when it lands in the chute.',
       facts: ['2–6 teams', 'Student steers', 'Hidden values'], f: ['two', 'many'], k: 'arcade animals prizes crane',
@@ -370,14 +365,6 @@
         <div><h3>Controls</h3><dl class="keys"><dt>Click a team, or <kbd>1</kbd>–<kbd>8</kbd></dt><dd>Marks or unmarks a team that answered correctly.</dd><dt><kbd>Enter</kbd> or Advance!</dt><dd>Moves every marked team forward one square.</dd><dt><kbd>U</kbd> or Undo</dt><dd>Takes back the last mark or move, even after the celebration.</dd></dl></div>`
     },
     {
-      id: 'changeone', name: 'Change Just One', tag: 'Word chain: ball → bell → cell', color: '#1d5f8a', icon: 'letters', url: 'changeone.html',
-      blurb: 'The computer gives the class a word. Change just one letter to make a new word, and keep the chain going as long as you can.',
-      facts: ['Whole class', 'Spelling + vocabulary', 'Class record'], f: ['class', 'ela'], k: 'word ladder spelling phonics vocabulary letters rhyme',
-      dir: `<div><h3>Set up</h3><ol><li>Choose the word length: 3, 4 or 5 letters.</li><li>Choose how words are checked: <b>Computer checks the word list</b>, or <b>Teacher decides</b> (you accept or reject every word).</li><li>Choose a timer for each new word (none, 30, 60 or 90 seconds).</li><li>Choose the starting word: the computer picks one, or type your own. The setup screen tells you how many words can come next from your word.</li></ol></div>
-        <div><h3>Play</h3><ol><li>The starting word appears as giant letter tiles.</li><li>The class suggests a new word that changes just one letter. Type it and press <b>Check</b> (or <kbd>Enter</kbd>). As you type, the boxes above the input show which letters changed.</li><li>If it works, the changed letter flips and turns yellow, and the word joins the chain on the right.</li><li>If it changes more than one letter, is already in the chain, or is the same word, the screen shakes and says why.</li><li>If a real word isn't in the word list (names and slang aren't), you'll see <b>Accept the word</b> or <b>Try again</b>. You make the call.</li><li>Stuck? Click <b>Hint</b> to see how many words are possible, again to highlight which letter to change, and again to show a word.</li><li>Click <b>We're stuck: end this chain</b> to see the whole chain and the count. Then start a new word, or keep going.</li></ol></div>
-        <div><h3>Good to know</h3><p>Every 5 words gets a celebration, and beating the class record (saved for each word length on that computer) sets off a "New class record!" banner. <b>Undo last word</b> takes a word back out of the chain.</p></div>`
-    },
-    {
       id: 'fourrow', name: 'Four in a Row', tag: '100 squares, hidden points', color: '#2a2d3e', icon: 'grid4', url: 'fourrow.html',
       blurb: 'A board of 100 black squares. A correct answer claims a square and reveals its hidden points. Spot 4 in a row of your color and draw the line for a big bonus.',
       facts: ['2–6 teams', 'Team picks', 'Spot the pattern'], f: ['two', 'many', 'math'], k: 'connect line bonus strategy board grid squares pattern',
@@ -428,30 +415,6 @@
         <div><h3>Controls</h3>${TEAM_TURN}</div>`
     },
     {
-      id: 'addend', name: 'Missing Number', tag: 'Missing addend practice', color: '#2c7be5', icon: 'plus', url: 'addend.html',
-      blurb: 'Simple 1st grade practice: 3 + ? = 7. Tap the missing number for an instant celebration, or a gentle "Try again!" with a hint of which numbers are left.',
-      facts: ['Single player or whole class', 'Instant feedback', 'Grade 1'], f: ['class', 'math'], k: 'addition missing addend first grade 1st grade number sentence ten frame facts unknown',
-      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b> to choose numbers up to 5, 10 or 20, where the missing number goes (3 + ? = 7, ? + 4 = 7, or a mix), the dot helper on or off, and sound on or off.</li></ol></div>
-        <div><h3>Play</h3><ol><li>A number sentence appears with a wiggling <b>?</b>. The dot helper shows the number you know as red dots and the missing part as empty circles to count.</li><li>Tap the missing number (or press a number key).</li><li>Right: the ? turns green and fills in, the dots fill up, confetti pops, the star buddy jumps, and a star is added at the top. The next problem comes automatically.</li><li>Not right: the box shakes and says <b>Try again!</b>, and that number is crossed out so students can try another.</li><li>Every 10 stars earns a big trophy celebration.</li></ol></div>
-        <div><h3>Good to know</h3><p>Works on a projector for the whole class, or on a single student's computer or tablet. Settings are remembered on each device.</p></div>`
-    },
-    {
-      id: 'vmole', name: 'Vocabulary Mole', tag: 'Whack the word that matches', color: '#2f7d2a', icon: 'vmole', url: 'vmole.html',
-      blurb: 'A picture (or a clue) appears at the top while moles pop up holding words. Whack the mole with the matching word. Use the built-in picture library or your own words with pictures or definitions.',
-      facts: ['Class, teams or timed', '143-picture library', 'Your own words'], f: ['class', 'two', 'many', 'ela'], k: 'whack a mole vocabulary words pictures reading sight words definitions clues ela spelling own words upload pictures',
-      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b>. Choose <b>Picture library</b>, <b>My own words</b>, or <b>Both</b>.</li><li>For the picture library, choose any groups: Animals, Food, School, Home, Sports and Play, Nature and Weather, Things That Go.</li><li>For your own words, type them one per line. To use a clue or definition instead of a picture, type it after a dash, like <i>habitat - the home of an animal</i>. Click <b>Add pictures to your words</b> to paste (<kbd>Ctrl</kbd>+<kbd>V</kbd>), drag, upload, or link a picture for any word. Words that match the library already have a picture.</li><li>Choose 4, 6 or 9 holes, the speed, and how to play: <b>Whole class</b>, <b>Teams take turns</b>, or <b>Beat the clock</b>.</li></ol></div>
-        <div><h3>Play</h3><ol><li>Moles pop up holding words. Click or tap the mole with the word that matches the picture or clue, or press the number under its hole.</li><li>Right: the mole gets bonked and the word appears under the picture. Wrong: the sign shakes and says <b>Try again</b>.</li><li><b>New picture</b> (<kbd>N</kbd>) skips ahead and shows the word. <b>Pause</b> (<kbd>P</kbd>) stops the moles.</li></ol></div>
-        <div><h3>Good to know</h3><p>The picture library uses the pictures approved for Guess the Word. Your own words and pictures are saved on that computer. The wrong words come from the same word list, often with the same first letter or a similar length.</p></div>`
-    },
-    {
-      id: 'mole', name: 'Math Mole', tag: 'Whack the right answer', color: '#3f9a37', icon: 'mole', url: 'mole.html',
-      blurb: 'A math fact appears at the top while moles pop up holding answers. Whack the mole with the right answer. Addition, subtraction, multiplication and division facts up to 5, 10 or 12.',
-      facts: ['Class, teams or timed', 'Math facts', 'Grades 1–5'], f: ['class', 'two', 'many', 'math'], k: 'whack a mole math facts addition subtraction multiplication division times tables fluency mole hammer',
-      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b>. Choose the operations (addition, subtraction, multiplication, division, or any mix) and facts up to 5, 10 or 12.</li><li>Choose 4, 6 or 9 holes and the speed (slow, medium or fast).</li><li>Choose how to play: <b>Whole class</b>, <b>Teams take turns</b>, or <b>Beat the clock</b> (30 seconds to 2 minutes). For teams, type team names and choose what happens after a wrong whack: the next team tries the same problem, or the same team keeps trying.</li></ol></div>
-        <div><h3>Play</h3><ol><li>Moles pop up holding answer signs. Click or tap the mole with the right answer, or press the number shown under its hole (the keys match a number pad).</li><li>Right: the mole gets bonked, the answer fills in, and a new problem appears. Wrong: the sign shakes and says <b>Try again</b>.</li><li><b>New problem</b> (<kbd>N</kbd>) skips to a different fact and shows the answer to the old one. <b>Pause</b> (<kbd>P</kbd>) stops the moles.</li></ol></div>
-        <div><h3>Good to know</h3><p>Subtraction and division come from the same fact families as addition and multiplication, so answers are never negative or fractions. With teams, <b>Undo</b> (<kbd>U</kbd>) takes back the last point.</p></div>`
-    },
-    {
       id: 'ctf', name: 'Capture the Flag', tag: 'Move flags to the team that captured them', color: '#1f7a45', icon: 'ctf', url: 'ctf.html',
       blurb: 'Colored flags wait in the flag field. Drag each flag to the team that captured it. Score by color (green = 5, purple = 10...) or with hidden random values revealed at the end.',
       facts: ['2–6 teams', 'Teacher moves flags', 'Hidden values option'], f: ['two', 'many'], k: 'capture the flag flags teams colors points steal hidden random values drag',
@@ -469,14 +432,6 @@
         <div><h3>Good to know</h3><p>The machine shows up to 70 balls at a time, even for longer lists; every entry still has a chance. Your list and picks are remembered on that computer. On the GitHub site, lists saved in Claw Picker show up here too.</p></div>`
     },
     {
-      id: 'estimate', name: 'Estimate It!', tag: 'How many in the jar?', color: '#0c8599', icon: 'estimate', url: 'estimate.html',
-      blurb: 'Estimate how many marbles, jelly beans, pumpkins, peppermints, hearts or Easter eggs are in a jar, bowl, box or bag, or scattered on the page. Upload your own picture too. Up to 1,000 items.',
-      facts: ['Class, teams or ranges', '1 to 1,000 items', 'Holiday items'], f: ['class', 'two', 'many', 'math'], k: 'estimate estimation jar how many guess count marbles jelly beans candy pumpkins halloween christmas peppermint valentine hearts easter eggs st patricks shamrock thanksgiving turkey fall leaves upload picture number sense benchmark',
-      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b>. Type the range of how many items there can be, anywhere from 1 to 1,000. Each round picks a new number in that range.</li><li>Choose the items: generic items (marbles, tokens, wrapped candy, jelly beans, gumballs, buttons, cubes) and holiday and seasonal items (pumpkins, candy corn, peppermints, ornaments, snowflakes, hearts, shamrocks, Easter eggs, stars, fall leaves, apples, turkeys). Click <b>Upload a picture</b> to use your own.</li><li>Choose how they are shown: in a <b>jar</b>, <b>fishbowl</b>, <b>clear box</b> or <b>bag</b>, or <b>scattered on the page</b>. Choose <b>Every item visible</b>, or <b>Piled up and overlapping</b> like a real jar.</li><li>Choose how students estimate: the <b>whole class types one estimate</b>; <b>teams or students each estimate</b> and the closest wins points (an exact estimate gets double); or <b>multiple choice ranges</b>.</li><li>Choose the reveal: items move into <b>groups of 10</b>, a <b>big number counts up</b>, or both. You can also show or hide the benchmark button.</li></ol></div>
-        <div><h3>Play</h3><ol><li>Students look and estimate. Press <b>Show 10</b> (or <b>Show 100</b>) to see that many of the same item as a benchmark.</li><li>Type the estimate (or each team's estimate) and press <b>Check</b> or <b>Reveal</b>, or press a range button.</li><li>The items move into groups of ten and the count goes up to the real total. The screen shows how close each estimate was.</li><li>Use the menus at the top to switch the item or container for the next round. <b>Next</b> (<kbd>N</kbd>) starts a new round with a new number.</li></ol></div>
-        <div><h3>Good to know</h3><p>With teams, <b>Undo</b> takes back the last points. Uploaded pictures and settings are remembered on that computer. Pictures with a clear or white background look best.</p></div>`
-    },
-    {
       id: 'clawpick', name: 'Claw Picker', tag: 'Pick from your own list', color: '#7b2cbf', icon: 'clawpick', url: 'clawpick.html',
       blurb: 'Type or upload a list of names, answers, numbers or questions (up to 1,000). The claw grabs a ball, and it opens to show the next entry in big letters.',
       facts: ['Whole class', 'Up to 1,000 entries', 'Upload or type'], f: ['class'], k: 'random name picker student picker claw machine list roster names answers questions upload csv excel word draw lottery choose',
@@ -485,45 +440,12 @@
         <div><h3>Good to know</h3><p>The list, what's left and what's been picked are remembered on that computer, so you can pick up where you left off.</p></div>`
     },
     {
-      id: 'countit', name: 'Count It!', tag: 'Counting 0 to 100', color: '#e8590c', icon: 'countit', url: 'countit.html',
-      blurb: 'Count ducks, flowers, cookies, counters and more, shown on ten-frames, in small groups, in arrays, scattered, in skip-count groups or as tens and ones blocks. Also find a missing number on a 100 chart or number line.',
-      facts: ['Whole class, stars or teams', 'Numbers 0–100', 'PreK–5'], f: ['class', 'two', 'many', 'math'], k: 'count counting objects ten frame tenframe subitize subitizing array groups skip count by 2s 5s 10s tens ones base ten blocks 100 chart hundred chart number line prek kindergarten',
-      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b>. Choose the activities: <b>Count the objects</b>, <b>Which number? 100 chart</b> and <b>Which number? Number line</b>.</li><li>Type the range, anywhere from 0 to 100.</li><li>For counting, choose how objects are shown (ten-frames, small groups, arrays, scattered, skip-count groups of 2, 5 or 10, or tens and ones blocks) and which objects to use. Each question picks one of the ways you chose.</li><li>Options: the <b>challenge</b> mixes in a second kind of object so students count only one kind; <b>flash</b> shows the objects for 1 to 5 seconds and then hides them; <b>tap to mark</b> lets students tap each object as they count; <b>count along</b> numbers the objects one by one after the answer.</li><li>For the 100 chart and number line, choose how many numbers are filled in: a few (harder), some, or many (easier).</li><li>Choose <b>Type the number</b> or <b>Multiple choice buttons</b> (2, 3 or 4 buttons), and play as a whole class with no score, a whole class with a star tally, or teams with points.</li></ol></div>
-        <div><h3>Play</h3><ol><li>Students count and type the number (or press an answer button).</li><li>Right: confetti, a star or team points, and the objects count along 1, 2, 3...</li><li>Not right: <b>Count again!</b> After 3 tries the answer is shown.</li><li>With flash on, press <b>Peek again</b> (<kbd>P</kbd>) for another look.</li><li><b>Next</b> (<kbd>N</kbd>) goes to a new question. With teams, the turn moves to the next team.</li></ol></div>
-        <div><h3>Good to know</h3><p>A star tally celebrates every 10 correct answers. With teams, use <b>+</b> and <b>−</b> to adjust scores and <b>Undo</b> (<kbd>U</kbd>) to take back a change. Settings are remembered on each device.</p></div>`
-    },
-    {
-      id: 'numline', name: 'Number Line', tag: 'Whole numbers, fractions and decimals', color: '#1f7a6d', icon: 'numline', url: 'numberline.html',
-      blurb: 'Type any range and practice on a big number line: missing numbers, placing a number, naming or estimating a point, rounding, putting numbers in order, jumps, comparing and a mystery number.',
-      facts: ['Whole class', '9 activities', 'Grades K–5'], f: ['class', 'math'], k: 'number line fractions decimals whole numbers rounding estimate place value order sequence compare greater less mystery missing skip count jumps addition subtraction tick marks benchmark',
-      dir: `<div><h3>Set up</h3><ol><li>Click <b>Settings</b>. Choose any of the 9 activities, and whether to <b>Mix them up</b> or <b>Take turns in order</b>.</li><li>Choose <b>Whole numbers</b>, <b>Fractions</b> or <b>Decimals</b>, and type the range in <b>From</b> and <b>To</b>. For whole numbers and decimals, type a <b>Count by</b> number for the tick marks, or leave it on Auto. For fractions, choose the denominators and mixed numbers or improper fractions. For decimals, choose tenths or hundredths.</li><li>Optional: type your own numbers. They are used for placing, estimating, rounding, ordering, comparing and the mystery number.</li><li>Choose whether to show <b>tick marks</b> and which numbers to label: start and end, midpoint, whole numbers, tens, hundreds or every tick mark.</li><li>Choose how students answer: <b>Type on a keypad</b> or <b>Multiple choice</b>. Then set how close counts for placing and estimating, how many numbers are missing, the rounding places, how many numbers to order, and the jump settings. The preview shows the line as you go.</li></ol></div>
-        <div><h3>The activities</h3><ol><li><b>Missing numbers</b>: fill in the yellow boxes. Click a box to choose which one to answer.</li><li><b>Place the number</b>: tap or drag the pin to where the number goes, then click <b>Check</b>.</li><li><b>What's this point?</b>: name the number at the arrow.</li><li><b>Estimate the point</b>: about what number is the dot? Answers within the closeness you chose count.</li><li><b>Round the number</b>: the line zooms in between the two choices, with the midpoint labeled.</li><li><b>Mystery number</b>: the class guesses, and each guess says <b>More than</b> or <b>Less than</b> and grays out that part of the line.</li><li><b>Put in order</b>: tap the cards from least to greatest (or greatest to least). Each one drops onto the line.</li><li><b>Jumps</b>: an addition or subtraction problem. Click <b>Show the jumps</b> to see the hops.</li><li><b>Compare</b>: choose &lt;, = or &gt;. <b>Show on the line</b> places both numbers.</li></ol></div>
-        <div><h3>Good to know</h3><p>Wrong answers get a hint, like <b>Try a smaller number</b> or <b>Move it to the right</b>. After 3 tries the answer is shown. <b>Show answer</b> reveals it any time, and <b>Next</b> (<kbd>N</kbd>) moves on. Pick an activity from the menu at the top left to jump straight to it. Settings are remembered on each device.</p></div>`
-    },
-    {
       id: 'pie', name: 'Pie Splat', tag: 'Cream pie carnival booth', color: '#c2357a', icon: 'pie', url: 'pie.html',
       blurb: 'A correct answer earns a cream pie to throw at the faces in a carnival booth. Use cartoon faces or upload photos of good sports, like teachers or the principal.',
       facts: ['2–6 teams', 'Student throws', 'Upload faces'], f: ['two', 'many'], k: 'pie face cream throw carnival photos faces teacher principal splat',
       dir: `<div><h3>Set up</h3>${TEAM_SETUP('pies per turn, the number of faces (3, 4 or 5), cartoon faces or uploaded photos, a difficulty (easy: faces bob; medium: faces duck; hard: fast ducking), and points (different per face, 10–50, or 10 for every face)')}<p style="margin-top:8px">With <b>Upload photos</b>, type a name and click <b>Upload photo</b> for each face. Photos stay on that computer only. Please ask permission before using someone's photo.</p></div>
         <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, a student clicks a face to throw the pie (or presses <kbd>Space</kbd> to throw at the sweeping target).</li><li>A hit squashes the face, covers it in cream with a big SPLAT! banner, and scores that face's points. The cream builds up for the rest of the game.</li><li>A miss splats on the board (or the face ducks!) and scores 0.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
         <div><h3>Good to know</h3><p>Press <kbd>C</kbd> to clean all the faces.</p></div>
-        <div><h3>Controls</h3>${TEAM_TURN}</div>`
-    },
-    {
-      id: 'memory', name: 'Word and Picture Match', tag: 'Memory game, grade 1', color: '#2f6fd1', icon: 'pairs', url: 'memory.html',
-      blurb: 'A memory game: flip two cards and match each word to its picture. Comes with 10 first grade words, or use your own words with pictures you upload or copy from the web.',
-      facts: ['Whole class or 2–4 teams', 'Your own pictures', 'Grade 1'], f: ['class', 'two', 'many', 'ela'], k: 'memory concentration match pairs sight words vocabulary pictures first grade 1st grade reading upload custom photos',
-      dir: `<div><h3>Set up</h3><ol><li>Choose who is playing: <b>Whole class</b>, or <b>2</b>, <b>3</b> or <b>4 teams</b>. Turn sound on or off.</li><li>Click <b>Play!</b> The cards are shuffled face down: one word card and one picture card for each word.</li></ol></div>
-        <div><h3>Use your own words and pictures</h3><ol><li>On the start screen, click <b>Change the words and pictures</b>.</li><li>Type a word in any row (2 to 12 words). The 10 original words keep their built-in pictures.</li><li>Give each new word a picture in any of these ways:<ul><li><b>Copy from the web:</b> right-click a picture on a web page, choose <b>Copy image</b>, click the row's picture box, then press <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>⌘</kbd>+<kbd>V</kbd> on a Mac).</li><li><b>Drag:</b> drag a picture from a web page or your computer onto the row.</li><li><b>Upload:</b> click <b>Upload</b> and pick a picture file.</li><li><b>Web link:</b> click <b>Web link</b> and paste the picture's address.</li></ul></li><li>Click <b>Save cards</b>. Your cards are saved on that computer for next time. <b>Use the original 10 words</b> switches back.</li></ol></div>
-        <div><h3>Play</h3><ol><li>A student flips two cards. Word cards are yellow; picture cards are white.</li><li>If the word matches the picture, both cards glow green, the word appears under the picture, and confetti pops. With teams, that team scores and goes again.</li><li>If they don't match, the cards shake, it says <b>Try again!</b>, and they flip back over. With teams, the next team is up.</li><li>When all 10 pairs are found, a trophy shows the winner (or how many tries the class took).</li></ol></div>
-        <div><h3>Good to know</h3><p>Ask students to read the word aloud, or sign it, before flipping its partner. Click <b>New game</b> to reshuffle.</p></div>`
-    },
-    {
-      id: 'shutbox', name: 'Shut the Box', tag: 'Roll, add, shut', color: '#7a4a1f', icon: 'dice2', url: 'shutbox.html',
-      blurb: 'A correct answer earns a roll of the dice. Shut tiles that add up to the roll to score, and shut every tile for a bonus. Great addition practice.',
-      facts: ['2–6 teams', 'Team adds', 'Dice'], f: ['two', 'many', 'math'], k: 'shut the box dice addition sums tiles math facts',
-      dir: `<div><h3>Set up</h3>${TEAM_SETUP('rolls per turn, tiles 1 to 9 or 1 to 12, the bonus for shutting the box (none, +20 or +50), and whether a team rolls one die once every tile above 6 is shut')}</div>
-        <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, click <b>Roll the dice</b> (or press <kbd>Space</kbd>). Each team has its own box.</li><li>The team picks open tiles that add up to the roll, like 6 + 2 for a roll of 8. The screen shows the running total. Click <b>Shut them</b> (or press <kbd>Enter</kbd>). The tiles flip down, and the roll is added to the score.</li><li>If no open tiles can make the roll, the turn scores 0.</li><li>Shut every tile to earn the bonus; the box then opens up again.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
         <div><h3>Controls</h3>${TEAM_TURN}</div>`
     },
     {
@@ -549,14 +471,6 @@
       dir: `<div><h3>Set up</h3>${TEAM_SETUP('tries per turn, the number of cups (3, 4 or 5), the shuffle speed (slow, medium or fast), and the points under the cup (5, 10 or 20; always 10; or 1 to 5)')}</div>
         <div><h3>Play</h3><ol><li>Ask the team that is up a question.</li><li>If they answer correctly, click <b>Show the points</b> (or press <kbd>Space</kbd>). One cup lifts to show the points hiding under it, then it covers them.</li><li>The cups shuffle. Everyone watches closely!</li><li>The team clicks the cup they think has the points, or uses <kbd>←</kbd> <kbd>→</kbd> and <kbd>Space</kbd>. The right cup wins the points. If the cup is empty, the game shows where the points were.</li><li>If they answer incorrectly, press <b>Wrong answer, skip</b>.</li></ol></div>
         <div><h3>Controls</h3>${TEAM_TURN}</div>`
-    },
-    {
-      id: 'guess', name: 'Guess the Word', tag: 'Hot seat vocabulary', color: '#2c5fc0', icon: 'hotseat', url: 'guess.html',
-      blurb: 'One student sits with their back to the screen while classmates give clues for the word. Use your own vocabulary list with your own pictures, or 250 built-in words in mild, medium and spicy levels with teacher-approved real photos.',
-      facts: ['Players or teams', 'Timer option', 'Clue points'], f: ['class', 'two', 'many', 'ela'], k: 'hot seat guess word vocabulary clues describe back to screen heads up pictures',
-      dir: `<div><h3>Set up</h3><ol><li>Type the players or teams, one per line. Student names work well.</li><li>Choose the words: <b>Random words</b>, or <b>My own word list</b> (type or paste your vocabulary, one word per line).</li><li>For random words, choose a level: <b>🌶 Mild</b> (PreK–K), <b>🌶🌶 Medium</b> (1st–3rd), <b>🌶🌶🌶 Spicy</b> (4th–5th) or <b>All levels</b>, and pick any word groups, like Animals, Food or School.</li><li>For your own list, click <b>Add your own pictures to these words</b>. Copy a picture from the web and paste it (<kbd>Ctrl</kbd>+<kbd>V</kbd>) into a word's box, drag one in, upload one, or paste its web address.</li><li>Choose <b>Show pictures</b> or <b>Words only</b>. For words without a picture of your own, choose <b>Photos I have approved</b> or <b>No picture</b>. Click <b>Review photos</b> and <b>Approve</b> or <b>Reject</b> each one, or replace it with a better picture: copy a picture from the web and paste it (<kbd>Ctrl</kbd>+<kbd>V</kbd>) into the word's photo box, drag one in, upload one, or paste a web link. Students never see a photo until a teacher approves it.</li><li>Choose the time to guess: no time limit, 60, 45 or 30 seconds.</li><li>Choose the points for the guesser when they get it in time (none, +1, +2 or +5) and the points for the best clue (+1, +2 or +5).</li></ol></div>
-        <div><h3>Play</h3><ol><li>The guesser sits with their back to the screen. Click <b>Show the word</b> (or press <kbd>Space</kbd>). The word and its picture appear, and the timer starts.</li><li>Everyone else gives clues without saying, signing or spelling the word.</li><li>Click <b>Got it!</b> (<kbd>G</kbd>) when the guesser says it; they get the points. <b>New word</b> (<kbd>N</kbd>) swaps in a different word. When time runs out, the screen flashes and says <b>Time's up!</b></li><li>Then click the person who gave the best clue to give them points, or <b>No clue points</b>. <b>Next guesser</b> moves the hot seat to the next player.</li></ol></div>
-        <div><h3>Good to know</h3><p>Use the <b>+</b> and <b>−</b> buttons on the scoreboard to adjust any score, and <b>Undo</b> (<kbd>U</kbd>) to take back the last change. Choose a different guesser from the <b>Change</b> menu before showing the word.</p><p style="margin-top:8px">Each built-in word has one candidate photo: the main photo from a hand-picked Wikipedia article (free to use, with the photographer credited). No photo is shown to students until a teacher approves it. To share your approvals with every teacher, click <b>Download approved list for the website</b> in Review photos and upload <b>guess-photos.json</b> to the GitHub repo next to guess.html. Photos need the internet and load on the website version of the hub, not inside Claude. Words about people, jobs, feelings and actions never get an automatic photo. Click <b>Hide photo</b> on any word card to reject that photo.</p></div>`
     },
     {
       id: 'deal', name: 'Take the Deal', tag: 'Briefcase game show', color: '#1f2a5c', icon: 'case', url: 'briefcase.html',
