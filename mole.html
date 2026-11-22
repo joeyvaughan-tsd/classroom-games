@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="analytics.js"></script>
+</head>
+<body>
+<title>Math Mole</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap">
+<style>
+  /* Layout: top bar (score or teams, timer, buttons), the problem in a big sign, the garden of holes where moles pop up
+     holding answer signs, and a feedback line. Click (or press the hole's number) to whack a mole. */
+  :root {
+    --sky: #bfe7ff; --grass: #5cbf4f; --grass-d: #3f9a37; --dirt: #6b4226; --dirt-d: #3d2414; --ink: #22301f; --ink-2: #4e5f49;
+    --good: #22b35e; --good-deep: #148043; --try: #ff7a3d; --yellow: #ffd23f; --btn: #4f8df5; --btn-deep: #2c5fc0;
+    --display: "Fredoka", "Andika", system-ui, sans-serif; --num: "Andika", "Fredoka", system-ui, sans-serif;
+    --hole: 150px;
+    color-scheme: light;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: linear-gradient(var(--sky) 0 22%, #9fd96b 22% 23%, var(--grass) 23%); color: var(--ink); font-family: var(--display); overflow: hidden; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 4px solid var(--btn); outline-offset: 3px; }
+  kbd { font-family: var(--num); font-size: .72em; border: 1px solid currentColor; border-radius: 6px; padding: 0 5px; margin-left: 6px; opacity: .75; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 6px; padding: 10px 16px 12px; max-width: 1280px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .title { font-weight: 700; font-size: 1.4rem; color: #3d2414; white-space: nowrap; }
+  .title span { color: #c2410c; }
+  .mid { flex: 1; display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; min-width: 0; }
+  .chip { background: #fff; border-radius: 12px; padding: 5px 12px; font-weight: 700; box-shadow: 0 3px 0 rgba(0,0,0,.12); white-space: nowrap; }
+  .chip b { font-family: var(--num); font-size: 1.15em; }
+  .team { border-left: 7px solid var(--c); display: inline-flex; align-items: center; gap: 6px; }
+  .team.on { outline: 4px solid var(--c); }
+  .team .sc { font-family: var(--num); font-size: 1.15rem; }
+  .team .sc.bump { animation: bump .6s cubic-bezier(.3,1.8,.5,1); display: inline-block; }
+  @keyframes bump { 40% { transform: scale(1.7); } }
+  .clock { font-family: var(--num); font-weight: 700; font-size: 1.3rem; background: #fff; border-radius: 999px; padding: 2px 14px; box-shadow: 0 3px 0 rgba(0,0,0,.12); }
+  .clock.low { background: #ffe0d1; color: #b3261e; }
+  .tb { border: 0; background: #fff; border-radius: 12px; padding: 8px 14px; font-weight: 600; color: var(--ink-2); box-shadow: 0 3px 0 rgba(0,0,0,.12); font-size: .95rem; white-space: nowrap; }
+  .tb.go2 { background: var(--btn); color: #fff; box-shadow: 0 4px 0 var(--btn-deep); }
+
+  .problem { justify-self: center; background: #fffaf0; border: 6px solid #8b5a2b; border-radius: 22px; padding: 4px 34px; font-family: var(--num); font-weight: 700; font-size: clamp(1.8rem, min(9vh, 11vw), 5rem); line-height: 1.15; white-space: nowrap; box-shadow: 0 8px 0 #5c3a1a; position: relative; text-align: center; min-width: 4em; }
+  .problem .turn { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); font-family: var(--display); font-size: 1rem; color: #fff; background: var(--c, var(--btn)); border-radius: 999px; padding: 1px 12px; white-space: nowrap; }
+  .problem.got { animation: pop .5s cubic-bezier(.3,1.7,.5,1); border-color: var(--good); box-shadow: 0 8px 0 var(--good-deep); }
+  @keyframes pop { 0% { transform: scale(.7); } 100% { transform: scale(1); } }
+
+  .garden { position: relative; display: grid; place-items: center; min-height: 0; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect x='20' y='14' width='6' height='32' rx='3' fill='%23a0682f' stroke='%235c3a1a' stroke-width='2'/%3E%3Crect x='6' y='4' width='34' height='15' rx='5' fill='%23e63946' stroke='%23801d26' stroke-width='2'/%3E%3C/svg%3E") 23 10, pointer; touch-action: manipulation; }
+  .holes { display: grid; gap: clamp(8px, 2vh, 22px) clamp(10px, 3vw, 40px); }
+  .hole { position: relative; width: var(--hole); height: calc(var(--hole) * 1.05); }
+  .hole .pit { position: absolute; left: 0; right: 0; bottom: 0; height: 34%; background: radial-gradient(ellipse at 50% 40%, var(--dirt-d) 0 55%, var(--dirt) 56% 70%, transparent 71%); }
+  .hole .clip { position: absolute; left: 0; right: 0; top: 0; bottom: 14%; overflow: hidden; }
+  .mole { position: absolute; left: 50%; bottom: -100%; width: 78%; transform: translateX(-50%); transition: bottom .22s cubic-bezier(.3,1.4,.5,1); }
+  .hole.up .mole { bottom: -6%; }
+  .hole.hit .mole { transition: bottom .35s ease-in .25s; }
+  .mole svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .sign { position: absolute; left: 50%; top: 2%; transform: translateX(-50%) rotate(var(--tilt, -4deg)); background: #fff; border: 4px solid #8b5a2b; border-radius: 12px; min-width: 70%; padding: 0 8px; text-align: center; font-family: var(--num); font-weight: 700; font-size: calc(var(--hole) * .27); line-height: 1.2; color: var(--ink); box-shadow: 0 3px 0 rgba(0,0,0,.2); white-space: nowrap; }
+  .hole.right .sign { background: #d9f7e5; border-color: var(--good); color: var(--good-deep); }
+  .hole.wrong .sign { background: #ffe0d1; border-color: var(--try); color: #b3261e; animation: shake .4s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-60%) rotate(-8deg); } 40%, 80% { transform: translateX(-40%) rotate(6deg); } }
+  .hole .key { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); font-family: var(--num); font-weight: 700; font-size: .8rem; color: rgba(255,255,255,.85); background: rgba(0,0,0,.25); border-radius: 6px; padding: 0 6px; pointer-events: none; }
+  .bonk { position: absolute; pointer-events: none; font-family: var(--display); font-weight: 700; font-size: calc(var(--hole) * .28); color: #fff; -webkit-text-stroke: 3px #c2410c; paint-order: stroke fill; animation: bonk .7s ease-out forwards; z-index: 5; }
+  .bonk.good { -webkit-text-stroke-color: var(--good-deep); }
+  @keyframes bonk { 0% { transform: translate(-50%, -20%) scale(.5); opacity: 0; } 25% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); } 100% { transform: translate(-50%, -140%) scale(1); opacity: 0; } }
+  .hammer { position: fixed; z-index: 30; pointer-events: none; width: 90px; height: 90px; transform-origin: 75% 85%; animation: swing .22s ease-in forwards; }
+  @keyframes swing { 0% { transform: translate(-75%, -85%) rotate(-50deg); } 100% { transform: translate(-75%, -85%) rotate(10deg); } }
+
+  .msg { text-align: center; font-weight: 700; font-size: clamp(1.1rem, 3.6vh, 2rem); min-height: 1.3em; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .msg.good { color: #eaffd9; }
+  .msg.try { color: #ffe0b0; }
+
+  .over { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; background: rgba(20,40,15,.55); }
+  .over > div { background: #fffaf0; border-radius: 26px; border: 6px solid var(--yellow); padding: 22px 34px; text-align: center; max-width: 92vw; animation: pop .5s cubic-bezier(.3,1.6,.5,1); }
+  .over h2 { margin: 4px 0; font-size: clamp(1.8rem, 6vh, 3rem); }
+  .over p { font-size: 1.2rem; margin: 6px 0 14px; }
+  .big { border: 0; border-radius: 16px; background: var(--good); color: #fff; font-weight: 700; font-size: 1.4rem; padding: 10px 30px; box-shadow: 0 6px 0 var(--good-deep); }
+
+  /* settings */
+  .sheet { position: fixed; inset: 0; z-index: 40; background: rgba(20,40,15,.6); display: grid; place-items: center; padding: 12px; }
+  .panel { background: #fffdf8; border-radius: 22px; width: min(860px, 100%); max-height: 100%; overflow: auto; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .panel h2 { margin: 0 0 4px; font-size: 1.6rem; }
+  .panel h3 { margin: 16px 0 6px; font-size: 1.12rem; color: #2f7d2a; border-top: 2px solid #efe6d5; padding-top: 12px; }
+  .panel .lbl { display: block; font-weight: 600; margin: 10px 0 5px; color: #5b6780; font-size: .95rem; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { border: 2px solid #e2d8c4; background: #fff; border-radius: 12px; padding: 6px 14px; font-weight: 600; font-size: 1rem; }
+  .seg button[aria-pressed="true"] { background: #2f7d2a; border-color: #2f7d2a; color: #fff; }
+  .seg.ops button { font-size: 1.15rem; min-width: 150px; }
+  textarea { width: 100%; min-height: 80px; border: 2px solid #e2d8c4; border-radius: 12px; padding: 8px 10px; font-family: var(--num); font-size: 1.05rem; background: #fff; resize: vertical; }
+  .note { margin: 6px 0 0; color: #5b6780; font-size: .9rem; line-height: 1.35; }
+  .note.warn { color: #b3261e; font-weight: 600; }
+  .go { display: block; margin: 18px auto 0; border: 0; background: var(--good); color: #fff; font-weight: 700; font-size: 1.3rem; padding: 12px 40px; border-radius: 16px; box-shadow: 0 6px 0 var(--good-deep); }
+  .go:disabled { background: #c8ced9; box-shadow: 0 6px 0 #a9b0bd; cursor: default; }
+
+  @media (max-width: 640px) { .title { display: none; } .tb { padding: 7px 10px; font-size: .85rem; } .hole .key { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .mole, .hole.hit .mole { transition: none; } .bonk, .hammer, .problem.got, .over > div, .team .sc.bump { animation: none !important; } .hammer { display: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="title">Math <span>Mole</span></div>
+    <div class="mid" id="mid"></div>
+    <button class="tb" id="pauseBtn" type="button">Pause <kbd>P</kbd></button>
+    <button class="tb" id="undoBtn" type="button" hidden>Undo <kbd>U</kbd></button>
+    <button class="tb" id="skipBtn" type="button">New problem <kbd>N</kbd></button>
+    <button class="tb" id="gearBtn" type="button">Settings</button>
+  </header>
+  <div class="problem" id="problem" aria-live="polite"></div>
+  <div class="garden" id="garden"><div class="holes" id="holes"></div></div>
+  <div class="msg" id="msg" role="status" aria-live="assertive"></div>
+</div>
+<div class="over" id="over" hidden><div role="dialog" aria-modal="true" aria-labelledby="overH"><div style="font-size:4rem" aria-hidden="true">🏆</div><h2 id="overH"></h2><p id="overP"></p><button class="big" id="overBtn" type="button">Play again</button></div></div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setH">
+    <h2 id="setH">Math Mole settings</h2>
+    <p class="note">A math fact appears at the top. Moles pop up holding answers. Whack the mole with the right answer!</p>
+    <h3>Math facts</h3>
+    <span class="lbl" id="lOps">Operations (choose any)</span><div class="seg ops" id="sOps" role="group" aria-labelledby="lOps"></div>
+    <span class="lbl" id="lMax">Facts up to</span><div class="seg" id="sMax" role="group" aria-labelledby="lMax"></div>
+    <p class="note" id="maxNote"></p>
+    <h3>The moles</h3>
+    <span class="lbl" id="lHoles">Holes</span><div class="seg" id="sHoles" role="group" aria-labelledby="lHoles"></div>
+    <span class="lbl" id="lSpeed">Speed</span><div class="seg" id="sSpeed" role="group" aria-labelledby="lSpeed"></div>
+    <h3>Playing</h3>
+    <span class="lbl" id="lPlay">Play as</span><div class="seg" id="sPlay" role="group" aria-labelledby="lPlay"></div>
+    <div id="teamOpt">
+      <span class="lbl" id="lTeams">Teams (one per line, 2 to 6)</span>
+      <textarea id="teams" aria-labelledby="lTeams" spellcheck="false"></textarea>
+      <span class="lbl" id="lMiss">After a wrong whack</span><div class="seg" id="sMiss" role="group" aria-labelledby="lMiss"></div>
+    </div>
+    <div id="clockOpt"><span class="lbl" id="lSecs">Time</span><div class="seg" id="sSecs" role="group" aria-labelledby="lSecs"></div></div>
+    <p class="note" id="err"></p>
+    <button class="go" id="goBtn" type="button">Start</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const STORE = 'math-mole-v1';
+  const OPS = { add: ['+', 'Addition +'], sub: ['−', 'Subtraction −'], mul: ['×', 'Multiplication ×'], div: ['÷', 'Division ÷'] };
+  const SPEED = { slow: { up: 3600, gap: 900, max: 2 }, medium: { up: 2600, gap: 650, max: 3 }, fast: { up: 1800, gap: 420, max: 3 } };
+  const TEAMC = ['#c62828', '#1d4ed8', '#15803d', '#7e22ce', '#c2410c', '#0e7490'];
+  const DEF = { ops: ['add'], max: 10, holes: 9, speed: 'medium', play: 'class', teams: 'Team 1\nTeam 2', miss: 'next', secs: 60 };
+  let S = JSON.parse(JSON.stringify(DEF)), stored = false;
+  try { const raw = localStorage.getItem(STORE); if (raw) { Object.assign(S, JSON.parse(raw)); stored = true; } } catch (e) {}
+  S.ops = (Array.isArray(S.ops) ? S.ops : DEF.ops).filter((o) => OPS[o]); if (!S.ops.length) S.ops = ['add'];
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+
+  let P = null, holes = [], running = false, paused = false, spawnT = 0, lastCorrectSpawn = 0, spawns = 0;
+  let score = 0, streak = 0, tries = 0, teams = [], scores = [], turn = 0, hist = [], timeLeft = 0, clockT = 0, lastKey = '';
+
+  /* ---------- facts: built from fact families so subtraction and division match addition and multiplication ---------- */
+  function newProblem() {
+    let p, k = 0;
+    do {
+      const op = pick(S.ops), m = S.max;
+      let a = rnd(0, m), b = rnd(0, m);
+      if (op === 'add') p = { t: `${a} + ${b}`, ans: a + b };
+      if (op === 'sub') p = { t: `${a + b} − ${b}`, ans: a };
+      if (op === 'mul') p = { t: `${a} × ${b}`, ans: a * b };
+      if (op === 'div') { b = rnd(1, m); p = { t: `${a * b} ÷ ${b}`, ans: a }; }
+      p.op = op; p.a = a; p.b = b;
+    } while (p.t === lastKey && ++k < 20);
+    lastKey = p.t;
+    const opts = new Set([p.ans]);
+    const near = [1, -1, 2, -2, 10, -10, 3, -3];
+    if (p.op === 'mul') near.unshift(p.a, -p.a, p.b, -p.b);
+    if (p.op === 'add' || p.op === 'sub') opts.add(p.op === 'add' ? Math.abs(p.a - p.b) : p.a + 2 * p.b);
+    if (p.op === 'mul') opts.add(p.a + p.b);
+    shuffle(near.slice(0, 6)).concat(near.slice(6)).forEach((d) => { const v = p.ans + d; if (opts.size < 6 && v >= 0 && v !== p.ans) opts.add(v); });
+    for (let v = 0; opts.size < 6; v++) opts.add(p.ans + v + 4);
+    p.opts = [...opts].filter((v) => v >= 0);
+    p.wrongs = p.opts.filter((v) => v !== p.ans);
+    P = p; tries = 0;
+    holes.forEach((h) => { if (h.up && !h.hit) hide(h); });
+    lastCorrectSpawn = spawns;
+    renderProblem();
+  }
+  function renderProblem(got) {
+    const t = S.play === 'teams' ? `<span class="turn" style="--c:${TEAMC[turn]}">${esc(teams[turn])}</span>` : '';
+    const pr = $('problem');
+    pr.innerHTML = `${t}${P.t} = ${got ? P.ans : '?'}`;
+    pr.classList.toggle('got', !!got);
+  }
+
+  /* ---------- holes and moles ---------- */
+  const MOLE = '<svg viewBox="0 0 120 130" aria-hidden="true"><ellipse cx="60" cy="88" rx="44" ry="46" fill="#8a5a3b"/><ellipse cx="60" cy="100" rx="28" ry="30" fill="#c79a74"/><circle cx="24" cy="48" r="11" fill="#8a5a3b"/><circle cx="96" cy="48" r="11" fill="#8a5a3b"/><circle cx="24" cy="48" r="5.5" fill="#e0a98a"/><circle cx="96" cy="48" r="5.5" fill="#e0a98a"/><ellipse cx="60" cy="68" rx="40" ry="34" fill="#9b6744"/><circle cx="45" cy="60" r="6.5" fill="#1d1410"/><circle cx="75" cy="60" r="6.5" fill="#1d1410"/><circle cx="47" cy="58" r="2.2" fill="#fff"/><circle cx="77" cy="58" r="2.2" fill="#fff"/><ellipse cx="60" cy="76" rx="10" ry="7" fill="#f28da0"/><path d="M52 86 Q60 92 68 86" stroke="#1d1410" stroke-width="3" fill="none" stroke-linecap="round"/><rect x="54" y="88" width="5" height="7" rx="1" fill="#fff"/><rect x="61" y="88" width="5" height="7" rx="1" fill="#fff"/><ellipse cx="22" cy="104" rx="11" ry="8" fill="#e0a98a"/><ellipse cx="98" cy="104" rx="11" ry="8" fill="#e0a98a"/></svg>';
+  const DIZZY = '<svg viewBox="0 0 120 130" aria-hidden="true"><ellipse cx="60" cy="88" rx="44" ry="46" fill="#8a5a3b"/><ellipse cx="60" cy="100" rx="28" ry="30" fill="#c79a74"/><circle cx="24" cy="48" r="11" fill="#8a5a3b"/><circle cx="96" cy="48" r="11" fill="#8a5a3b"/><ellipse cx="60" cy="68" rx="40" ry="34" fill="#9b6744"/><path d="M39 54 l12 12 M51 54 l-12 12 M69 54 l12 12 M81 54 l-12 12" stroke="#1d1410" stroke-width="4" stroke-linecap="round"/><ellipse cx="60" cy="76" rx="10" ry="7" fill="#f28da0"/><ellipse cx="60" cy="90" rx="7" ry="5" fill="#1d1410"/><g fill="#ffd23f"><path d="M30 26 l3 7 7 1 -5 5 1 7 -6 -4 -6 4 1 -7 -5 -5 7 -1z"/><path d="M84 20 l3 7 7 1 -5 5 1 7 -6 -4 -6 4 1 -7 -5 -5 7 -1z"/></g><ellipse cx="22" cy="104" rx="11" ry="8" fill="#e0a98a"/><ellipse cx="98" cy="104" rx="11" ry="8" fill="#e0a98a"/></svg>';
+  const KEYS9 = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+  function buildHoles() {
+    const n = S.holes, cols = n === 4 ? 2 : 3, rows = Math.ceil(n / cols);
+    const g = $('garden').getBoundingClientRect();
+    const size = Math.max(70, Math.min(230, (g.width - 40) / cols / 1.25, (g.height - 20) / rows / 1.2));
+    document.documentElement.style.setProperty('--hole', size + 'px');
+    $('holes').style.gridTemplateColumns = `repeat(${cols}, auto)`;
+    const keys = n === 9 ? KEYS9 : Array.from({ length: n }, (_, i) => i + 1);
+    $('holes').innerHTML = Array.from({ length: n }, (_, i) => `<div class="hole" data-i="${i}"><div class="pit"></div><div class="clip"><div class="mole"><div class="face">${MOLE}</div><div class="sign" style="--tilt:${(i % 2 ? 4 : -4)}deg"></div></div></div><span class="key">${keys[i]}</span></div>`).join('');
+    holes = [...$('holes').children].map((el, i) => ({ i, el, key: keys[i], up: false, hit: false, val: null, until: 0 }));
+  }
+  function show(h, val, now) {
+    h.val = val; h.up = true; h.hit = false; h.until = now + SPEED[S.speed].up * (0.8 + Math.random() * 0.4);
+    h.el.querySelector('.sign').textContent = val; h.el.querySelector('.face').innerHTML = MOLE;
+    h.el.classList.remove('hit', 'right', 'wrong'); void h.el.offsetWidth; h.el.classList.add('up');
+  }
+  function hide(h) { h.up = false; h.el.classList.remove('up'); }
+  function tick() {
+    if (!running || paused || !P) return;
+    const now = performance.now(), sp = SPEED[S.speed];
+    holes.forEach((h) => { if (h.up && !h.hit && now > h.until) hide(h); if (h.hit && now > h.until) { h.hit = false; hide(h); } });
+    const up = holes.filter((h) => h.up && !h.hit);
+    if (now > spawnT && up.length < sp.max) {
+      const free = holes.filter((h) => !h.up && !h.hit && !h.el.classList.contains('up')); if (!free.length) return;
+      const correctUp = up.some((h) => h.val === P.ans);
+      const shown = new Set(up.map((h) => h.val));
+      let val;
+      if (!correctUp && (spawns - lastCorrectSpawn >= 2 || Math.random() < 0.38)) val = P.ans;
+      else { const w = P.wrongs.filter((v) => !shown.has(v)); if (!w.length) return; val = pick(w); }
+      if (val === P.ans) { if (correctUp) return; lastCorrectSpawn = spawns; }
+      spawns++;
+      show(pick(free), val, now);
+      spawnT = now + sp.gap * (0.7 + Math.random() * 0.6);
+    }
+  }
+  setInterval(tick, 80);
+
+  /* ---------- whacking ---------- */
+  function whack(h, x, y) {
+    if (!running || paused || !h || !h.up || h.hit) return;
+    swing(x, y);
+    h.hit = true; h.until = performance.now() + 900;
+    const r = h.el.getBoundingClientRect();
+    if (h.val === P.ans) {
+      h.el.classList.add('hit', 'right'); h.el.querySelector('.face').innerHTML = DIZZY;
+      bonk(r, pick(['BONK!', 'WHACK!', 'YES!', 'POW!']), true);
+      setTimeout(() => hide(h), 250);
+      correct();
+    } else {
+      h.el.classList.add('hit', 'wrong');
+      bonk(r, 'Oops!', false);
+      setTimeout(() => hide(h), 450);
+      miss(h.val);
+    }
+  }
+  function correct() {
+    renderProblem(true); confetti(40);
+    if (S.play === 'teams') {
+      hist.push({ scores: scores.slice(), turn }); scores[turn] += 1; const t = turn;
+      say(`Yes! ${P.t} = ${P.ans}. +1 for ${teams[turn]}`, 'good');
+      turn = (turn + 1) % teams.length; renderTop(t);
+    } else {
+      score++; streak++;
+      say(streak >= 3 ? `Yes! ${P.t} = ${P.ans}. ${streak} in a row!` : `Yes! ${P.t} = ${P.ans}`, 'good');
+      renderTop();
+    }
+    pauseSpawns(1100); setTimeout(() => { if (running) newProblem(); }, 1000);
+  }
+  function miss(v) {
+    streak = 0; tries++;
+    if (S.play === 'teams' && S.miss === 'next') {
+      say(`${v} isn't it. ${teams[(turn + 1) % teams.length]}, your turn on the same problem!`, 'try');
+      hist.push({ scores: scores.slice(), turn }); turn = (turn + 1) % teams.length; renderProblem(); renderTop();
+    } else say(`${v} isn't it. Try again!`, 'try');
+    renderTop();
+  }
+  function pauseSpawns(ms) { spawnT = performance.now() + ms; }
+  function swing(x, y) {
+    if (reduce || x == null) return;
+    const el = document.createElement('div'); el.className = 'hammer'; el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.innerHTML = '<svg viewBox="0 0 90 90"><rect x="40" y="26" width="10" height="60" rx="5" fill="#a0682f" stroke="#5c3a1a" stroke-width="3"/><rect x="12" y="6" width="66" height="28" rx="9" fill="#e63946" stroke="#801d26" stroke-width="3"/><rect x="18" y="10" width="20" height="6" rx="3" fill="#fff" opacity=".4"/></svg>';
+    document.body.appendChild(el); setTimeout(() => el.remove(), 300);
+  }
+  function bonk(r, t, good) {
+    const g = $('garden').getBoundingClientRect(), el = document.createElement('div');
+    el.className = 'bonk' + (good ? ' good' : ''); el.textContent = t; el.style.left = (r.left - g.left + r.width / 2) + 'px'; el.style.top = (r.top - g.top + r.height * .3) + 'px';
+    $('garden').appendChild(el); setTimeout(() => el.remove(), 800);
+  }
+  $('holes').addEventListener('pointerdown', (e) => { const el = e.target.closest('.hole'); if (!el) return; e.preventDefault(); whack(holes[+el.dataset.i], e.clientX, e.clientY); });
+
+  /* ---------- top bar ---------- */
+  function renderTop(bump) {
+    const m = $('mid');
+    if (S.play === 'teams') m.innerHTML = teams.map((t, i) => `<span class="chip team${i === turn ? ' on' : ''}" style="--c:${TEAMC[i]}">${esc(t)} <span class="sc${bump === i ? ' bump' : ''}">${scores[i]}</span></span>`).join('');
+    else m.innerHTML = `<span class="chip">Correct: <b>${score}</b></span>${streak >= 2 ? `<span class="chip">🔥 <b>${streak}</b> in a row</span>` : ''}${S.play === 'clock' ? `<span class="clock${timeLeft <= 10 ? ' low' : ''}" id="clock">⏱ ${timeLeft}</span>` : ''}`;
+    $('undoBtn').hidden = S.play !== 'teams' || !hist.length;
+  }
+  function undo() { const h = hist.pop(); if (!h) return; scores = h.scores; turn = h.turn; renderTop(); renderProblem(); }
+  $('undoBtn').onclick = undo;
+  function say(t, c) { const m = $('msg'); m.className = 'msg ' + (c || ''); m.textContent = t; }
+
+  /* ---------- game flow ---------- */
+  function start() {
+    $('over').hidden = true; running = true; paused = false; score = 0; streak = 0; spawns = 0;
+    $('pauseBtn').innerHTML = 'Pause <kbd>P</kbd>';
+    buildHoles(); newProblem(); pauseSpawns(600);
+    clearInterval(clockT);
+    if (S.play === 'clock') {
+      timeLeft = S.secs;
+      clockT = setInterval(() => { if (paused) return; timeLeft--; renderTop(); if (timeLeft <= 0) endClock(); }, 1000);
+    }
+    say(S.play === 'teams' ? `${teams[turn]}, whack the right answer!` : 'Whack the mole with the right answer!', '');
+    renderTop();
+  }
+  function endClock() {
+    clearInterval(clockT); running = false; holes.forEach(hide);
+    $('overH').textContent = score === 1 ? '1 correct!' : `${score} correct!`;
+    $('overP').textContent = `in ${S.secs} seconds. Can you beat it?`;
+    $('over').hidden = false; $('overBtn').focus(); confetti(160);
+  }
+  $('overBtn').onclick = start;
+  function setPause(v) {
+    paused = v; $('pauseBtn').innerHTML = paused ? 'Resume <kbd>P</kbd>' : 'Pause <kbd>P</kbd>';
+    if (paused) { holes.forEach((h) => { if (!h.hit) hide(h); }); say('Paused', ''); } else { pauseSpawns(400); say('', ''); }
+  }
+  $('pauseBtn').onclick = () => { if (running) setPause(!paused); };
+  $('skipBtn').onclick = () => { if (running && !paused) { say(`${P.t} = ${P.ans}. Here's a new one.`, ''); newProblem(); } };
+
+  document.addEventListener('keydown', (e) => {
+    if (!$('sheet').hidden) { if (e.key === 'Escape') closeSheet(); return; }
+    if (!$('over').hidden) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } return; }
+    const tg = e.target && e.target.tagName; if (tg === 'INPUT' || tg === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (/^[1-9]$/.test(k)) { const h = holes.find((x) => x.key === +k); if (h) { e.preventDefault(); const r = h.el.getBoundingClientRect(); whack(h, r.left + r.width / 2, r.top + r.height * .4); } return; }
+    if (k === 'p' || k === 'P') { e.preventDefault(); $('pauseBtn').click(); }
+    if (k === 'n' || k === 'N') { e.preventDefault(); $('skipBtn').click(); }
+    if ((k === 'u' || k === 'U') && S.play === 'teams') { e.preventDefault(); undo(); }
+  });
+  let rt = 0; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (!holes.length) return; const vals = holes.map((h) => (h.up && !h.hit ? h.val : null)); buildHoles(); const now = performance.now(); vals.forEach((v, i) => { if (v != null && holes[i]) show(holes[i], v, now); }); }, 150); });
+
+  /* ---------- confetti ---------- */
+  const fx = document.createElement('canvas'); fx.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:35'; fx.setAttribute('aria-hidden', 'true'); document.body.appendChild(fx);
+  const fc = fx.getContext('2d'); let bits = [], raf = 0;
+  function confetti(n) {
+    if (reduce) return; fx.width = innerWidth; fx.height = innerHeight;
+    const cols = ['#ef5a5a', '#ffc93d', '#22b35e', '#4f8df5', '#8b5cf6', '#ff8a3d'];
+    const r = $('problem').getBoundingClientRect();
+    for (let i = 0; i < n; i++) bits.push({ x: r.left + r.width / 2 + (Math.random() - .5) * 160, y: r.top + r.height / 2, vx: (Math.random() - .5) * 14, vy: -Math.random() * 10 - 2, r: Math.random() * 6.28, s: 6 + Math.random() * 7, c: pick(cols), t: 0 });
+    if (!raf) raf = requestAnimationFrame(fxTick);
+  }
+  function fxTick() {
+    fc.clearRect(0, 0, fx.width, fx.height);
+    bits.forEach((p) => { p.t++; p.vy += .45; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += .2; fc.save(); fc.translate(p.x, p.y); fc.rotate(p.r); fc.fillStyle = p.c; fc.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); fc.restore(); });
+    bits = bits.filter((p) => p.y < fx.height + 20 && p.t < 150);
+    raf = bits.length ? requestAnimationFrame(fxTick) : (fc.clearRect(0, 0, fx.width, fx.height), 0);
+  }
+
+  /* ---------- settings ---------- */
+  const toggle = (a, v) => (a.includes(v) ? a.filter((x) => x !== v) : a.concat(v));
+  function seg(el, opts, isOn, fn) { el.innerHTML = ''; opts.forEach(([v, l]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = l; b.setAttribute('aria-pressed', String(isOn(v))); b.onclick = () => { fn(v); save(); renderSheet(); }; el.appendChild(b); }); }
+  function renderSheet() {
+    seg($('sOps'), Object.entries(OPS).map(([k, v]) => [k, v[1]]), (v) => S.ops.includes(v), (v) => { S.ops = toggle(S.ops, v); });
+    seg($('sMax'), [[5, '5'], [10, '10'], [12, '12']], (v) => S.max === v, (v) => { S.max = v; });
+    const m = S.max; $('maxNote').textContent = `Uses facts with numbers from 0 to ${m}: for example ${m} + ${m}, ${m * 2} − ${m}, ${m} × ${m} and ${m * m} ÷ ${m}.`;
+    seg($('sHoles'), [[4, '4'], [6, '6'], [9, '9']], (v) => S.holes === v, (v) => { S.holes = v; });
+    seg($('sSpeed'), [['slow', 'Slow'], ['medium', 'Medium'], ['fast', 'Fast']], (v) => S.speed === v, (v) => { S.speed = v; });
+    seg($('sPlay'), [['class', 'Whole class'], ['teams', 'Teams take turns'], ['clock', 'Beat the clock']], (v) => S.play === v, (v) => { S.play = v; });
+    $('teamOpt').hidden = S.play !== 'teams'; $('clockOpt').hidden = S.play !== 'clock';
+    $('teams').value = S.teams;
+    seg($('sMiss'), [['next', 'The next team gets a try'], ['same', 'The same team keeps trying']], (v) => S.miss === v, (v) => { S.miss = v; });
+    seg($('sSecs'), [[30, '30 seconds'], [60, '60 seconds'], [90, '90 seconds'], [120, '2 minutes']], (v) => S.secs === v, (v) => { S.secs = v; });
+    check();
+  }
+  function check() {
+    const errs = [];
+    if (!S.ops.length) errs.push('Choose at least one operation.');
+    const tl = S.teams.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (S.play === 'teams' && tl.length < 2) errs.push('Type at least 2 team names, one per line.');
+    $('err').className = 'note' + (errs.length ? ' warn' : ''); $('err').textContent = errs.join(' ') || (S.play === 'teams' && tl.length > 6 ? 'Only the first 6 teams are used.' : '');
+    $('goBtn').disabled = errs.length > 0; return !errs.length;
+  }
+  $('teams').addEventListener('input', () => { S.teams = $('teams').value; save(); check(); });
+  function openSheet() { running = false; clearInterval(clockT); holes.forEach(hide); $('over').hidden = true; $('sheet').hidden = false; renderSheet(); $('goBtn').focus({ preventScroll: true }); }
+  function closeSheet() {
+    if (!check()) return;
+    const tl = S.teams.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    if (S.play === 'teams' && tl.join('\n') !== teams.join('\n')) { teams = tl; scores = tl.map(() => 0); turn = 0; hist = []; }
+    save(); $('sheet').hidden = true; start();
+  }
+  $('goBtn').onclick = closeSheet; $('gearBtn').onclick = openSheet;
+  window.__mm = { P: () => P, holes: () => holes, score: () => score, scores: () => scores, turn: () => turn };
+  if (stored && check()) closeSheet(); else openSheet();
+})();
+</script>
+
+</body>
+</html>
